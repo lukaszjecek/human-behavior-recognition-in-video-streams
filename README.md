@@ -20,8 +20,8 @@ Use descriptive branch names, for example:
 
 Before opening a Pull Request:
 
-- make sure your branch is up to date,
-- describe the scope of changes clearly,
-- link the related GitHub Issue if applicable.
+- Make sure your branch is up to date.
+- Describe the scope of changes clearly.
+- Link the related GitHub issue if applicable.
 
 Pull Requests are merged into `main` using **Squash** to keep history clean.
