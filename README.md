@@ -54,7 +54,8 @@ docker compose up --build
  Use descriptive branch names, for example:    
     
 - `feature/add-inference-buffer` - `fix/websocket-reconnect` - `docs/update-readme` - `chore/setup-ci`    
- ### Pull Requests    
+
+### Pull Requests    
  Before opening a Pull Request:    
     
 - Make sure your branch is up to date.    
@@ -62,3 +63,27 @@ docker compose up --build
 - Link the related GitHub issue if applicable.    
     
 Pull Requests are merged into `main` using **Squash** to keep history clean.
+
+
+### Dev commands
+
+Run the development container:
+```
+.\scripts\run.ps1
+```
+
+Run tests:
+```
+.\scripts\test.ps1
+```
+
+Run lint checks:
+```
+.\scripts\lint.ps1
+```
+
+
+> If PowerShell blocks scripts from running, set this locally:
+> ```
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
