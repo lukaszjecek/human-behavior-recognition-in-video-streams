@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Basic repository sanity check
+        run: |
+          test -d .github
+          test -d .github/workflows
+
+      - name: Compile Python files if present
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          py_files=(**/*.py)
+          if [ ${#py_files[@]} -gt 0 ]; then
+            python -m compileall .
+          else
+            echo "No Python files yet. Skipping Python compilation."
+          fi
