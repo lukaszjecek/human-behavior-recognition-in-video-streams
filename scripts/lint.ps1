@@ -1,0 +1,1 @@
+docker compose run --rm inference python -m ruff check src tests
