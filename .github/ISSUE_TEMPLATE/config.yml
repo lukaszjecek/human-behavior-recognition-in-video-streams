@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project README
+    url: https://github.com/lukaszjecek/human-behavior-recognition-in-video-streams
+    about: Read the project setup and workflow instructions first.
