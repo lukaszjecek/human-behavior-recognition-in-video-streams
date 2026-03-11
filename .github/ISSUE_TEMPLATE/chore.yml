@@ -1,0 +1,40 @@
+name: Chore / Infra
+description: Maintenance, tooling, CI, Docker, repo setup, documentation process
+title: "[Chore] "
+labels: ["type:chore"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be standardized, fixed, or improved?
+      placeholder: Configure...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What files, services, or areas are affected?
+      placeholder: |
+        Affected areas:
+        - ...
+
+        Not affected:
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: Checklist that must be completed before closing the issue
+      value: |
+        - [ ] Change implemented
+        - [ ] Verified by team member or locally
+        - [ ] Documentation updated if relevant
+        - [ ] PR created and linked to this issue
+    validations:
+      required: true

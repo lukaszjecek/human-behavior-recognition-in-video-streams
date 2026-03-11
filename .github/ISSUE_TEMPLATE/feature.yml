@@ -1,0 +1,40 @@
+name: Feature
+description: New feature or functional task
+title: "[Feature] "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be achieved?
+      placeholder: Implement...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope and what is out of scope?
+      placeholder: |
+        In scope:
+        - ...
+
+        Out of scope:
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: Checklist that must be completed before closing the issue
+      value: |
+        - [ ] Implementation completed
+        - [ ] Tested locally
+        - [ ] Docs/README updated if relevant
+        - [ ] PR created and linked to this issue
+    validations:
+      required: true
