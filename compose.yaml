@@ -5,7 +5,7 @@ services:
       dockerfile: docker/app/Dockerfile
     container_name: hbr_inference
     environment:
-      DATA_DIR: /app/data/subset
+      DATA_DIR: /app/data/raw
       LOG_DIR: /app/data/logs
       PYTHONUNBUFFERED: "1"
     working_dir: /app
