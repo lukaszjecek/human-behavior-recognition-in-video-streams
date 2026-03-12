@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from os import getenv
 
-DATA_DIR = Path(getenv("DATA_DIR", "/app/data/subset"))
+DATA_DIR = Path(getenv("DATA_DIR", "/app/data/raw"))
 LOG_DIR = Path(getenv("LOG_DIR", "/app/data/logs"))
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}

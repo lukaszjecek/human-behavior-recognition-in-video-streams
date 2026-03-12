@@ -3,7 +3,7 @@
 ### Requirements:    
 - Docker  
 - local clone of this repository    
-- dataset subset in `./data/subset`   
+- dataset subset in `./data/raw`   
 
 ### Setup:  
 ```
@@ -14,7 +14,7 @@ docker compose up --build
   
 Place the extracted dataset subset under:  
   
-- `./data/subset`  
+- `./data/raw`  
   
 The application scans this directory recursively for `.mp4` files, so nested class folders are supported.  
   
@@ -37,7 +37,7 @@ If the dataset subset is mounted correctly, the logs should include the number o
 On Windows PowerShell, create the folders manually if they do not already exist:  
   
 ```
-mkdir data\subset  
+mkdir data\raw  
 mkdir data\logs  
 docker compose up --build  
 ```
