@@ -4,6 +4,8 @@ Describe what was changed and why.
 ## Linked Issue
 Closes #
 
+[delete line below, it's just an example]
+
 Example: Closes #123 (select the appropriate issue to close)
 
 ## Checklist
