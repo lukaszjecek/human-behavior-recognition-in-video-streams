@@ -87,3 +87,13 @@ Run lint checks:
 > ```
 > Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 > ```
+
+
+### Run CI checks locally
+
+```
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+puython -m ruff check .
+python -m pytest -q tests
+```
