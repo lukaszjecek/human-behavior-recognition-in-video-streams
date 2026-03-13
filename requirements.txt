@@ -1,2 +1,6 @@
 pandas==2.2.3
 pyyaml==6.0.1
+torch
+opencv-python
+numpy
+pytest
