@@ -4,3 +4,5 @@ torch
 opencv-python
 numpy
 pytest
+matplotlib==3.8.3
+seaborn==0.13.2
