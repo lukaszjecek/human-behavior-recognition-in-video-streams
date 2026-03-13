@@ -36,3 +36,12 @@ The following commands will be available once the full pipeline is implemented (
 
 - Download data: `python -m src.data.download --config configs/data_pipeline.yaml`
 - Generate subset: `python -m src.data.sample --fraction 0.05 --output data/manifests/subset_manifest.jsonl`
+
+### Visual Validation
+To overlay labels (and bounding boxes, if present) onto a video and export the result to an MP4 file, run the visualizer tool:
+```bash
+# Pick a random video from the manifest
+docker compose run --rm inference python -m scripts.visualize
+
+# Or specify an exact video by ID and choose a custom output path
+docker compose run --rm inference python -m scripts.visualize --video_id "20200524_191348-983363826_0" --output "/app/data/logs/my_custom_overlay.mp4"
