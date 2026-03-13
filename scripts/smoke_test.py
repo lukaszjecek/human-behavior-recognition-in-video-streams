@@ -25,7 +25,7 @@ def main():
         print(f"[ERROR] Manifest not found at {manifest_path}. Run src.data.sample first.")
         sys.exit(1)
 
-    print(f"--- Starting Smoke Test ---")
+    print("--- Starting Smoke Test ---")
     start_time = time.time()
 
     loader = get_dataloader(
@@ -57,12 +57,12 @@ def main():
             print(f"  - Labels:       {labels.tolist()}")
 
         elapsed = time.time() - start_time
-        print(f"\n--- SUCCESS ---")
+        print("\n--- SUCCESS ---")
         print(f"Timing: {elapsed:.2f}s total ({elapsed / args.batches:.2f}s per batch)")
         sys.exit(0)
 
     except Exception as e:
-        print(f"\n--- FAILED ---")
+        print("\n--- FAILED ---")
         print(f"Error: {str(e)}")
         sys.exit(1)
 
