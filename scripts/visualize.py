@@ -53,7 +53,7 @@ def main():
     label = selected.get("label", "Unknown")
     bboxes = selected.get("bboxes", {})
 
-    print(f"--- Visualizer ---")
+    print("--- Visualizer ---")
     print(f"Selected Video: {selected['video_id']}")
     print(f"Class Label: {label}")
     print(f"Source Path: {video_path}")
