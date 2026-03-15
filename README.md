@@ -53,10 +53,9 @@ docker compose up --build
 - When a Pull Request changes files owned by specific contributors, GitHub automatically requests their review once the PR is ready for review.
 - Changes in owned areas should be approved by the relevant code owner before merge. Such approval is mandatory for merging.
     
-### Branch naming    
- Use descriptive branch names, for example:    
-    
-- `feature/add-inference-buffer` - `fix/websocket-reconnect` - `docs/update-readme` - `chore/setup-ci`    
+### Branch naming
+Create a feature branch from the related GitHub Issue page.
+Use the branch name suggested by GitHub when creating the branch from the issue, unless there is a strong reason to adjust it.
 
 ### Pull Requests    
  Before opening a Pull Request:    
@@ -97,6 +96,6 @@ Run lint checks:
 ```
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
-puython -m ruff check .
+python -m ruff check .
 python -m pytest -q tests
 ```
