@@ -1,1 +1,26 @@
+# fallback ownership
 * @lukaszjecek
+
+# lukaszjecek ownership
+/.github/                @lukaszjecek
+/docker/                 @lukaszjecek
+/docs/                   @lukaszjecek
+/.dockerignore           @lukaszjecek
+/.gitattributes          @lukaszjecek
+/.gitignore              @lukaszjecek
+/compose.yaml            @lukaszjecek
+/pytest.ini              @lukaszjecek
+/README.md               @lukaszjecek
+/requirements*.txt       @lukaszjecek
+
+
+# alicjaswiers ownership
+/configs/                @alicjaswiers
+/data/                   @alicjaswiers
+/docs/data_pipeline.md   @alicjaswiers
+
+
+# shared ownership
+/scripts/                @alicjaswiers @lukaszjecek
+/src/                    @alicjaswiers @lukaszjecek
+/tests/                  @alicjaswiers @lukaszjecek

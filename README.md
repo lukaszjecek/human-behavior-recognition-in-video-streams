@@ -48,7 +48,10 @@ docker compose up --build
 - Do not commit directly to `main`.    
 - All changes must be made on a feature branch and merged through a Pull Request.    
 - Each Pull Request requires at least 1 approving review before merge.    
-- Direct pushes to `main` are blocked by repository rules.    
+- Direct pushes to `main` are blocked by repository rules.
+- Repository ownership is defined in `.github/CODEOWNERS`.
+- When a Pull Request changes files owned by specific contributors, GitHub automatically requests their review once the PR is ready for review.
+- Changes in owned areas should be approved by the relevant code owner before merge. Such approval is mandatory for merging.
     
 ### Branch naming    
  Use descriptive branch names, for example:    
