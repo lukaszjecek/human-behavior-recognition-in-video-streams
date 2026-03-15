@@ -16,7 +16,7 @@ The manifest is the primary file used by the Data Loader. We use the **JSON Line
 
 **Required fields:**
 - `video_id` (string): Unique identifier for the recording.
-- `path` (string): Relative path to the processed video file (relative to `data/processed/`).
+- `path` (string): Relative path to the video file (relative to the data directory, e.g., `data/raw/`).
 - `label` (string/int): Human behavior class.
 - `split` (string): Split assignment (`train`, `val`, `test`).
 
@@ -28,14 +28,19 @@ The manifest is the primary file used by the Data Loader. We use the **JSON Line
 `{"video_id": "pip_001", "path": "walking/pip_001.mp4", "label": "walking", "split": "train", "timestamps": [1.5, 4.2], "bboxes": {"frame_10": [10, 20, 100, 200]}}`
 
 ## 3. Configuration & Seed Policy
-The main configuration is located in the `configs/data_pipeline.yaml` file. 
-To ensure full reproducibility of experiments, it is **strictly required** to pass a constant seed value (default `42` defined in the `.yaml` file) to pseudo-random number generators in the `random`, `numpy` modules, and ML frameworks during split creation and data sampling.
+The main configuration is located in the `configs/data_pipeline.yml` file. 
+To ensure full reproducibility of experiments, it is **strictly required** to pass a constant seed value (default `42` defined in the `.yml` file) to pseudo-random number generators in the `random`, `numpy` modules, and ML frameworks during split creation and data sampling.
 
 ## 4. Example Commands (CLI)
-The following commands will be available once the full pipeline is implemented (defined in subsequent sprints):
+The following commands should be run inside the Docker environment to manage the data pipeline:
 
-- Download data: `python -m src.data.download --config configs/data_pipeline.yaml`
-- Generate subset: `python -m src.data.sample --fraction 0.05 --output data/manifests/subset_manifest.jsonl`
+- **Generate dataset splits and manifest:** `docker compose run --rm inference python -m src.data.sample --config configs/data_pipeline.yml --output manifest.jsonl`
+
+- **Run Exploratory Data Analysis (EDA):**
+  `docker compose run --rm inference python -m src.data.eda --config configs/data_pipeline.yml`
+
+- **Visual Validation (Overlay):**
+  `docker compose run --rm inference python -m scripts.visualize --config configs/data_pipeline.yml`
 
 ### Visual Validation
 To overlay labels (and bounding boxes, if present) onto a video and export the result to an MP4 file, run the visualizer tool:
