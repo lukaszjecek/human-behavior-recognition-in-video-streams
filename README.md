@@ -99,5 +99,3 @@ pip install -r requirements-dev.txt
 python -m ruff check .
 python -m pytest -q tests
 ```
-
-example change
