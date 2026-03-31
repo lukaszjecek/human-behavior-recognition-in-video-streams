@@ -53,3 +53,21 @@ def test_configurable_window_size():
 
     with pytest.raises(ValueError):
         FrameBuffer(window_size=-5)
+
+
+def test_clear_buffer():
+    """Test clearing the buffer content."""
+    buf = FrameBuffer(window_size=5)
+    buf.append("frame_1")
+    buf.append("frame_2")
+
+    # Verify the buffer has elements before clearing
+    assert buf.current_size == 2
+
+    # Clear the buffer
+    buf.clear()
+
+    # Verify the state after clearing
+    assert buf.current_size == 0
+    assert buf.is_full() is False
+    assert buf.get_window() == []

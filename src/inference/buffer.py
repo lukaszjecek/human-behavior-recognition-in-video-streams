@@ -4,7 +4,7 @@ from typing import Any, List
 
 class FrameBuffer:
     """
-    Fixed-size FIFO data structure for buffering video frames 
+    Fixed-size FIFO data structure for buffering video frames
     for real-time inference.
     """
 
@@ -16,16 +16,21 @@ class FrameBuffer:
             window_size (int): Maximum number of frames stored in the window.
         """
         if window_size <= 0:
-            raise ValueError(
-                "Window size must be greater than 0.")
+            raise ValueError("Window size must be greater than 0.")
 
-        self.window_size = window_size
         # deque with maxlen automatically removes the oldest elements upon overflow
         self.buffer = collections.deque(maxlen=window_size)
 
+    @property
+    def window_size(self) -> int:
+        """
+        Returns the maximum capacity of the buffer (read-only).
+        """
+        return self.buffer.maxlen
+
     def append(self, frame: Any) -> None:
         """
-        Appends a new frame to the buffer. If the buffer is full, 
+        Appends a new frame to the buffer. If the buffer is full,
         the oldest frame is automatically removed.
         """
         self.buffer.append(frame)
@@ -40,7 +45,7 @@ class FrameBuffer:
         """
         Checks if the buffer has reached its target size.
         """
-        return len(self.buffer) == self.window_size
+        return len(self.buffer) == self.buffer.maxlen
 
     def clear(self) -> None:
         """
