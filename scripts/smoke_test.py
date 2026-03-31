@@ -6,7 +6,7 @@ import torch
 import yaml
 
 from src.data.loader import get_dataloader
-from src.models.dummy import DummyBehaviorModel
+from src.models.baseline import BaselineBehaviorModel
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
     )
 
     num_classes = len(loader.dataset.label_to_idx)
-    model = DummyBehaviorModel(num_classes=num_classes)
+    model = BaselineBehaviorModel(num_classes=num_classes)
     model.eval()
 
     print(f"Detected {num_classes} classes in manifest.")
