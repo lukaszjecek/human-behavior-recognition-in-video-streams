@@ -4,7 +4,7 @@ from typing import Any, List
 
 class FrameBuffer:
     """
-    Fixed-size FIFO data structure for buffering video frames 
+    Fixed-size FIFO data structure for buffering video frames
     for real-time inference.
     """
 
