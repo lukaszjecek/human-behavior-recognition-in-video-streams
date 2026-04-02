@@ -105,7 +105,7 @@ def main():
         'loss': avg_loss,
     }, checkpoints_path)
 
-    print(f"\n SUCCESSFULLY TRAINED MODEL")
+    print("\n SUCCESSFULLY TRAINED MODEL")
     print(f"MODEL SAVED TO: {checkpoints_path}")
 
 
