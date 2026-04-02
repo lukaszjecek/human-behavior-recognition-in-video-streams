@@ -84,6 +84,11 @@ Run lint checks:
 .\scripts\lint.ps1
 ```
 
+Run model validation:
+```
+docker compose run --rm inference python -m scripts.validate --checkpoint data/logs/checkpoints/baseline_epoch_10.pth
+```
+
 
 > If PowerShell blocks scripts from running, set this locally:
 > ```
