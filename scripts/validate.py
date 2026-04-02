@@ -69,7 +69,7 @@ def main():
     with open(summary_file, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=4)
 
-    print(f'\n VALIDATION COMPLETED')
+    print('\n VALIDATION COMPLETED')
     print(f'Classes: {classes}')
     print(f'Accuracy: {accuracy * 100:.2f}%')
     print(f'Saved to file: {summary_file}')
