@@ -84,6 +84,10 @@ Run lint checks:
 .\scripts\lint.ps1
 ```
 
+Run training:
+```
+docker compose run --rm inference python -m scripts.train
+```
 
 > If PowerShell blocks scripts from running, set this locally:
 > ```
