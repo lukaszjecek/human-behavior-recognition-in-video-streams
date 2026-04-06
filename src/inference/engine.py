@@ -1,5 +1,5 @@
 import collections
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional, Tuple
 from dataclasses import dataclass
 from threading import Lock
 import logging
