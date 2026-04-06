@@ -1,75 +1,323 @@
-import copy
 from typing import Any, Optional, List
+from dataclasses import dataclass
+from threading import Lock
+import logging
+import time
+
 from src.inference.buffer import FrameBuffer
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class InferenceResult:
+    """
+    Stores metadata and prediction for an inference step.
+    """
+
+    window: List[Any]
+
+    start_frame_index: int
+    end_frame_index: int
+
+    start_timestamp: Optional[float]
+    end_timestamp: Optional[float]
+
+    prediction: Optional[Any]
 
 
 class InferenceEngine:
     """
-    Core engine for processing real-time video streams and predicting human behavior.
+    Production-grade inference engine with:
+
+    - configurable stride
+    - frame + timestamp tracking
+    - deterministic windowing
+    - thread safety
+    - logging
+    - metrics
     """
 
-    def __init__(self, window_size: int = 16, stride: int = 1, model: Optional[Any] = None):
+    def __init__(
+        self,
+        window_size: int = 16,
+        stride: int = 1,
+        model: Optional[Any] = None,
+        copy_window: bool = True
+    ):
         """
-        Initializes the InferenceEngine.
-
         Args:
-            window_size (int): The number of frames required to make a prediction.
-            stride (int): The number of frames to skip before triggering the next inference.
-            model (Any, optional): The behavior recognition model (e.g., PyTorch nn.Module).
+            window_size:
+                Number of frames per inference window.
+
+            stride:
+                Frames between inference triggers.
+
+            model:
+                Optional model object with:
+                    predict(window)
+
+            copy_window:
+                Whether window should be copied
+                before storing result.
         """
-        if stride <= 0:
-            raise ValueError("Stride must be greater than 0")
 
         if window_size <= 0:
-            raise ValueError("window_size must be greater than 0")
+            raise ValueError("window_size must be > 0")
+
+        if stride <= 0:
+            raise ValueError("stride must be > 0")
 
         self.buffer = FrameBuffer(window_size=window_size)
-        self.stride = stride
+
+        self.window_size = window_size
+        self._stride = stride
+
         self.model = model
 
-        # Counter to track the total number of processed frames
+        self.copy_window = copy_window
+
+        # Thread safety
+        self._lock = Lock()
+
+        # Frame tracking
         self.frame_count: int = 0
 
-        # Stores the exact window of frames used in the most recent valid inference
-        self._latest_inference_window: Optional[List[Any]] = None
+        # Timestamp tracking
+        self._timestamps: List[Optional[float]] = []
 
-    def process_frame(self, frame: Any) -> Optional[Any]:
+        # Last inference location
+        self._last_inference_frame: Optional[int] = None
+
+        # Last result
+        self._latest_result: Optional[InferenceResult] = None
+
+        # Metrics
+        self.total_inferences: int = 0
+        self.total_frames_processed: int = 0
+        self.total_frames_skipped: int = 0
+
+        logger.debug(
+            "InferenceEngine initialized "
+            "(window=%d stride=%d)",
+            window_size,
+            stride
+        )
+
+    # ========================
+    # Public properties
+    # ========================
+
+    @property
+    def stride(self) -> int:
+        return self._stride
+
+    def set_stride(self, stride: int):
         """
-        Adds a new frame to the temporal buffer and triggers inference based on the stride logic.
+        Dynamically updates stride.
+        """
 
-        Args:
-            frame (Any): A single video frame.
+        if stride <= 0:
+            raise ValueError("stride must be > 0")
+
+        with self._lock:
+            logger.info(
+                "Stride changed from %d to %d",
+                self._stride,
+                stride
+            )
+
+            self._stride = stride
+
+    # ========================
+    # Core processing
+    # ========================
+
+    def process_frame(
+        self,
+        frame: Any,
+        timestamp: Optional[float] = None
+    ) -> Optional[InferenceResult]:
+        """
+        Processes a single frame.
 
         Returns:
-            Optional[Any]: The prediction result if inference is triggered, otherwise None.
+            InferenceResult if triggered
+            None otherwise
         """
-        self.frame_count += 1
-        self.buffer.append(frame)
 
-        # We only trigger inference if the buffer is completely full
-        if self.buffer.is_full():
-            # Calculate how many frames have passed since the buffer first filled up
-            frames_since_full = self.frame_count - self.buffer.window_size
+        if timestamp is None:
+            timestamp = time.time()
 
-            # Trigger inference on the very first full window, and then exactly every `stride` frames
-            if frames_since_full % self.stride == 0:
-                self._latest_inference_window = copy.deepcopy(
-                    self.buffer.get_window())
+        with self._lock:
 
-                if self.model is not None:
-                    # TODO: Implement actual tensor preprocessing and model forward pass
-                    # window = self.get_latest_window()
-                    # return self.model(window)
-                    return "prediction_stub"
+            self.frame_count += 1
+            self.total_frames_processed += 1
 
-        return None
+            self.buffer.append(frame)
 
-    def get_latest_window(self) -> Optional[List[Any]]:
+            self._timestamps.append(timestamp)
+
+            if len(self._timestamps) > self.window_size:
+                self._timestamps.pop(0)
+
+            if not self.buffer.is_full():
+                return None
+
+            if not self._should_trigger_inference():
+
+                self.total_frames_skipped += 1
+                return None
+
+            result = self._run_inference()
+
+            return result
+
+    # ========================
+    # Internal logic
+    # ========================
+
+    def _should_trigger_inference(self) -> bool:
+
+        if self._last_inference_frame is None:
+            return True
+
+        frames_since_last = (
+            self.frame_count
+            - self._last_inference_frame
+        )
+
+        return frames_since_last >= self._stride
+
+    def _run_inference(self) -> InferenceResult:
+
+        window = self.buffer.get_window()
+
+        if len(window) != self.window_size:
+            raise RuntimeError(
+                "Buffer returned invalid window size"
+            )
+
+        if self.copy_window:
+            window = list(window)
+
+        start_frame = (
+            self.frame_count
+            - self.window_size
+            + 1
+        )
+
+        end_frame = self.frame_count
+
+        start_ts = self._timestamps[0]
+        end_ts = self._timestamps[-1]
+
+        prediction = None
+
+        if self.model is not None:
+
+            if hasattr(self.model, "predict"):
+
+                prediction = self.model.predict(window)
+
+            else:
+
+                logger.warning(
+                    "Model has no predict() method"
+                )
+
+        result = InferenceResult(
+            window=window,
+            start_frame_index=start_frame,
+            end_frame_index=end_frame,
+            start_timestamp=start_ts,
+            end_timestamp=end_ts,
+            prediction=prediction
+        )
+
+        self._latest_result = result
+
+        self._last_inference_frame = self.frame_count
+
+        self.total_inferences += 1
+
+        logger.debug(
+            "Inference triggered "
+            "(frames %d-%d)",
+            start_frame,
+            end_frame
+        )
+
+        return result
+
+    # ========================
+    # API helpers
+    # ========================
+
+    def get_latest_result(
+        self
+    ) -> Optional[InferenceResult]:
+
+        with self._lock:
+
+            return self._latest_result
+
+    def has_new_result(self) -> bool:
+
+        return self._latest_result is not None
+
+    def peek_next_trigger_frame(
+        self
+    ) -> Optional[int]:
         """
-        Returns the most recent temporal window on which inference was triggered.
-        This provides a clear API to retrieve valid frames regardless of the current buffer state.
-
-        Returns:
-            Optional[List[Any]]: A list of frames, or None if no inference has been triggered yet.
+        Predicts next inference frame index.
         """
-        return self._latest_inference_window
+
+        with self._lock:
+
+            if self._last_inference_frame is None:
+
+                if self.buffer.is_full():
+                    return self.frame_count
+
+                return self.window_size
+
+            return (
+                self._last_inference_frame
+                + self._stride
+            )
+
+    def get_metrics(self) -> dict:
+
+        with self._lock:
+
+            return {
+                "total_frames_processed":
+                    self.total_frames_processed,
+
+                "total_inferences":
+                    self.total_inferences,
+
+                "total_frames_skipped":
+                    self.total_frames_skipped
+            }
+
+    def reset(self):
+
+        with self._lock:
+
+            logger.info("Engine reset")
+
+            self.buffer.clear()
+
+            self.frame_count = 0
+
+            self._timestamps.clear()
+
+            self._last_inference_frame = None
+
+            self._latest_result = None
+
+            self.total_inferences = 0
+            self.total_frames_processed = 0
+            self.total_frames_skipped = 0

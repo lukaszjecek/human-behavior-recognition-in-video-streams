@@ -1,67 +1,138 @@
 import pytest
-from src.inference.engine import InferenceEngine
+
+from src.inference.engine import (
+    InferenceEngine,
+    InferenceResult
+)
 
 
 class DummyModel:
-    """Mock model to test the return triggering behavior."""
     pass
 
 
-def test_inference_engine_initialization():
-    """Test if the engine initializes correctly with buffer and stride."""
-    engine = InferenceEngine(window_size=16, stride=4)
+def test_invalid_parameters():
 
-    assert engine.buffer.window_size == 16
-    assert engine.stride == 4
-    assert engine.frame_count == 0
-    assert engine.model is None
-    assert engine.get_latest_window() is None
+    with pytest.raises(ValueError):
+        InferenceEngine(window_size=0)
 
-
-def test_invalid_stride_value():
-    """Test validation for stride parameter."""
     with pytest.raises(ValueError):
         InferenceEngine(stride=0)
+
     with pytest.raises(ValueError):
-        InferenceEngine(stride=-2)
+        InferenceEngine(stride=-1)
 
 
-def test_stride_trigger_cadence():
-    """Test if inference is triggered strictly every N frames after filling the buffer."""
-    engine = InferenceEngine(window_size=3, stride=2, model=DummyModel())
+def test_first_window_triggers():
 
-    # Fill the buffer (first full window triggers inference)
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
     assert engine.process_frame("f1") is None
     assert engine.process_frame("f2") is None
-    assert engine.process_frame("f3") == "prediction_stub"
-    assert engine.get_latest_window() == ["f1", "f2", "f3"]
 
-    # Next frame (stride = 1 since full) -> No trigger
-    assert engine.process_frame("f4") is None
-    # Still preserves the old window!
-    assert engine.get_latest_window() == ["f1", "f2", "f3"]
+    result = engine.process_frame("f3")
 
-    # Next frame (stride = 2 since full) -> Trigger!
-    assert engine.process_frame("f5") == "prediction_stub"
-    assert engine.get_latest_window() == ["f3", "f4", "f5"]
+    assert result == "prediction_stub"
 
-    # Check if frame counter correctly reached 5
-    assert engine.frame_count == 5
+    latest = engine.get_latest_window()
+
+    assert latest == ["f1", "f2", "f3"]
 
 
-def test_get_latest_window_determinism():
-    """Verify that the retrieved window does not mutate while buffer progresses."""
-    engine = InferenceEngine(window_size=2, stride=3, model=DummyModel())
+def test_stride_cadence():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
+    triggers = []
+
+    for i in range(10):
+
+        out = engine.process_frame(f"f{i}")
+
+        if out is not None:
+            triggers.append(i)
+
+    # Expected trigger frames:
+    # 2,4,6,8
+    assert triggers == [2, 4, 6, 8]
+
+
+def test_window_copy_safety():
+
+    engine = InferenceEngine(
+        window_size=2,
+        stride=2,
+        model=DummyModel()
+    )
 
     engine.process_frame("A")
-    engine.process_frame("B")  # Triggers inference, window is ["A", "B"]
+    engine.process_frame("B")
 
-    saved_window = engine.get_latest_window()
-    assert saved_window == ["A", "B"]
+    window = engine.get_latest_window()
 
-    engine.process_frame("C")  # No inference (stride wait)
-    engine.process_frame("D")  # No inference (stride wait)
+    window[0] = "CORRUPTED"
 
-    # Buffer has moved forward ["C", "D"], but the latest inference window should be intact
-    assert engine.buffer.get_window() == ["C", "D"]
-    assert engine.get_latest_window() == saved_window
+    assert engine.get_latest_window()[0] == "A"
+
+
+def test_metadata_integrity():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
+    engine.process_frame("f1")
+    engine.process_frame("f2")
+    engine.process_frame("f3")
+
+    result = engine.get_latest_result()
+
+    assert isinstance(result, InferenceResult)
+
+    assert result.start_frame == 1
+    assert result.end_frame == 3
+
+
+def test_large_stride():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=10,
+        model=DummyModel()
+    )
+
+    triggers = 0
+
+    for i in range(20):
+
+        if engine.process_frame(i):
+            triggers += 1
+
+    assert triggers == 2
+
+
+def test_reset():
+
+    engine = InferenceEngine(
+        window_size=2,
+        stride=1,
+        model=DummyModel()
+    )
+
+    engine.process_frame(1)
+    engine.process_frame(2)
+
+    engine.reset()
+
+    assert engine.frame_count == 0
+
+    assert engine.get_latest_window() is None
