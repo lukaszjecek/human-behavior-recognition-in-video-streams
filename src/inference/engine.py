@@ -42,8 +42,7 @@ class InferenceEngine:
         self,
         window_size: int = 16,
         stride: int = 1,
-        model: Optional[Any] = None,
-        copy_window: bool = True
+        model: Optional[Any] = None
     ):
         """
         Args:
@@ -54,12 +53,7 @@ class InferenceEngine:
                 Frames between inference triggers.
 
             model:
-                Optional model object with:
-                    predict(window)
-
-            copy_window:
-                Whether window should be copied
-                before storing result.
+                Optional model object (callable PyTorch model or object with predict()).
         """
 
         if window_size <= 0:
@@ -69,13 +63,8 @@ class InferenceEngine:
             raise ValueError("stride must be > 0")
 
         self.buffer = FrameBuffer(window_size=window_size)
-
-        self.window_size = window_size
         self._stride = stride
-
         self.model = model
-
-        self.copy_window = copy_window
 
         # Thread safety
         self._lock = Lock()
@@ -89,8 +78,9 @@ class InferenceEngine:
         # Last inference location
         self._last_inference_frame: Optional[int] = None
 
-        # Last result
+        # Result tracking
         self._latest_result: Optional[InferenceResult] = None
+        self._unread_result: bool = False  # Track if there is a new, unconsumed result
 
         # Metrics
         self.total_inferences: int = 0
@@ -109,6 +99,13 @@ class InferenceEngine:
     # ========================
 
     @property
+    def window_size(self) -> int:
+        """
+        Single Source of Truth for window_size, delegated to the buffer.
+        """
+        return self.buffer.window_size
+
+    @property
     def stride(self) -> int:
         return self._stride
 
@@ -116,7 +113,6 @@ class InferenceEngine:
         """
         Dynamically updates stride.
         """
-
         if stride <= 0:
             raise ValueError("stride must be > 0")
 
@@ -126,7 +122,6 @@ class InferenceEngine:
                 self._stride,
                 stride
             )
-
             self._stride = stride
 
     # ========================
@@ -145,7 +140,6 @@ class InferenceEngine:
             InferenceResult if triggered
             None otherwise
         """
-
         if timestamp is None:
             timestamp = time.time()
 
@@ -165,12 +159,10 @@ class InferenceEngine:
                 return None
 
             if not self._should_trigger_inference():
-
                 self.total_frames_skipped += 1
                 return None
 
             result = self._run_inference()
-
             return result
 
     # ========================
@@ -191,15 +183,13 @@ class InferenceEngine:
 
     def _run_inference(self) -> InferenceResult:
 
+        # get_window() in FrameBuffer already returns a fresh list (shallow copy)
         window = self.buffer.get_window()
 
         if len(window) != self.window_size:
             raise RuntimeError(
                 "Buffer returned invalid window size"
             )
-
-        if self.copy_window:
-            window = list(window)
 
         start_frame = (
             self.frame_count
@@ -215,15 +205,15 @@ class InferenceEngine:
         prediction = None
 
         if self.model is not None:
-
-            if hasattr(self.model, "predict"):
-
+            # Check for PyTorch nn.Module style callable
+            if callable(self.model):
+                prediction = self.model(window)
+            # Check for Scikit-learn style predict()
+            elif hasattr(self.model, "predict"):
                 prediction = self.model.predict(window)
-
             else:
-
                 logger.warning(
-                    "Model has no predict() method"
+                    "Model is neither callable nor has a predict() method"
                 )
 
         result = InferenceResult(
@@ -236,6 +226,7 @@ class InferenceEngine:
         )
 
         self._latest_result = result
+        self._unread_result = True  # Mark result as fresh
 
         self._last_inference_frame = self.frame_count
 
@@ -259,12 +250,13 @@ class InferenceEngine:
     ) -> Optional[InferenceResult]:
 
         with self._lock:
-
+            self._unread_result = False  # Result consumed
             return self._latest_result
 
     def has_new_result(self) -> bool:
 
-        return self._latest_result is not None
+        with self._lock:
+            return self._unread_result
 
     def peek_next_trigger_frame(
         self
@@ -317,6 +309,7 @@ class InferenceEngine:
             self._last_inference_frame = None
 
             self._latest_result = None
+            self._unread_result = False
 
             self.total_inferences = 0
             self.total_frames_processed = 0
