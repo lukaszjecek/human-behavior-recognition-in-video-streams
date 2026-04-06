@@ -1,4 +1,4 @@
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Tuple
 from dataclasses import dataclass
 from threading import Lock
 import logging
@@ -9,13 +9,12 @@ from src.inference.buffer import FrameBuffer
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class InferenceResult:
     """
     Stores metadata and prediction for an inference step.
     """
-
-    window: List[Any]
+    window: Tuple[Any, ...]
 
     start_frame_index: int
     end_frame_index: int
@@ -183,8 +182,8 @@ class InferenceEngine:
 
     def _run_inference(self) -> InferenceResult:
 
-        # get_window() in FrameBuffer already returns a fresh list (shallow copy)
-        window = self.buffer.get_window()
+        # Cast to tuple to ensure immutability and protect engine state
+        window = tuple(self.buffer.get_window())
 
         if len(window) != self.window_size:
             raise RuntimeError(

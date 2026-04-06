@@ -35,11 +35,30 @@ def test_first_window_triggers():
 
     result = engine.process_frame("f3")
 
-    assert result == "prediction_stub"
+    assert isinstance(result, InferenceResult)
 
-    latest = engine.get_latest_window()
+    latest = engine.get_latest_result().window
 
-    assert latest == ["f1", "f2", "f3"]
+    assert latest == ("f1", "f2", "f3")
+
+
+def test_window_copy_safety():
+
+    engine = InferenceEngine(
+        window_size=2,
+        stride=2,
+        model=DummyModel()
+    )
+
+    engine.process_frame("A")
+    engine.process_frame("B")
+
+    window = engine.get_latest_result().window
+
+    with pytest.raises(TypeError):
+        window[0] = "CORRUPTED"
+
+    assert engine._latest_result.window[0] == "A"
 
 
 def test_stride_cadence():
@@ -59,27 +78,7 @@ def test_stride_cadence():
         if out is not None:
             triggers.append(i)
 
-    # Expected trigger frames:
-    # 2,4,6,8
     assert triggers == [2, 4, 6, 8]
-
-
-def test_window_copy_safety():
-
-    engine = InferenceEngine(
-        window_size=2,
-        stride=2,
-        model=DummyModel()
-    )
-
-    engine.process_frame("A")
-    engine.process_frame("B")
-
-    window = engine.get_latest_window()
-
-    window[0] = "CORRUPTED"
-
-    assert engine.get_latest_window()[0] == "A"
 
 
 def test_metadata_integrity():
@@ -98,8 +97,8 @@ def test_metadata_integrity():
 
     assert isinstance(result, InferenceResult)
 
-    assert result.start_frame == 1
-    assert result.end_frame == 3
+    assert result.start_frame_index == 1
+    assert result.end_frame_index == 3
 
 
 def test_large_stride():
@@ -135,4 +134,4 @@ def test_reset():
 
     assert engine.frame_count == 0
 
-    assert engine.get_latest_window() is None
+    assert engine.get_latest_result() is None
