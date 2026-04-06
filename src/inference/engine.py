@@ -148,7 +148,6 @@ class InferenceEngine:
             self.total_frames_processed += 1
 
             self.buffer.append(frame)
-
             self._timestamps.append(timestamp)
 
             if len(self._timestamps) > self.window_size:
@@ -161,8 +160,48 @@ class InferenceEngine:
                 self.total_frames_skipped += 1
                 return None
 
-            result = self._run_inference()
-            return result
+            # Prepare immutable snapshot for the model
+            window_snapshot = tuple(self.buffer.get_window())
+            start_frame_snap = self.frame_count - self.window_size + 1
+            end_frame_snap = self.frame_count
+            start_ts_snap = self._timestamps[0]
+            end_ts_snap = self._timestamps[-1]
+
+            self._last_inference_frame = self.frame_count
+            self.total_inferences += 1
+
+        prediction = None
+
+        if self.model is not None:
+            if callable(self.model):
+                prediction = self.model(window_snapshot)
+            elif hasattr(self.model, "predict"):
+                prediction = self.model.predict(window_snapshot)
+            else:
+                logger.warning(
+                    "Model is neither callable nor has a predict() method"
+                )
+
+        result = InferenceResult(
+            window=window_snapshot,
+            start_frame_index=start_frame_snap,
+            end_frame_index=end_frame_snap,
+            start_timestamp=start_ts_snap,
+            end_timestamp=end_ts_snap,
+            prediction=prediction
+        )
+
+        with self._lock:
+            self._latest_result = result
+            self._unread_result = True
+
+            logger.debug(
+                "Inference completed (frames %d-%d)",
+                start_frame_snap,
+                end_frame_snap
+            )
+
+        return result
 
     # ========================
     # Internal logic
@@ -179,66 +218,6 @@ class InferenceEngine:
         )
 
         return frames_since_last >= self._stride
-
-    def _run_inference(self) -> InferenceResult:
-
-        # Cast to tuple to ensure immutability and protect engine state
-        window = tuple(self.buffer.get_window())
-
-        if len(window) != self.window_size:
-            raise RuntimeError(
-                "Buffer returned invalid window size"
-            )
-
-        start_frame = (
-            self.frame_count
-            - self.window_size
-            + 1
-        )
-
-        end_frame = self.frame_count
-
-        start_ts = self._timestamps[0]
-        end_ts = self._timestamps[-1]
-
-        prediction = None
-
-        if self.model is not None:
-            # Check for PyTorch nn.Module style callable
-            if callable(self.model):
-                prediction = self.model(window)
-            # Check for Scikit-learn style predict()
-            elif hasattr(self.model, "predict"):
-                prediction = self.model.predict(window)
-            else:
-                logger.warning(
-                    "Model is neither callable nor has a predict() method"
-                )
-
-        result = InferenceResult(
-            window=window,
-            start_frame_index=start_frame,
-            end_frame_index=end_frame,
-            start_timestamp=start_ts,
-            end_timestamp=end_ts,
-            prediction=prediction
-        )
-
-        self._latest_result = result
-        self._unread_result = True  # Mark result as fresh
-
-        self._last_inference_frame = self.frame_count
-
-        self.total_inferences += 1
-
-        logger.debug(
-            "Inference triggered "
-            "(frames %d-%d)",
-            start_frame,
-            end_frame
-        )
-
-        return result
 
     # ========================
     # API helpers
