@@ -81,6 +81,7 @@ class InferenceEngine:
         # Result tracking
         self._latest_result: Optional[InferenceResult] = None
         self._unread_result: bool = False  # Track if there is a new, unconsumed result
+        self._inference_active: bool = False
 
         # Metrics
         self.total_inferences: int = 0
@@ -133,18 +134,11 @@ class InferenceEngine:
         frame: Any,
         timestamp: Optional[float] = None
     ) -> Optional[InferenceResult]:
-        """
-        Processes a single frame.
 
-        Returns:
-            InferenceResult if triggered
-            None otherwise
-        """
         if timestamp is None:
             timestamp = time.time()
 
         with self._lock:
-
             self.frame_count += 1
             self.total_frames_processed += 1
 
@@ -154,44 +148,54 @@ class InferenceEngine:
             if not self.buffer.is_full():
                 return None
 
-            if not self._should_trigger_inference():
+            if self._inference_active or not self._should_trigger_inference():
                 self.total_frames_skipped += 1
                 return None
 
-            # Prepare immutable snapshot for the model
+            self._inference_active = True
+
             window_snapshot = tuple(self.buffer.get_window())
             start_frame_snap = self.frame_count - self.window_size + 1
             end_frame_snap = self.frame_count
             start_ts_snap = self._timestamps[0]
             end_ts_snap = self._timestamps[-1]
 
-            self._last_inference_frame = self.frame_count
-            self.total_inferences += 1
-
         prediction = None
 
-        if self.model is not None:
-            if callable(self.model):
-                prediction = self.model(window_snapshot)
-            elif hasattr(self.model, "predict"):
-                prediction = self.model.predict(window_snapshot)
-            else:
-                logger.warning(
-                    "Model is neither callable nor has a predict() method"
-                )
+        try:
+            if self.model is not None:
+                if callable(self.model):
+                    prediction = self.model(window_snapshot)
+                elif hasattr(self.model, "predict"):
+                    prediction = self.model.predict(window_snapshot)
+                else:
+                    logger.warning(
+                        "Model is neither callable nor has a predict() method")
 
-        result = InferenceResult(
-            window=window_snapshot,
-            start_frame_index=start_frame_snap,
-            end_frame_index=end_frame_snap,
-            start_timestamp=start_ts_snap,
-            end_timestamp=end_ts_snap,
-            prediction=prediction
-        )
+            result = InferenceResult(
+                window=window_snapshot,
+                start_frame_index=start_frame_snap,
+                end_frame_index=end_frame_snap,
+                start_timestamp=start_ts_snap,
+                end_timestamp=end_ts_snap,
+                prediction=prediction
+            )
+
+        except Exception as e:
+            with self._lock:
+                self._inference_active = False
+            logger.error(
+                "Inference failed due to an exception.", exc_info=True)
+            raise e
 
         with self._lock:
+            # Update after success
+            self._last_inference_frame = end_frame_snap
+            self.total_inferences += 1
+
             self._latest_result = result
             self._unread_result = True
+            self._inference_active = False
 
             logger.debug(
                 "Inference completed (frames %d-%d)",
