@@ -58,7 +58,7 @@ def test_window_copy_safety():
     with pytest.raises(TypeError):
         window[0] = "CORRUPTED"
 
-    assert engine._latest_result.window[0] == "A"
+    assert engine.get_latest_result().window[0] == "A"
 
 
 def test_stride_cadence():
