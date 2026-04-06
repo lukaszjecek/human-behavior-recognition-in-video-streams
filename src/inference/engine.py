@@ -185,7 +185,7 @@ class InferenceEngine:
                 prediction=prediction
             )
 
-        except Exception as e:
+        except Exception:
             with self._lock:
                 if self._generation == current_generation:
                     self._inference_active = False
