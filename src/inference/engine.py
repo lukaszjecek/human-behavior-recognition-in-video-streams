@@ -186,7 +186,7 @@ class InferenceEngine:
                 self._inference_active = False
             logger.error(
                 "Inference failed due to an exception.", exc_info=True)
-            raise e
+            raise
 
         with self._lock:
             # Update after success
