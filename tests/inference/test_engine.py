@@ -7,7 +7,8 @@ from src.inference.engine import (
 
 
 class DummyModel:
-    pass
+    def __call__(self, window):
+        return window
 
 
 def test_invalid_parameters():
