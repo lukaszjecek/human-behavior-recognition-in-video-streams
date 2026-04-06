@@ -83,6 +83,9 @@ class InferenceEngine:
         self._unread_result: bool = False  # Track if there is a new, unconsumed result
         self._inference_active: bool = False
 
+        # Generation token for state invalidation across locks
+        self._generation: int = 0
+
         # Metrics
         self.total_inferences: int = 0
         self.total_frames_processed: int = 0
@@ -153,6 +156,7 @@ class InferenceEngine:
                 return None
 
             self._inference_active = True
+            current_generation = self._generation
 
             window_snapshot = tuple(self.buffer.get_window())
             start_frame_snap = self.frame_count - self.window_size + 1
@@ -183,13 +187,18 @@ class InferenceEngine:
 
         except Exception as e:
             with self._lock:
-                self._inference_active = False
+                if self._generation == current_generation:
+                    self._inference_active = False
             logger.error(
                 "Inference failed due to an exception.", exc_info=True)
-            raise e
+            raise
 
         with self._lock:
-            # Update after success
+            if self._generation != current_generation:
+                logger.debug(
+                    "Stale inference detected due to reset. Discarding result.")
+                return None
+
             self._last_inference_frame = end_frame_snap
             self.total_inferences += 1
 
@@ -275,21 +284,19 @@ class InferenceEngine:
             }
 
     def reset(self):
-
         with self._lock:
-
             logger.info("Engine reset")
 
             self.buffer.clear()
-
             self.frame_count = 0
-
             self._timestamps.clear()
 
             self._last_inference_frame = None
-
             self._latest_result = None
             self._unread_result = False
+
+            self._inference_active = False
+            self._generation += 1
 
             self.total_inferences = 0
             self.total_frames_processed = 0
