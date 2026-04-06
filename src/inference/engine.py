@@ -1,3 +1,4 @@
+import collections
 from typing import Any, Optional, List, Tuple
 from dataclasses import dataclass
 from threading import Lock
@@ -72,7 +73,7 @@ class InferenceEngine:
         self.frame_count: int = 0
 
         # Timestamp tracking
-        self._timestamps: List[Optional[float]] = []
+        self._timestamps = collections.deque(maxlen=window_size)
 
         # Last inference location
         self._last_inference_frame: Optional[int] = None
@@ -149,9 +150,6 @@ class InferenceEngine:
 
             self.buffer.append(frame)
             self._timestamps.append(timestamp)
-
-            if len(self._timestamps) > self.window_size:
-                self._timestamps.pop(0)
 
             if not self.buffer.is_full():
                 return None
