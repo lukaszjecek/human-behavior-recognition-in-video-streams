@@ -114,7 +114,9 @@ def test_large_stride():
 
     for i in range(20):
 
-        if engine.process_frame(i):
+        out = engine.process_frame(i)
+
+        if out is not None:
             triggers += 1
 
     assert triggers == 2
