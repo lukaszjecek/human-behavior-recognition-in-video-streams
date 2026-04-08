@@ -1,3 +1,5 @@
+"""Tensorization utilities for online inference windows."""
+
 from typing import Any, List, Tuple
 
 import numpy as np
@@ -23,7 +25,7 @@ class FrameTensorizer:
         W = Width
     """
 
-    def __init__(self, target_resolution: Tuple[int, int] = (224, 224)):
+    def __init__(self, target_resolution: Tuple[int, int] = (224, 224)) -> None:
         """Initializes the tensorizer.
 
         Args:
