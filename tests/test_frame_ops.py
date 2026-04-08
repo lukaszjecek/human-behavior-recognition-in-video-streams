@@ -85,6 +85,45 @@ def test_preprocess_single_frame_dtype_validation():
     assert result.shape == (224, 224, 3)
 
 
+def test_preprocess_single_frame_type_validation():
+    """Test that non-array frame inputs raise a clear ValueError."""
+    with pytest.raises(ValueError, match="Expected numpy.ndarray"):
+        preprocess_single_frame("not-an-array", (224, 224))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "invalid_frame",
+    [
+        np.zeros((100, 100), dtype=np.uint8),
+        np.zeros((100, 100, 1), dtype=np.uint8),
+        np.zeros((100, 100, 4), dtype=np.uint8),
+    ],
+)
+def test_preprocess_single_frame_shape_validation(invalid_frame: np.ndarray):
+    """Test that invalid frame shapes/channels raise a clear ValueError."""
+    with pytest.raises(ValueError, match=r"Expected \(H, W, 3\)"):
+        preprocess_single_frame(invalid_frame, (224, 224))
+
+
+@pytest.mark.parametrize(
+    "invalid_resolution",
+    [
+        [224, 224],
+        (224,),
+        (224, 0),
+        (-1, 224),
+        (224.0, 224),
+        ("224", 224),
+    ],
+)
+def test_preprocess_single_frame_target_resolution_validation(invalid_resolution):
+    """Test target resolution validation in preprocessing."""
+    frame = create_dummy_bgr_frame()
+
+    with pytest.raises(ValueError, match="tuple of two positive integers"):
+        preprocess_single_frame(frame, invalid_resolution)  # type: ignore[arg-type]
+
+
 def test_normalize_frames_uint8():
     """Test normalization of uint8 frames."""
     # Create frames with known values
