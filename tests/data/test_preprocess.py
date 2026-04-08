@@ -1,6 +1,6 @@
 import torch
-from src.data.preprocess import VideoPreprocessor
 
+from src.data.preprocess import VideoPreprocessor
 
 
 def test_preprocessor_shape_and_stride(dummy_video):

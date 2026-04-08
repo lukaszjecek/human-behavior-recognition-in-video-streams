@@ -1,6 +1,7 @@
 # Data Pipeline Specification
+## Author: [Alicja Świercz](https://github.com/alicjaswiers)
 
-This document defines the data standards and layout for the Human Behavior Recognition project, with a specific focus on the PIP 370k dataset.
+[Back to README](../README.md)
 
 ## 1. Directory Layout
 All data is stored inside the container within the `/app/data/` directory. According to the repository rules, the `data/*` directory is ignored in version control.
@@ -50,3 +51,4 @@ docker compose run --rm inference python -m scripts.visualize
 
 # Or specify an exact video by ID and choose a custom output path
 docker compose run --rm inference python -m scripts.visualize --video_id "20200524_191348-983363826_0" --output "/app/data/logs/my_custom_overlay.mp4"
+```
