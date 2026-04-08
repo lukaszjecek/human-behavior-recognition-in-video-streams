@@ -1,0 +1,88 @@
+name: Docker Smoke
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    name: docker-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies for smoke sample generator
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Prepare smoke workspace
+        shell: bash
+        run: |
+          rm -rf data/smoke_raw data/smoke_logs
+          mkdir -p data/smoke_raw data/smoke_logs
+
+      - name: Generate smoke MP4 sample
+        run: python scripts/ci/generate_smoke_sample.py
+
+      - name: Build inference service
+        run: docker compose build inference
+
+      - name: Run smoke validation through Docker Compose
+        run: |
+          docker compose run --rm \
+            -e DATA_DIR=/app/data/smoke_raw \
+            -e LOG_DIR=/app/data/smoke_logs \
+            inference sh -lc "python src/main.py"
+
+      - name: Validate startup summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary_path = Path("data/smoke_logs/startup_summary.json")
+          if not summary_path.exists():
+              raise SystemExit("startup_summary.json was not created")
+
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          expected_classes = {"walking", "running", "falling"}
+          actual_classes = set(summary.get("classes_preview", []))
+
+          if summary.get("video_count") != 3:
+              raise SystemExit(f"Expected 3 videos, got: {summary.get('video_count')}")
+
+          if summary.get("class_count") != 3:
+              raise SystemExit(f"Expected 3 classes, got: {summary.get('class_count')}")
+
+          if actual_classes != expected_classes:
+              raise SystemExit(f"Expected classes {expected_classes}, got: {actual_classes}")
+
+          print("[OK] Smoke summary validation passed.")
+          PY
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs inference
+
+      - name: Cleanup containers
+        if: always()
+        run: docker compose down --volumes --remove-orphans
