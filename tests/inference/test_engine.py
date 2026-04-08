@@ -1,27 +1,140 @@
-from src.inference.engine import InferenceEngine
+import pytest
+
+from src.inference.engine import (
+    InferenceEngine,
+    InferenceResult
+)
 
 
-def test_inference_engine_initialization():
-    """Test if the engine initializes correctly with the frame buffer."""
-    engine = InferenceEngine(window_size=16)
-
-    assert engine.buffer.window_size == 16
-    assert engine.model is None
+class DummyModel:
+    def __call__(self, window):
+        return window
 
 
-def test_inference_engine_process_frame():
-    """Test the frame processing logic and stub prediction trigger."""
-    class DummyModel:
-        pass  # Just a placeholder for testing
+def test_invalid_parameters():
 
-    engine = InferenceEngine(window_size=3, model=DummyModel())
+    with pytest.raises(ValueError):
+        InferenceEngine(window_size=0)
 
-    # Buffer is not full yet
-    assert engine.process_frame("frame_1") is None
-    assert engine.process_frame("frame_2") is None
+    with pytest.raises(ValueError):
+        InferenceEngine(stride=0)
 
-    # Buffer is now full, it should trigger inference and return the stub prediction
-    assert engine.process_frame("frame_3") == "prediction_stub"
+    with pytest.raises(ValueError):
+        InferenceEngine(stride=-1)
 
-    # Next frame shifts the window (overflow), it should still predict
-    assert engine.process_frame("frame_4") == "prediction_stub"
+
+def test_first_window_triggers():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
+    assert engine.process_frame("f1") is None
+    assert engine.process_frame("f2") is None
+
+    result = engine.process_frame("f3")
+
+    assert isinstance(result, InferenceResult)
+
+    latest = engine.get_latest_result().window
+
+    assert latest == ("f1", "f2", "f3")
+
+
+def test_window_copy_safety():
+
+    engine = InferenceEngine(
+        window_size=2,
+        stride=2,
+        model=DummyModel()
+    )
+
+    engine.process_frame("A")
+    engine.process_frame("B")
+
+    window = engine.get_latest_result().window
+
+    with pytest.raises(TypeError):
+        window[0] = "CORRUPTED"
+
+    assert engine.get_latest_result().window[0] == "A"
+
+
+def test_stride_cadence():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
+    triggers = []
+
+    for i in range(10):
+
+        out = engine.process_frame(f"f{i}")
+
+        if out is not None:
+            triggers.append(i)
+
+    assert triggers == [2, 4, 6, 8]
+
+
+def test_metadata_integrity():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=2,
+        model=DummyModel()
+    )
+
+    engine.process_frame("f1")
+    engine.process_frame("f2")
+    engine.process_frame("f3")
+
+    result = engine.get_latest_result()
+
+    assert isinstance(result, InferenceResult)
+
+    assert result.start_frame_index == 1
+    assert result.end_frame_index == 3
+
+
+def test_large_stride():
+
+    engine = InferenceEngine(
+        window_size=3,
+        stride=10,
+        model=DummyModel()
+    )
+
+    triggers = 0
+
+    for i in range(20):
+
+        out = engine.process_frame(i)
+
+        if out is not None:
+            triggers += 1
+
+    assert triggers == 2
+
+
+def test_reset():
+
+    engine = InferenceEngine(
+        window_size=2,
+        stride=1,
+        model=DummyModel()
+    )
+
+    engine.process_frame(1)
+    engine.process_frame(2)
+
+    engine.reset()
+
+    assert engine.frame_count == 0
+
+    assert engine.get_latest_result() is None
