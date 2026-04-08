@@ -126,6 +126,28 @@ def test_tensorize_invalid_dtype():
         tensorizer.tensorize(frames)
 
 
+def test_tensorize_preprocess_error_chains_original_exception(monkeypatch):
+    """Test that preprocessing failures preserve original exception context."""
+    tensorizer = FrameTensorizer()
+    frame = create_dummy_bgr_frame()
+
+    def _raise_preprocess_error(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    import src.inference.tensorize as tensorize_module
+    monkeypatch.setattr(
+        tensorize_module,
+        "preprocess_single_frame",
+        _raise_preprocess_error,
+    )
+
+    with pytest.raises(ValueError, match="Failed to preprocess frame at index 0: boom") as exc_info:
+        tensorizer.tensorize([frame])
+
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert str(exc_info.value.__cause__) == "boom"
+
+
 def test_tensorize_output_shape():
     """Test that tensorize produces correct output shape [B, T, C, H, W]."""
     tensorizer = FrameTensorizer(target_resolution=(224, 224))

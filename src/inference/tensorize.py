@@ -94,7 +94,7 @@ class FrameTensorizer:
                 processed_frames.append(frame_processed)
             except Exception as e:
                 raise ValueError(
-                    f"Failed to preprocess frame at index {i}: {e}")
+                    f"Failed to preprocess frame at index {i}: {e}") from e
 
         # Stack frames and normalize to [0.0, 1.0] using shared utility
         frames_array = np.stack(processed_frames, axis=0)
