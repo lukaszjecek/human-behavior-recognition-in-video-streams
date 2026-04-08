@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,8 +35,40 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Lint
-        run: python -m ruff check .
+      - name: Collect Python files to lint
+        id: python-files
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            mapfile -t files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.py')
+          else
+            mapfile -t files < <(find src tests -type f -name '*.py' | sort)
+          fi
+
+          if (( ${#files[@]} == 0 )); then
+            echo "has_python=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "has_python=true"
+            echo "files<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed Python files
+        if: steps.python-files.outputs.has_python == 'true'
+        shell: bash
+        run: |
+          mapfile -t files <<< "${{ steps.python-files.outputs.files }}"
+          python -m ruff check "${files[@]}"
+
+      - name: No Python changes to lint
+        if: steps.python-files.outputs.has_python != 'true'
+        run: echo "No changed Python files detected."
 
       - name: Run tests
         env:
