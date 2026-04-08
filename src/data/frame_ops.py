@@ -19,21 +19,51 @@ def preprocess_single_frame(
     Preprocess a single BGR frame for model input.
 
     Pipeline:
-    1. Validate frame dtype (optional)
-    2. Convert BGR to RGB
-    3. Resize to target resolution
+    1. Validate frame shape and channel count
+    2. Validate target resolution
+    3. Validate frame dtype (optional)
+    4. Convert BGR to RGB
+    5. Resize to target resolution
 
     Args:
         frame: BGR frame (numpy array) from OpenCV with dtype uint8.
-        target_resolution: Target (width, height) for resizing.
+        target_resolution: Target (width, height) for resizing as positive integers.
         validate_dtype: If True, validates that frame is uint8.
 
     Returns:
         np.ndarray: Preprocessed RGB frame in uint8, shape (H, W, 3).
-
+    
     Raises:
-        ValueError: If frame is invalid or dtype is not uint8 (when validate_dtype=True).
+        ValueError: If frame shape/channels are invalid, target_resolution is invalid,
+                   or dtype is not uint8 (when validate_dtype=True).
     """
+    if not isinstance(frame, np.ndarray):
+        raise ValueError(
+            f"Frame has invalid type {type(frame).__name__}. "
+            "Expected numpy.ndarray"
+        )
+
+    if frame.ndim != 3 or frame.shape[2] != 3:
+        raise ValueError(
+            f"Frame has invalid shape {frame.shape}. "
+            "Expected (H, W, 3)"
+        )
+
+    if (
+        not isinstance(target_resolution, tuple)
+        or len(target_resolution) != 2
+        or any(
+            not isinstance(dim, (int, np.integer))
+            or isinstance(dim, bool)
+            or dim <= 0
+            for dim in target_resolution
+        )
+    ):
+        raise ValueError(
+            f"target_resolution has invalid value {target_resolution}. "
+            "Expected tuple of two positive integers (width, height)"
+        )
+
     if validate_dtype and frame.dtype != np.uint8:
         raise ValueError(
             f"Frame has invalid dtype {frame.dtype}. "
