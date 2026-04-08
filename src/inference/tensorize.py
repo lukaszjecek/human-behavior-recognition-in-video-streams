@@ -1,13 +1,13 @@
+from typing import Any, List, Tuple
+
 import numpy as np
 import torch
-from typing import List, Tuple, Any
 
-from src.data.frame_ops import preprocess_single_frame, normalize_frames
+from src.data.frame_ops import normalize_frames, preprocess_single_frame
 
 
 class FrameTensorizer:
-    """
-    Converts buffered raw frames into model-ready tensors for real-time inference.
+    """Converts buffered raw frames into model-ready tensors for real-time inference.
 
     Pipeline:
     1. Convert OpenCV BGR frames to RGB
@@ -24,8 +24,7 @@ class FrameTensorizer:
     """
 
     def __init__(self, target_resolution: Tuple[int, int] = (224, 224)):
-        """
-        Initializes the tensorizer.
+        """Initializes the tensorizer.
 
         Args:
             target_resolution: Target (width, height) for resizing frames.
@@ -41,8 +40,7 @@ class FrameTensorizer:
         self.target_resolution = target_resolution
 
     def tensorize(self, frames: List[Any]) -> torch.Tensor:
-        """
-        Converts a list of raw BGR frames into a model-ready tensor.
+        """Converts a list of raw BGR frames into a model-ready tensor.
 
         Args:
             frames: List of BGR frames (numpy arrays) from OpenCV.

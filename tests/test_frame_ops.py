@@ -1,7 +1,8 @@
 """Tests for shared frame preprocessing operations."""
-import pytest
 import numpy as np
-from src.data.frame_ops import preprocess_single_frame, normalize_frames
+import pytest
+
+from src.data.frame_ops import normalize_frames, preprocess_single_frame
 
 
 def create_dummy_bgr_frame(height: int = 480, width: int = 640) -> np.ndarray:

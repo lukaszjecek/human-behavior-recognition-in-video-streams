@@ -1,13 +1,13 @@
-"""
-Shared preprocessing utilities for video frames.
+"""Shared preprocessing utilities for video frames.
 
 This module contains common preprocessing operations used by both
 offline (VideoPreprocessor) and online (FrameTensorizer) pipelines
 to ensure consistency.
 """
+from typing import Tuple
+
 import cv2
 import numpy as np
-from typing import Tuple
 
 
 def preprocess_single_frame(
@@ -15,8 +15,7 @@ def preprocess_single_frame(
     target_resolution: Tuple[int, int],
     validate_dtype: bool = True
 ) -> np.ndarray:
-    """
-    Preprocess a single BGR frame for model input.
+    """Preprocess a single BGR frame for model input.
 
     Pipeline:
     1. Validate frame shape and channel count
@@ -80,8 +79,7 @@ def preprocess_single_frame(
 
 
 def normalize_frames(frames: np.ndarray) -> np.ndarray:
-    """
-    Normalize frame pixel values from [0, 255] to [0.0, 1.0].
+    """Normalize frame pixel values from [0, 255] to [0.0, 1.0].
 
     Args:
         frames: Array of frames with dtype uint8 or already float32.
