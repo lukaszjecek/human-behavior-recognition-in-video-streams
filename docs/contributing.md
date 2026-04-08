@@ -78,6 +78,9 @@ python -m ruff check .
 python -m pytest -q tests
 ```
 
+Repository CI also includes a Docker smoke workflow.
+It generates a tiny MP4 sample and validates that the inference service starts correctly through Docker Compose.
+
 ## Documentation Rule
 
 Update documentation when the change affects setup, architecture, API, or usage.

@@ -37,3 +37,4 @@ docker compose up --build
 - [Frontend](docs/frontend.md)
 - [Integration and DevOps](docs/integration-devops.md)
 - [Contributing](docs/contributing.md)
+- [CI Workflows](docs/ci-workflows.md)
