@@ -1,26 +1,44 @@
 # fallback ownership
 * @lukaszjecek
 
-# lukaszjecek ownership
-/.github/                @lukaszjecek
-/docker/                 @lukaszjecek
-/docs/                   @lukaszjecek
-/.dockerignore           @lukaszjecek
-/.gitattributes          @lukaszjecek
-/.gitignore              @lukaszjecek
-/compose.yaml            @lukaszjecek
-/pytest.ini              @lukaszjecek
-/README.md               @lukaszjecek
-/requirements*.txt       @lukaszjecek
+# repository / infra / governance
+/.github/                        @lukaszjecek
+/docker/                         @lukaszjecek
+/docs/contributing.md            @lukaszjecek
+/docs/ci-workflows.md            @lukaszjecek
+/docs/integration-devops.md      @lukaszjecek
+/.dockerignore                   @lukaszjecek
+/.gitattributes                  @lukaszjecek
+/.gitignore                      @lukaszjecek
+/compose*.y*ml                   @lukaszjecek
+/pytest.ini                      @lukaszjecek
+/pyproject.toml                  @lukaszjecek
+/README.md                       @lukaszjecek
+/requirements*.txt               @lukaszjecek
 
+# data pipeline
+/configs/data_pipeline.y*ml      @alicjaswiers
+/docs/data-pipeline.md           @alicjaswiers
+/src/data/                       @alicjaswiers
+/tests/data/                     @alicjaswiers
+/data/                           @alicjaswiers
+/scripts/visualize.py            @alicjaswiers
 
-# alicjaswiers ownership
-/configs/                @alicjaswiers
-/data/                   @alicjaswiers
-/docs/data_pipeline.md   @alicjaswiers
+# inference engine
+/docs/inference.md               @blanqtoja
+/src/inference/                  @blanqtoja
+/tests/inference/                @blanqtoja
 
+# baseline / training / validation
+/configs/train.y*ml              @XEN00000
+/docs/ml-baseline.md             @XEN00000
+/src/models/                     @XEN00000
+/tests/models/                   @XEN00000
+/scripts/smoke_test.py           @XEN00000
+/scripts/train.py                @XEN00000
+/scripts/validate.py             @XEN00000
 
-# shared ownership
-/scripts/                @alicjaswiers @lukaszjecek
-/src/                    @alicjaswiers @lukaszjecek
-/tests/                  @alicjaswiers @lukaszjecek
+# app entry / integration smoke
+/src/main.py                     @lukaszjecek
+/tests/app/                      @lukaszjecek
+/scripts/ci/                     @lukaszjecek

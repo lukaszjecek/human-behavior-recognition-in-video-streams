@@ -1,5 +1,7 @@
 import torch
+
 from src.models.baseline import BaselineBehaviorModel
+
 
 def test_baseline_model_synthetic_input():
     batch_size = 2
@@ -18,4 +20,5 @@ def test_baseline_model_synthetic_input():
         output = model(dummy_input)
 
     expected_shape = (batch_size, num_classes)
-    assert output.shape == expected_shape, f"Oczekiwano kształtu {expected_shape}, otrzymano {output.shape}"
+    assert output.shape == expected_shape, (f"Oczekiwano kształtu {expected_shape}, "
+                                            f"otrzymano {output.shape}")

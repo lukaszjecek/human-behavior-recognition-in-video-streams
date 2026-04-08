@@ -1,5 +1,7 @@
 import json
+
 import src.main as app_main
+
 
 def test_main_writes_summary(tmp_path, monkeypatch):
     subset_dir = tmp_path / "subset"
