@@ -116,6 +116,14 @@ def test_normalize_frames_float32():
     assert np.array_equal(result, frames)  # Should be unchanged
 
 
+def test_normalize_frames_unsupported_float_dtype():
+    """Test that unsupported float dtypes raise an explicit error."""
+    frames = np.random.rand(5, 100, 100, 3).astype(np.float64)
+
+    with pytest.raises(ValueError, match="Expected np.uint8 or np.float32"):
+        normalize_frames(frames)
+
+
 def test_normalize_frames_single_frame():
     """Test normalization of a single frame (3D array)."""
     frame = np.ones((100, 100, 3), dtype=np.uint8) * 128
