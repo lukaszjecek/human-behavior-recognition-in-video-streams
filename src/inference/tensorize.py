@@ -47,13 +47,19 @@ class FrameTensorizer:
             frames: List of BGR frames (numpy arrays) from OpenCV.
 
         Returns:
-            torch.Tensor: Shape [B, T, C, H, W] where B=1, T=len(frames), C=3, 
-                         H and W are from target_resolution.
+            torch.Tensor: Shape [B, T, C, H, W] where B=1, T=len(frames), C=3,
+                         H=target_resolution[1] (height) and
+                         W=target_resolution[0] (width). Note that
+                         target_resolution is specified as (width, height)
+                         to match OpenCV's resize dsize order.
 
         Raises:
             ValueError: If frames list is empty or contains invalid frames.
         """
-        if not frames:
+        if not isinstance(frames, (list, tuple)):
+            raise ValueError("frames must be a list or tuple of frames")
+        
+        if len(frames) == 0:
             raise ValueError("frames list cannot be empty")
 
         processed_frames = []
@@ -69,6 +75,12 @@ class FrameTensorizer:
                 raise ValueError(
                     f"Frame at index {i} has invalid shape {frame.shape}. "
                     "Expected (H, W, 3)"
+                )
+            
+            if frame.dtype != np.uint8:
+                raise ValueError(
+                    f"Frame at index {i} has invalid dtype {frame.dtype}. "
+                    "Expected np.uint8 for proper normalization"
                 )
 
             # Convert BGR to RGB

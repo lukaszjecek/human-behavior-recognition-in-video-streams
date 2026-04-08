@@ -44,6 +44,24 @@ def test_tensorize_empty_frames_list():
         tensorizer.tensorize([])
 
 
+def test_tensorize_invalid_container_type():
+    """Test that tensorize raises ValueError for non-list/tuple containers."""
+    tensorizer = FrameTensorizer()
+    
+    # Passing a numpy array instead of a list should fail with clear error
+    frames_array = np.random.randint(0, 256, (3, 480, 640, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="must be a list or tuple"):
+        tensorizer.tensorize(frames_array)
+    
+    # Passing a string should also fail
+    with pytest.raises(ValueError, match="must be a list or tuple"):
+        tensorizer.tensorize("not a list")
+    
+    # Passing a dict should also fail
+    with pytest.raises(ValueError, match="must be a list or tuple"):
+        tensorizer.tensorize({})
+
+
 def test_tensorize_none_frame():
     """Test that tensorize raises ValueError for None frames."""
     tensorizer = FrameTensorizer()
@@ -79,6 +97,32 @@ def test_tensorize_invalid_frame_shape():
     frames = [rgba_frame]
 
     with pytest.raises(ValueError, match="invalid shape"):
+        tensorizer.tensorize(frames)
+
+
+def test_tensorize_invalid_dtype():
+    """Test that tensorize raises ValueError for non-uint8 frames."""
+    tensorizer = FrameTensorizer()
+    
+    # Float32 frame (already normalized) - should fail
+    float_frame = np.random.rand(480, 640, 3).astype(np.float32)
+    frames = [float_frame]
+    
+    with pytest.raises(ValueError, match="invalid dtype.*Expected np.uint8"):
+        tensorizer.tensorize(frames)
+    
+    # Float64 frame - should fail
+    float64_frame = np.random.rand(480, 640, 3).astype(np.float64)
+    frames = [float64_frame]
+    
+    with pytest.raises(ValueError, match="invalid dtype.*Expected np.uint8"):
+        tensorizer.tensorize(frames)
+    
+    # Int32 frame - should fail
+    int32_frame = np.random.randint(0, 256, (480, 640, 3), dtype=np.int32)
+    frames = [int32_frame]
+    
+    with pytest.raises(ValueError, match="invalid dtype.*Expected np.uint8"):
         tensorizer.tensorize(frames)
 
 
