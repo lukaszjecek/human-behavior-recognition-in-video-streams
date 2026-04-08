@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from pathlib import Path
 
+from src.data.frame_ops import preprocess_single_frame, normalize_frames
+
 
 class VideoPreprocessor:
     """
@@ -38,16 +40,18 @@ class VideoPreprocessor:
             ret, frame = cap.read()
             if not ret:
                 break
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, self.target_resolution)
-            frames.append(frame)
+            # Use shared preprocessing: BGR->RGB, resize
+            frame_processed = preprocess_single_frame(frame, self.target_resolution, validate_dtype=False)
+            frames.append(frame_processed)
 
         cap.release()
 
         if not frames:
             return torch.zeros((0, self.T, 3, self.target_resolution[1], self.target_resolution[0]))
 
-        frames_np = np.array(frames, dtype=np.float32) / 255.0
+        # Use shared normalization
+        frames_np = np.array(frames)
+        frames_np = normalize_frames(frames_np)
         total_frames = len(frames_np)
 
         windows = []

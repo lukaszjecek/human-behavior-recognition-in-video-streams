@@ -1,7 +1,8 @@
-import cv2
 import numpy as np
 import torch
 from typing import List, Tuple, Any
+
+from src.data.frame_ops import preprocess_single_frame, normalize_frames
 
 
 class FrameTensorizer:
@@ -58,7 +59,7 @@ class FrameTensorizer:
         """
         if not isinstance(frames, (list, tuple)):
             raise ValueError("frames must be a list or tuple of frames")
-        
+
         if len(frames) == 0:
             raise ValueError("frames list cannot be empty")
 
@@ -76,24 +77,28 @@ class FrameTensorizer:
                     f"Frame at index {i} has invalid shape {frame.shape}. "
                     "Expected (H, W, 3)"
                 )
-            
+
             if frame.dtype != np.uint8:
                 raise ValueError(
                     f"Frame at index {i} has invalid dtype {frame.dtype}. "
                     "Expected np.uint8 for proper normalization"
                 )
 
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Use shared preprocessing: BGR->RGB, resize
+            try:
+                frame_processed = preprocess_single_frame(
+                    frame,
+                    self.target_resolution,
+                    validate_dtype=False  # Already validated above
+                )
+                processed_frames.append(frame_processed)
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to preprocess frame at index {i}: {e}")
 
-            # Resize to target resolution
-            frame_resized = cv2.resize(frame_rgb, self.target_resolution)
-
-            processed_frames.append(frame_resized)
-
-        # Stack frames and normalize to [0.0, 1.0]
-        frames_array = np.stack(
-            processed_frames, axis=0).astype(np.float32) / 255.0
+        # Stack frames and normalize to [0.0, 1.0] using shared utility
+        frames_array = np.stack(processed_frames, axis=0)
+        frames_array = normalize_frames(frames_array)
 
         # Convert to torch tensor
         # Current shape: [T, H, W, C]
