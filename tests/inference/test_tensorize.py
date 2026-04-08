@@ -157,6 +157,44 @@ def test_tensorize_output_shape_custom_resolution():
     assert tensor.shape == (1, 8, 3, 112, 112)
 
 
+def test_tensorize_non_square_resolution():
+    """
+    Test tensorize with non-square resolution to verify width/height ordering.
+    
+    Critical test: Ensures that target_resolution=(width, height) correctly maps to
+    output shape [B, T, C, H, W] where H=height and W=width.
+    """
+    # Test case 1: 320x240 (landscape)
+    tensorizer = FrameTensorizer(target_resolution=(320, 240))
+    frames = [create_dummy_bgr_frame() for _ in range(16)]
+    tensor = tensorizer.tensorize(frames)
+    
+    # target_resolution=(320, 240) means width=320, height=240
+    # Output should be [B=1, T=16, C=3, H=240, W=320]
+    assert tensor.shape == (1, 16, 3, 240, 320), \
+        f"Expected shape (1, 16, 3, 240, 320) but got {tensor.shape}"
+    
+    # Test case 2: 240x320 (portrait) - swapped dimensions
+    tensorizer = FrameTensorizer(target_resolution=(240, 320))
+    frames = [create_dummy_bgr_frame() for _ in range(8)]
+    tensor = tensorizer.tensorize(frames)
+    
+    # target_resolution=(240, 320) means width=240, height=320
+    # Output should be [B=1, T=8, C=3, H=320, W=240]
+    assert tensor.shape == (1, 8, 3, 320, 240), \
+        f"Expected shape (1, 8, 3, 320, 240) but got {tensor.shape}"
+    
+    # Test case 3: 640x480 (common video resolution)
+    tensorizer = FrameTensorizer(target_resolution=(640, 480))
+    frames = [create_dummy_bgr_frame() for _ in range(4)]
+    tensor = tensorizer.tensorize(frames)
+    
+    # target_resolution=(640, 480) means width=640, height=480
+    # Output should be [B=1, T=4, C=3, H=480, W=640]
+    assert tensor.shape == (1, 4, 3, 480, 640), \
+        f"Expected shape (1, 4, 3, 480, 640) but got {tensor.shape}"
+
+
 def test_tensorize_dtype_and_normalization():
     """Test that tensorize produces float32 dtype and normalizes values to [0.0, 1.0]."""
     tensorizer = FrameTensorizer(target_resolution=(224, 224))

@@ -52,9 +52,23 @@ def test_preprocess_single_frame_resize():
     result = preprocess_single_frame(frame, (512, 512))
     assert result.shape == (512, 512, 3)
 
-    # Non-square resize
+    # Non-square resize - verify width/height ordering
+    # target_resolution=(320, 240) means width=320, height=240
+    # Output shape should be (H=240, W=320, C=3)
     result = preprocess_single_frame(frame, (320, 240))
-    assert result.shape == (240, 320, 3)  # Height, Width, Channels
+    assert result.shape == (240, 320, 3), \
+        f"Expected shape (240, 320, 3) for target_resolution=(320, 240), got {result.shape}"
+    
+    # Test reverse: target_resolution=(240, 320) means width=240, height=320
+    # Output shape should be (H=320, W=240, C=3)
+    result = preprocess_single_frame(frame, (240, 320))
+    assert result.shape == (320, 240, 3), \
+        f"Expected shape (320, 240, 3) for target_resolution=(240, 320), got {result.shape}"
+    
+    # Test common video resolution: 640x480
+    result = preprocess_single_frame(frame, (640, 480))
+    assert result.shape == (480, 640, 3), \
+        f"Expected shape (480, 640, 3) for target_resolution=(640, 480), got {result.shape}"
 
 
 def test_preprocess_single_frame_dtype_validation():
