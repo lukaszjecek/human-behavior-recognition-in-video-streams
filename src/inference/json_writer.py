@@ -1,12 +1,12 @@
-"""JSON writer for converting inference results to action event records.
+"""
+JSON writer for converting inference results to action event records.
 
 Handles serialization of InferenceResult objects to ActionEvent format
 with confidence score extraction and error handling.
 """
 
+from typing import Optional, Any
 import logging
-from typing import Any, Optional
-
 import numpy as np
 import torch
 
@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class ActionEventWriter:
-    """Convert InferenceResult objects to ActionEvent records and manage logging.
+    """
+    Converts InferenceResult objects to ActionEvent records and manages logging.
 
     Supports multiple prediction formats:
     - Logits (raw model outputs)
@@ -26,8 +27,9 @@ class ActionEventWriter:
     - Single confidence values
     """
 
-    def __init__(self, class_labels: Optional[list[str]] = None) -> None:
-        """Initialize the writer.
+    def __init__(self, class_labels: Optional[list[str]] = None):
+        """
+        Initialize the writer.
 
         Args:
             class_labels: Optional list of class labels indexed by prediction index.
@@ -41,7 +43,8 @@ class ActionEventWriter:
         result: InferenceResult,
         track_id: Optional[int] = None,
     ) -> Optional[ActionEvent]:
-        """Convert InferenceResult to ActionEvent.
+        """
+        Convert InferenceResult to ActionEvent.
 
         Args:
             result: InferenceResult from the inference engine.
@@ -84,7 +87,8 @@ class ActionEventWriter:
         result: InferenceResult,
         track_id: Optional[int] = None,
     ) -> bool:
-        """Process and add an inference result to the log.
+        """
+        Process and add an inference result to the log.
 
         Args:
             result: InferenceResult from the inference engine.
@@ -104,7 +108,8 @@ class ActionEventWriter:
         results: list[InferenceResult],
         track_ids: Optional[list[int]] = None,
     ) -> int:
-        """Process and add multiple inference results.
+        """
+        Process and add multiple inference results.
 
         Args:
             results: List of InferenceResult objects.
@@ -144,9 +149,10 @@ class ActionEventWriter:
 
     def _extract_label_confidence(
         self,
-        prediction: Any,  # noqa: ANN401
+        prediction: Any,
     ) -> tuple[Optional[str], Optional[float]]:
-        """Extract label and confidence from various prediction formats.
+        """
+        Extract label and confidence from various prediction formats.
 
         Args:
             prediction: Can be logits, probabilities, dict, or single float.
@@ -183,9 +189,10 @@ class ActionEventWriter:
 
     def _extract_from_logits_or_probs(
         self,
-        prediction: Any,  # noqa: ANN401
+        prediction: Any,
     ) -> tuple[Optional[str], Optional[float]]:
-        """Extract label and confidence from logits or probability distributions.
+        """
+        Extract label and confidence from logits or probability distributions.
 
         Args:
             prediction: Logits, probabilities as list, numpy array, or torch tensor.

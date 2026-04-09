@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import pytest
 
-
 @pytest.fixture
 def dummy_video(tmp_path):
     """Creates a 40-frame dummy video in a temporary directory."""

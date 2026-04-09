@@ -1,5 +1,4 @@
 import pytest
-
 from src.inference.buffer import FrameBuffer
 
 

@@ -1,9 +1,9 @@
 import collections
-import logging
-import time
+from typing import Any, Optional, Tuple
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Optional, Tuple
+import logging
+import time
 
 from src.inference.buffer import FrameBuffer
 
@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class InferenceResult:
-    """Stores metadata and prediction for an inference step.
+    """
+    Stores metadata and prediction for an inference step.
     """
     window: Tuple[Any, ...]
 
@@ -26,7 +27,8 @@ class InferenceResult:
 
 
 class InferenceEngine:
-    """Production-grade inference engine with:
+    """
+    Production-grade inference engine with:
 
     - configurable stride
     - frame + timestamp tracking
@@ -42,16 +44,18 @@ class InferenceEngine:
         stride: int = 1,
         model: Optional[Any] = None
     ):
-        """Args:
-        window_size:
-            Number of frames per inference window.
-
-        stride:
-            Frames between inference triggers.
-
-        model:
-            Optional model object (callable PyTorch model or object with predict()).
         """
+        Args:
+            window_size:
+                Number of frames per inference window.
+
+            stride:
+                Frames between inference triggers.
+
+            model:
+                Optional model object (callable PyTorch model or object with predict()).
+        """
+
         if window_size <= 0:
             raise ValueError("window_size must be > 0")
 
@@ -100,7 +104,8 @@ class InferenceEngine:
 
     @property
     def window_size(self) -> int:
-        """Single Source of Truth for window_size, delegated to the buffer.
+        """
+        Single Source of Truth for window_size, delegated to the buffer.
         """
         return self.buffer.window_size
 
@@ -109,7 +114,8 @@ class InferenceEngine:
         return self._stride
 
     def set_stride(self, stride: int):
-        """Dynamically updates stride.
+        """
+        Dynamically updates stride.
         """
         if stride <= 0:
             raise ValueError("stride must be > 0")
@@ -244,8 +250,10 @@ class InferenceEngine:
     def peek_next_trigger_frame(
         self
     ) -> Optional[int]:
-        """Predicts next inference frame index.
         """
+        Predicts next inference frame index.
+        """
+
         with self._lock:
 
             if self._last_inference_frame is None:

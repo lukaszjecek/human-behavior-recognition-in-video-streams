@@ -1,12 +1,11 @@
-import argparse
 import json
-from pathlib import Path
-
-import cv2
-import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
+import cv2
 import yaml
+import argparse
 
 
 def get_video_info(video_path: Path):

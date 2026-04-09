@@ -6,13 +6,13 @@ import json
 import tempfile
 from pathlib import Path
 
-import numpy as np
 import pytest
+import numpy as np
 import torch
 
 from src.inference.action_event import ActionEvent, ActionEventLog
-from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.engine import InferenceResult
 
 
 class TestActionEvent:

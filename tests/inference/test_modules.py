@@ -4,16 +4,16 @@ Test script to verify action_event and json_writer modules work correctly.
 Generates a sample output JSON file demonstrating the schema.
 """
 
-import json
 import sys
+import json
 from pathlib import Path
 
 # Add root directory to path (go up 3 levels: tests/inference -> tests -> . -> .)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.inference.action_event import ActionEvent, ActionEventLog
-from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.engine import InferenceResult
 
 
 def main():
@@ -95,7 +95,7 @@ def main():
         log.add_event(ActionEvent(0, 15, "walking", 0.95))
         log.add_event(ActionEvent(16, 31, "running", 0.87))
         log.add_event(ActionEvent(32, 47, "jumping", 0.92))
-        print("✓ Added 3 events to ActionEventLog")
+        print(f"✓ Added 3 events to ActionEventLog")
         print(f"  - Event count: {len(log.events)}")
     except Exception as e:
         print(f"✗ Failed to manage ActionEventLog: {e}")
@@ -204,7 +204,7 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         sample_log.save_to_file(str(output_path))
 
-        print("✓ Generated sample output file")
+        print(f"✓ Generated sample output file")
         print(f"  - Path: {output_path}")
         print(f"  - Events: {len(sample_log.events)}")
 

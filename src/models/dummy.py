@@ -2,7 +2,8 @@ import torch.nn as nn
 
 
 class DummyBehaviorModel(nn.Module):
-    """Simple 3D model that accepts [B, T, C, H, W] tensors
+    """
+    Simple 3D model that accepts [B, T, C, H, W] tensors
     and returns class logits.
     """
 

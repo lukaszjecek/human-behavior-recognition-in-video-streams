@@ -1,7 +1,6 @@
 import torch.nn as nn
 from torchvision.models.video import r3d_18
 
-
 class BaselineBehaviorModel(nn.Module):
     def __init__(self, num_classes=5):
         super().__init__()
