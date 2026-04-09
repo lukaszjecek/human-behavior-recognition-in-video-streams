@@ -1,0 +1,50 @@
+{
+  "events": [
+    {
+      "start_frame_index": 0,
+      "end_frame_index": 15,
+      "label": "walking",
+      "confidence": 0.95,
+      "start_timestamp": 0.0,
+      "end_timestamp": 0.5,
+      "track_id": 1
+    },
+    {
+      "start_frame_index": 16,
+      "end_frame_index": 31,
+      "label": "running",
+      "confidence": 0.87,
+      "start_timestamp": 0.533,
+      "end_timestamp": 1.033,
+      "track_id": 1
+    },
+    {
+      "start_frame_index": 32,
+      "end_frame_index": 47,
+      "label": "jumping",
+      "confidence": 0.92,
+      "start_timestamp": 1.067,
+      "end_timestamp": 1.567,
+      "track_id": 1
+    },
+    {
+      "start_frame_index": 48,
+      "end_frame_index": 63,
+      "label": "standing",
+      "confidence": 0.98,
+      "start_timestamp": 1.6,
+      "end_timestamp": 2.1,
+      "track_id": 1
+    },
+    {
+      "start_frame_index": 64,
+      "end_frame_index": 79,
+      "label": "walking",
+      "confidence": 0.91,
+      "start_timestamp": 2.133,
+      "end_timestamp": 2.633,
+      "track_id": 2
+    }
+  ],
+  "event_count": 5
+}
