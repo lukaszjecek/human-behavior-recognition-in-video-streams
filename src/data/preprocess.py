@@ -1,12 +1,16 @@
+"""Video preprocessing pipeline for offline tensor preparation."""
+
+from pathlib import Path
+
 import cv2
 import numpy as np
 import torch
-from pathlib import Path
+
+from src.data.frame_ops import normalize_frames, preprocess_single_frame
 
 
 class VideoPreprocessor:
-    """
-    Module responsible for consistent video preprocessing into tensors.
+    """Module responsible for consistent video preprocessing into tensors.
 
     Pipeline operations order:
     1. Decode: Video frame decoding via OpenCV (BGR -> RGB conversion).
@@ -15,14 +19,26 @@ class VideoPreprocessor:
     4. Windowing: Extracting temporal windows of length `T` frames with a given `stride`.
     5. Tensor shape: PyTorch conversion and axis permutation to [T, C, H, W].
     """
-    def __init__(self, target_resolution: tuple = (224, 224), temporal_window: int = 16, stride: int = 16):
+
+    def __init__(
+        self,
+        target_resolution: tuple[int, int] = (224, 224),
+        temporal_window: int = 16,
+        stride: int = 16,
+    ) -> None:
+        """Initialize the video preprocessor.
+
+        Args:
+            target_resolution: Target frame size as (width, height).
+            temporal_window: Number of frames in one temporal window.
+            stride: Step between consecutive windows.
+        """
         self.target_resolution = target_resolution
         self.T = temporal_window
         self.stride = stride
 
     def process(self, video_path: Path) -> torch.Tensor:
-        """
-        Processes the entire video and returns extracted, model-ready windows.
+        """Processes the entire video and returns extracted, model-ready windows.
 
         Returns:
         torch.Tensor: Tensor of shape [num_windows, T, C, H, W].
@@ -38,16 +54,22 @@ class VideoPreprocessor:
             ret, frame = cap.read()
             if not ret:
                 break
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, self.target_resolution)
-            frames.append(frame)
+            # Use shared preprocessing: BGR->RGB, resize
+            frame_processed = preprocess_single_frame(
+                frame,
+                self.target_resolution,
+                validate_dtype=False,
+            )
+            frames.append(frame_processed)
 
         cap.release()
 
         if not frames:
             return torch.zeros((0, self.T, 3, self.target_resolution[1], self.target_resolution[0]))
 
-        frames_np = np.array(frames, dtype=np.float32) / 255.0
+        # Use shared normalization
+        frames_np = np.array(frames)
+        frames_np = normalize_frames(frames_np)
         total_frames = len(frames_np)
 
         windows = []
