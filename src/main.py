@@ -1,7 +1,7 @@
 import json
 import sys
-from pathlib import Path
 from os import getenv
+from pathlib import Path
 
 DATA_DIR = Path(getenv("DATA_DIR", "/app/data/raw"))
 LOG_DIR = Path(getenv("LOG_DIR", "/app/data/logs"))

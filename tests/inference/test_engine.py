@@ -1,9 +1,6 @@
 import pytest
 
-from src.inference.engine import (
-    InferenceEngine,
-    InferenceResult
-)
+from src.inference.engine import InferenceEngine, InferenceResult
 
 
 class DummyModel:

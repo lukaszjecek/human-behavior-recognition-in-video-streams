@@ -1,19 +1,17 @@
-"""
-Action event record schema for JSON serialization.
+"""Action event record schema for JSON serialization.
 
 Defines the data structure for detected actions/behaviors with confidence scores
 and temporal/spatial metadata.
 """
 
-from dataclasses import dataclass, asdict
-from typing import Optional
 import json
+from dataclasses import asdict, dataclass
+from typing import Optional
 
 
 @dataclass
 class ActionEvent:
-    """
-    Represents a single detected action/behavior event with temporal and confidence metadata.
+    """Represent a single detected action/behavior event with temporal and confidence metadata.
 
     Attributes:
         start_frame_index: Starting frame index of the detection window.
@@ -32,7 +30,7 @@ class ActionEvent:
     end_timestamp: Optional[float] = None
     track_id: Optional[int] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate fields after initialization."""
         if self.start_frame_index < 0:
             raise ValueError("start_frame_index must be >= 0")
@@ -64,7 +62,8 @@ class ActionEvent:
 class ActionEventLog:
     """Container for a log of action events with serialization support."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize empty action event log."""
         self.events: list[ActionEvent] = []
 
     def add_event(self, event: ActionEvent) -> None:
