@@ -1,19 +1,17 @@
-"""
-Action event record schema for JSON serialization.
+"""Action event record schema for JSON serialization.
 
 Defines the data structure for detected actions/behaviors with confidence scores
 and temporal/spatial metadata.
 """
 
-from dataclasses import dataclass, asdict
-from typing import Optional
 import json
+from dataclasses import asdict, dataclass
+from typing import Optional
 
 
 @dataclass
 class ActionEvent:
-    """
-    Represents a single detected action/behavior event with temporal and confidence metadata.
+    """Represents a single detected action/behavior event with temporal and confidence metadata.
 
     Attributes:
         start_frame_index: Starting frame index of the detection window.
