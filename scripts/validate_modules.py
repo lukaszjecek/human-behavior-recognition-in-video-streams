@@ -1,23 +1,20 @@
 #!/usr/bin/env python
-"""
-Test script to verify action_event and json_writer modules work correctly.
+"""Validation script to verify action_event and json_writer modules work correctly.
+
 Generates a sample output JSON file demonstrating the schema.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
-# Add root directory to path (go up 3 levels: tests/inference -> tests -> . -> .)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from src.inference.action_event import ActionEvent, ActionEventLog
-from src.inference.json_writer import ActionEventWriter
 from src.inference.engine import InferenceResult
+from src.inference.json_writer import ActionEventWriter
 
 
-def main():
-    """Run tests and generate sample output."""
+def main() -> bool:
+    """Run validation and generate sample output."""
     print("=" * 70)
     print("ACTION EVENT & JSON WRITER MODULE VALIDATION")
     print("=" * 70)
@@ -47,7 +44,6 @@ def main():
     print("\nTEST 2: ActionEvent JSON Serialization")
     print("-" * 70)
     try:
-        data = event.to_dict()
         json_str = event.to_json()
         print("✓ Serialized ActionEvent to JSON")
         print(f"  - JSON: {json_str}")
@@ -95,7 +91,7 @@ def main():
         log.add_event(ActionEvent(0, 15, "walking", 0.95))
         log.add_event(ActionEvent(16, 31, "running", 0.87))
         log.add_event(ActionEvent(32, 47, "jumping", 0.92))
-        print(f"✓ Added 3 events to ActionEventLog")
+        print("✓ Added 3 events to ActionEventLog")
         print(f"  - Event count: {len(log.events)}")
     except Exception as e:
         print(f"✗ Failed to manage ActionEventLog: {e}")
@@ -200,11 +196,11 @@ def main():
             sample_log.add_event(event)
 
         # Save to file
-        output_path = Path(__file__).parent / "data" / "logs" / "sample_actions.json"
+        output_path = Path(__file__).parent / "data" / "sample_actions.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         sample_log.save_to_file(str(output_path))
 
-        print(f"✓ Generated sample output file")
+        print("✓ Generated sample output file")
         print(f"  - Path: {output_path}")
         print(f"  - Events: {len(sample_log.events)}")
 
