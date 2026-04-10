@@ -138,12 +138,13 @@ def main() -> bool:
     for test_name, test_data in test_predictions:
         try:
             pred = test_data["prediction"]
+            event_count = len(writer.log.events)
             result = InferenceResult(
                 window=tuple(),
-                start_frame_index=writer.log.events.__len__() * 16,
-                end_frame_index=writer.log.events.__len__() * 16 + 15,
-                start_timestamp=writer.log.events.__len__() * 0.5,
-                end_timestamp=writer.log.events.__len__() * 0.5 + 0.5,
+                start_frame_index=event_count * 16,
+                end_frame_index=event_count * 16 + 15,
+                start_timestamp=event_count * 0.5,
+                end_timestamp=event_count * 0.5 + 0.5,
                 prediction=pred,
             )
             event = writer.process_inference_result(result, test_data.get("track_id"))
