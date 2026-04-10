@@ -30,7 +30,7 @@ class ActionEvent:
     end_timestamp: Optional[float] = None
     track_id: Optional[int] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate fields after initialization."""
         if self.start_frame_index < 0:
             raise ValueError("start_frame_index must be >= 0")
@@ -62,7 +62,8 @@ class ActionEvent:
 class ActionEventLog:
     """Container for a log of action events with serialization support."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the ActionEventLog container."""
         self.events: list[ActionEvent] = []
 
     def add_event(self, event: ActionEvent) -> None:
