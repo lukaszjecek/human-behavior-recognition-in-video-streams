@@ -11,6 +11,7 @@ import yaml
 from src.data.loader import get_dataloader
 from src.models.baseline import BaselineBehaviorModel
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Trainin entrypoint for the baseline mdl")
     parser.add_argument("--config", default="configs/train.yml", help="Path to config file")
