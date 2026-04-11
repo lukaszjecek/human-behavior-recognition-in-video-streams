@@ -1,3 +1,6 @@
+"""
+Module for training the baseline behavior recognition model.
+"""
 import argparse
 import json
 import time
@@ -13,6 +16,9 @@ from src.models.baseline import BaselineBehaviorModel
 
 
 def main() -> int:
+    """
+    Main entrypoint for the training script.
+    """
     parser = argparse.ArgumentParser(description="Trainin entrypoint for the baseline mdl")
     parser.add_argument("--config", default="configs/train.yml", help="Path to config file")
     args = parser.parse_args()
