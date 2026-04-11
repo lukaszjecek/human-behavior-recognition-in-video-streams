@@ -2,15 +2,16 @@ import argparse
 import json
 import time
 from pathlib import Path
-import yaml
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import yaml
 
 from src.data.loader import get_dataloader
 from src.models.baseline import BaselineBehaviorModel
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Trainin entrypoint for the baseline mdl")
     parser.add_argument("--config", default="configs/train.yml", help="Path to config file")
     args = parser.parse_args()
@@ -108,6 +109,8 @@ def main():
     print("\n SUCCESSFULLY TRAINED MODEL")
     print(f"MODEL SAVED TO: {checkpoints_path}")
 
+    return 0
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())

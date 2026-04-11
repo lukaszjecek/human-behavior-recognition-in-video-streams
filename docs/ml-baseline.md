@@ -12,3 +12,6 @@ Run training:
 ```
 docker compose run --rm inference python -m scripts.train
 ```
+**Training outputs:**
+- Model checkpoints are saved to: `data/logs/checkpoints/`
+- Training metrics (JSONL) are saved to: `data/logs/metrics/`
