@@ -2,8 +2,8 @@ experiment_name: "baseline_finetune"
 directories:
   manifests: "data/manifests"
   raw: "data/raw"
-  checkpoints: "logs/checkpoints"
-  logs: "logs/metrics"
+  checkpoints: "data/logs/checkpoints" 
+  logs: "data/logs/metrics"     
 
 training:
   epochs: 10

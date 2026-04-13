@@ -19,16 +19,6 @@ docker compose run --rm inference python -m scripts.train
 **Class Configuration:**
 The `num_classes` parameter is intentionally derived dynamically from the dataset manifest during runtime. This approach ensures that the model architecture (specifically the final linear layer) always matches the number of unique labels present in the current data subset, avoiding configuration drift and manual errors.
 
-<<<<<<< Updated upstream
-## Training
-Run training:
-```
-docker compose run --rm inference python -m scripts.train
-```
-**Training outputs:**
-- Model checkpoints are saved to: `data/logs/checkpoints/`
-- Training metrics (JSONL) are saved to: `data/logs/metrics/`
-=======
 ## Validation
 
 To evaluate the performance of a specific checkpoint on the validation split, run:
@@ -38,4 +28,3 @@ docker compose run --rm inference python -m scripts.validate --checkpoint data/l
 
 **Validation outputs:**
 * **Summary report:** A JSON file containing accuracy and evaluated classes is saved to `./data/logs/metrics/validation_summary.json`.
->>>>>>> Stashed changes

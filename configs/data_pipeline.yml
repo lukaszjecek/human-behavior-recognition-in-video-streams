@@ -1,8 +1,7 @@
 directories:
-  manifests: "data/manifests"
-  raw: "data/raw"
-  checkpoints: "data/logs/checkpoints" 
-  logs: "data/logs/metrics"            
+  raw: "/app/data/raw"
+  processed: "/app/data/processed"
+  manifests: "/app/data/manifests"          
 
 pipeline:
   seed: 42
