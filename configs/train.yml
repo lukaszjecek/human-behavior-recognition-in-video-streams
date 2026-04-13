@@ -1,0 +1,11 @@
+experiment_name: "baseline_finetune"
+directories:
+  manifests: "data/manifests"
+  raw: "data/raw"
+  checkpoints: "data/logs/checkpoints" 
+  logs: "data/logs/metrics"     
+
+training:
+  epochs: 10
+  batch_size: 4 # set to 4 bcs it can choke RAM or VRAM
+  learning_rate: 0.001
