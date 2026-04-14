@@ -102,13 +102,14 @@ class ActionEventWriter:
     def add_results(
         self,
         results: list[InferenceResult],
-        track_ids: Optional[list[int]] = None,
+        track_ids: Optional[list[Optional[int]]] = None,
     ) -> int:
         """Process and add multiple inference results.
 
         Args:
             results: List of InferenceResult objects.
             track_ids: Optional list of tracking IDs (must match results length).
+                      Each element can be None for results without tracking.
 
         Returns:
             Number of events successfully added.
@@ -172,8 +173,10 @@ class ActionEventWriter:
         # Handle single confidence value (assume positive class)
         if isinstance(prediction, (int, float)):
             confidence = float(prediction)
+            # Clamp confidence to [0, 1] range
+            confidence = max(0.0, min(1.0, confidence))
             label = "action" if confidence > 0.5 else "no_action"
-            return label, abs(confidence)
+            return label, confidence
 
         # Handle numpy/torch tensors or lists
         if isinstance(prediction, (list, np.ndarray, torch.Tensor)):

@@ -419,3 +419,414 @@ class TestActionEventWriter:
 
         assert event is not None
         assert event.confidence == 0.75
+
+
+class TestActionEventValidation:
+    """Test new validation features in ActionEvent."""
+
+    def test_action_event_type_check_confidence_string(self):
+        """Test ActionEvent rejects string confidence (issue #48)."""
+        with pytest.raises(TypeError, match="confidence must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence="0.95",
+            )
+
+    def test_action_event_type_check_confidence_dict(self):
+        """Test ActionEvent rejects dict confidence."""
+        with pytest.raises(TypeError, match="confidence must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence={"value": 0.95},
+            )
+
+    def test_action_event_type_check_label(self):
+        """Test ActionEvent rejects non-string label."""
+        with pytest.raises(TypeError, match="label must be a string"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label=123,
+                confidence=0.95,
+            )
+
+    def test_action_event_type_check_start_frame(self):
+        """Test ActionEvent rejects non-int start_frame_index."""
+        with pytest.raises(TypeError, match="start_frame_index must be an integer"):
+            ActionEvent(
+                start_frame_index=0.5,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+            )
+
+    def test_action_event_type_check_end_frame(self):
+        """Test ActionEvent rejects non-int end_frame_index."""
+        with pytest.raises(TypeError, match="end_frame_index must be an integer"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index="15",
+                label="walking",
+                confidence=0.95,
+            )
+
+    def test_action_event_negative_start_timestamp(self):
+        """Test ActionEvent rejects negative start_timestamp (issue #48)."""
+        with pytest.raises(ValueError, match="start_timestamp must be >= 0"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                start_timestamp=-1.0,
+            )
+
+    def test_action_event_negative_end_timestamp(self):
+        """Test ActionEvent rejects negative end_timestamp (issue #48)."""
+        with pytest.raises(ValueError, match="end_timestamp must be >= 0"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                end_timestamp=-0.5,
+            )
+
+    def test_action_event_type_check_start_timestamp(self):
+        """Test ActionEvent rejects non-float start_timestamp."""
+        with pytest.raises(TypeError, match="start_timestamp must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                start_timestamp="0.0",
+            )
+
+    def test_action_event_type_check_end_timestamp(self):
+        """Test ActionEvent rejects non-float end_timestamp."""
+        with pytest.raises(TypeError, match="end_timestamp must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                end_timestamp=[0.5],
+            )
+
+    def test_action_event_type_check_track_id(self):
+        """Test ActionEvent rejects non-int track_id."""
+        with pytest.raises(TypeError, match="track_id must be an integer"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                track_id="1",
+            )
+
+    def test_action_event_rejects_bool_confidence(self):
+        """Test ActionEvent rejects bool as confidence (bool is subclass of int in Python)."""
+        with pytest.raises(TypeError, match="confidence must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=True,
+            )
+
+    def test_action_event_rejects_bool_timestamps(self):
+        """Test ActionEvent rejects bool as timestamps."""
+        with pytest.raises(TypeError, match="start_timestamp must be a float"):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95,
+                start_timestamp=False,
+            )
+
+
+class TestActionEventLogValidation:
+    """Test new validation features in ActionEventLog."""
+
+    def test_action_event_log_add_event_type_check(self):
+        """Test add_event rejects non-ActionEvent objects (issue #48)."""
+        log = ActionEventLog()
+        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+            log.add_event({"label": "zaq1"})
+
+    def test_action_event_log_add_event_rejects_string(self):
+        """Test add_event rejects string."""
+        log = ActionEventLog()
+        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+            log.add_event("invalid")
+
+    def test_action_event_log_add_event_rejects_dict(self):
+        """Test add_event rejects dict."""
+        log = ActionEventLog()
+        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+            log.add_event({
+                "start_frame_index": 0,
+                "end_frame_index": 15,
+                "label": "walking",
+                "confidence": 0.95,
+            })
+
+    def test_action_event_log_add_event_rejects_none(self):
+        """Test add_event rejects None."""
+        log = ActionEventLog()
+        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+            log.add_event(None)
+
+    def test_action_event_log_load_valid_event_count(self):
+        """Test load_from_file validates event_count consistency (issue #48)."""
+        log = ActionEventLog()
+        log.add_event(ActionEvent(0, 15, "walking", 0.95))
+        log.add_event(ActionEvent(16, 31, "running", 0.87))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.json"
+            log.save_to_file(str(filepath))
+
+            loaded_log = ActionEventLog.load_from_file(str(filepath))
+            assert len(loaded_log.events) == 2
+
+    def test_action_event_log_load_event_count_mismatch(self):
+        """Test load_from_file raises error on event_count mismatch (issue #48)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "corrupted.json"
+
+            bad_data = {
+                "event_count": 5,
+                "events": [
+                    {
+                        "start_frame_index": 0,
+                        "end_frame_index": 15,
+                        "label": "walking",
+                        "confidence": 0.95,
+                    },
+                    {
+                        "start_frame_index": 16,
+                        "end_frame_index": 31,
+                        "label": "running",
+                        "confidence": 0.87,
+                    },
+                ]
+            }
+
+            with open(filepath, "w") as f:
+                json.dump(bad_data, f)
+
+            with pytest.raises(ValueError, match="event_count mismatch"):
+                ActionEventLog.load_from_file(str(filepath))
+
+    def test_action_event_log_load_no_event_count(self):
+        """Test load_from_file works without event_count field."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "no_count.json"
+
+            data = {
+                "events": [
+                    {
+                        "start_frame_index": 0,
+                        "end_frame_index": 15,
+                        "label": "walking",
+                        "confidence": 0.95,
+                    },
+                ]
+            }
+
+            with open(filepath, "w") as f:
+                json.dump(data, f)
+
+            loaded_log = ActionEventLog.load_from_file(str(filepath))
+            assert len(loaded_log.events) == 1
+
+
+class TestJsonWriterConfidenceHandling:
+    """Test fixed confidence handling in ActionEventWriter (issue #48)."""
+
+    def test_writer_single_confidence_clamping_positive(self):
+        """Test writer clamps confidence > 1.0 to valid range."""
+        writer = ActionEventWriter()
+        result = InferenceResult(
+            window=tuple(),
+            start_frame_index=0,
+            end_frame_index=15,
+            start_timestamp=0.0,
+            end_timestamp=0.5,
+            prediction=1.5,
+        )
+        event = writer.process_inference_result(result)
+
+        assert event is not None
+        assert event.confidence == 1.0
+        assert 0.0 <= event.confidence <= 1.0
+
+    def test_writer_single_confidence_clamping_negative(self):
+        """Test writer clamps negative confidence to valid range."""
+        writer = ActionEventWriter()
+        result = InferenceResult(
+            window=tuple(),
+            start_frame_index=0,
+            end_frame_index=15,
+            start_timestamp=0.0,
+            end_timestamp=0.5,
+            prediction=-0.5,
+        )
+        event = writer.process_inference_result(result)
+
+        assert event is not None
+        assert event.confidence == 0.0
+        assert 0.0 <= event.confidence <= 1.0
+
+    def test_writer_confidence_label_consistency(self):
+        """Test label selection is based on clamped confidence (issue #48)."""
+        writer = ActionEventWriter()
+
+        result_high = InferenceResult(
+            window=tuple(),
+            start_frame_index=0,
+            end_frame_index=15,
+            start_timestamp=0.0,
+            end_timestamp=0.5,
+            prediction=0.75,
+        )
+        event_high = writer.process_inference_result(result_high)
+        assert event_high.label == "action"
+        assert event_high.confidence == 0.75
+
+        result_low = InferenceResult(
+            window=tuple(),
+            start_frame_index=0,
+            end_frame_index=15,
+            start_timestamp=0.5,
+            end_timestamp=1.0,
+            prediction=0.25,
+        )
+        event_low = writer.process_inference_result(result_low)
+        assert event_low.label == "no_action"
+        assert event_low.confidence == 0.25
+
+    def test_writer_no_abs_applied_to_confidence(self):
+        """Test that abs() is not applied to confidence (issue #48)."""
+        writer = ActionEventWriter()
+
+        result = InferenceResult(
+            window=tuple(),
+            start_frame_index=0,
+            end_frame_index=15,
+            start_timestamp=0.0,
+            end_timestamp=0.5,
+            prediction=0.3,
+        )
+        event = writer.process_inference_result(result)
+
+        assert event.confidence == 0.3
+        assert event.label == "no_action"
+
+    def test_writer_all_confidence_values_valid(self):
+        """Test that all returned confidence values are in valid range."""
+        writer = ActionEventWriter()
+
+        test_cases = [
+            (-2.0, 0.0),
+            (-0.5, 0.0),
+            (0.0, 0.0),
+            (0.3, 0.3),
+            (0.5, 0.5),
+            (0.75, 0.75),
+            (1.0, 1.0),
+            (1.5, 1.0),
+            (2.0, 1.0),
+        ]
+
+        for input_confidence, expected_clamped in test_cases:
+            result = InferenceResult(
+                window=tuple(),
+                start_frame_index=0,
+                end_frame_index=15,
+                start_timestamp=0.0,
+                end_timestamp=0.5,
+                prediction=input_confidence,
+            )
+            event = writer.process_inference_result(result)
+            assert event.confidence == expected_clamped, \
+                f"Input {input_confidence} should clamp to {expected_clamped}"
+            assert 0.0 <= event.confidence <= 1.0
+
+
+class TestJsonWriterTrackIdsType:
+    """Test fixed track_ids type hint in ActionEventWriter (issue #48)."""
+
+    def test_writer_add_results_with_mixed_track_ids(self):
+        """Test add_results handles list with None and int values (issue #48)."""
+        writer = ActionEventWriter(class_labels=["walking", "running"])
+        results = [
+            InferenceResult(
+                window=tuple(),
+                start_frame_index=0,
+                end_frame_index=15,
+                start_timestamp=0.0,
+                end_timestamp=0.5,
+                prediction={"class": 0, "confidence": 0.95},
+            ),
+            InferenceResult(
+                window=tuple(),
+                start_frame_index=16,
+                end_frame_index=31,
+                start_timestamp=0.5,
+                end_timestamp=1.0,
+                prediction={"class": 1, "confidence": 0.88},
+            ),
+            InferenceResult(
+                window=tuple(),
+                start_frame_index=32,
+                end_frame_index=47,
+                start_timestamp=1.0,
+                end_timestamp=1.5,
+                prediction={"class": 0, "confidence": 0.92},
+            ),
+        ]
+
+        track_ids = [1, None, 2]
+        count = writer.add_results(results, track_ids=track_ids)
+
+        assert count == 3
+        assert writer.log.events[0].track_id == 1
+        assert writer.log.events[1].track_id is None
+        assert writer.log.events[2].track_id == 2
+
+    def test_writer_add_results_all_none_track_ids(self):
+        """Test add_results with all None track_ids."""
+        writer = ActionEventWriter(class_labels=["walking", "running"])
+        results = [
+            InferenceResult(
+                window=tuple(),
+                start_frame_index=0,
+                end_frame_index=15,
+                start_timestamp=0.0,
+                end_timestamp=0.5,
+                prediction={"class": 0, "confidence": 0.95},
+            ),
+            InferenceResult(
+                window=tuple(),
+                start_frame_index=16,
+                end_frame_index=31,
+                start_timestamp=0.5,
+                end_timestamp=1.0,
+                prediction={"class": 1, "confidence": 0.88},
+            ),
+        ]
+
+        track_ids = [None, None]
+        count = writer.add_results(results, track_ids=track_ids)
+
+        assert count == 2
+        assert writer.log.events[0].track_id is None
+        assert writer.log.events[1].track_id is None

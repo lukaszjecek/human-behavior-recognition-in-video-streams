@@ -101,4 +101,4 @@ The schema enforces:
 - **Schema**: `src/inference/action_event.py` - ActionEvent and ActionEventLog classes
 - **Writer**: `src/inference/json_writer.py` - ActionEventWriter for serialization
 - **Tests**: `tests/inference/test_action_event.py` - Comprehensive test suite
-- **Validation Script**: `tests/inference/test_modules.py` - Standalone validation and sample generation
+- **Validation Script**: `scripts/validate_modules.py` - Standalone validation and sample generation
