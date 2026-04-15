@@ -31,7 +31,8 @@ jobs:
       - name: Install helpers
         run: |
           python -m pip install --upgrade pip
-          pip install gdown
+          python -m pip install gdown==5.2.1
+          python -m gdown --version
 
       - name: Prepare nightly workspace
         shell: bash
@@ -41,7 +42,7 @@ jobs:
 
       - name: Download full dataset zip from Google Drive
         run: |
-          gdown --id "${{ vars.GDRIVE_FILE_ID }}" -O "data/nightly_zip/${{ vars.FULL_DATASET_ZIP_NAME }}"
+          python -m gdown "https://drive.google.com/uc?id=${{ vars.GDRIVE_FILE_ID }}" -O "data/nightly_zip/${{ vars.FULL_DATASET_ZIP_NAME }}"
 
       - name: Unpack dataset
         run: |
