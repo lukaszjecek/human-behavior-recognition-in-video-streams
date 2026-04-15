@@ -1,44 +1,56 @@
 # fallback ownership
-* @lukaszjecek
+*                                       @lukaszjecek
 
 # repository / infra / governance
-/.github/                        @lukaszjecek
-/docker/                         @lukaszjecek
-/docs/contributing.md            @lukaszjecek
-/docs/ci-workflows.md            @lukaszjecek
-/docs/integration-devops.md      @lukaszjecek
-/.dockerignore                   @lukaszjecek
-/.gitattributes                  @lukaszjecek
-/.gitignore                      @lukaszjecek
-/compose*.y*ml                   @lukaszjecek
-/pytest.ini                      @lukaszjecek
-/pyproject.toml                  @lukaszjecek
-/README.md                       @lukaszjecek
-/requirements*.txt               @lukaszjecek
+/.github/                               @lukaszjecek
+/docker/                                @lukaszjecek
+/docs/contributing.md                   @lukaszjecek
+/docs/ci-workflows.md                   @lukaszjecek
+/docs/integration-devops.md             @lukaszjecek
+/.dockerignore                          @lukaszjecek
+/.gitattributes                         @lukaszjecek
+/.gitignore                             @lukaszjecek
+/compose*.y*ml                          @lukaszjecek
+/pytest.ini                             @lukaszjecek
+/pyproject.toml                         @lukaszjecek
+/README.md                              @lukaszjecek
+/requirements*.txt                      @lukaszjecek
 
 # data pipeline
-/configs/data_pipeline.y*ml      @alicjaswiers
-/docs/data-pipeline.md           @alicjaswiers
-/src/data/                       @alicjaswiers
-/tests/data/                     @alicjaswiers
-/data/                           @alicjaswiers
-/scripts/visualize.py            @alicjaswiers
+/configs/data_pipeline.y*ml             @alicjaswiers
+/docs/data-pipeline.md                  @alicjaswiers
+/src/data/                              @alicjaswiers
+/tests/data/                            @alicjaswiers
+/tests/test_frame_ops.py                @alicjaswiers @blanqtoja
+/data/                                  @alicjaswiers
+/scripts/visualize.py                   @alicjaswiers
 
 # inference engine
-/docs/inference.md               @blanqtoja
-/src/inference/                  @blanqtoja
-/tests/inference/                @blanqtoja
+/docs/inference.md                      @blanqtoja
+/src/inference/                         @blanqtoja
+/tests/inference/                       @blanqtoja
 
 # baseline / training / validation
-/configs/train.y*ml              @XEN00000
-/docs/ml-baseline.md             @XEN00000
-/src/models/                     @XEN00000
-/tests/models/                   @XEN00000
-/scripts/smoke_test.py           @XEN00000
-/scripts/train.py                @XEN00000
-/scripts/validate.py             @XEN00000
+/configs/train.y*ml                     @XEN00000
+/docs/ml-baseline.md                    @XEN00000
+/src/models/                            @XEN00000
+/tests/models/                          @XEN00000
+/scripts/smoke_test.py                  @XEN00000
+/scripts/train.py                       @XEN00000
 
-# app entry / integration smoke
-/src/main.py                     @lukaszjecek
-/tests/app/                      @lukaszjecek
-/scripts/ci/                     @lukaszjecek
+# backend
+/docs/backend.md                        @Szymon110903
+
+# frontend
+/docs/frontend.md                       @Filipwasiel
+
+# app entry / integration / shared test glue
+/src/main.py                            @lukaszjecek
+/tests/app/                             @lukaszjecek
+/tests/conftest.py                      @lukaszjecek
+/scripts/ci/                            @lukaszjecek
+/scripts/lint.ps1                       @lukaszjecek
+/scripts/run.ps1                        @lukaszjecek
+/scripts/test.ps1                       @lukaszjecek
+/scripts/__init__.py                    @lukaszjecek
+/docs/assets/contributing/              @lukaszjecek
