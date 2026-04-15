@@ -86,8 +86,8 @@ def run_video(video_path: str) -> tuple[int, int, list]:
         video_path (str): Path to the input video file.
 
     Returns:
-        tuple[int, int, list]: Number of processed frames, generated inference results and collected inference
-        metadata/results.
+        tuple[int, int, list]: Number of processed frames, generated inference results and collected
+        inferencemetadata/results.
     """
     engine = InferenceEngine()
     frame_queue = Queue()
