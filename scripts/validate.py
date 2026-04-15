@@ -13,7 +13,10 @@ from src.models.baseline import BaselineBehaviorModel
 
 
 def main() -> int:
-    """Main entrypoint for the validation script. Loads a checkpoint and evaluates it on the validation split. """
+    """Main entrypoint for the validation script.
+
+    Loads a checkpoint and evaluates it on the validation split.
+    """
     parser = argparse.ArgumentParser(description="Validate a saved baseline checkpoint.")
     parser.add_argument("--config", default="configs/train.yml", help="Path to config")
     parser.add_argument("--checkpoint", required=True, help="Path to the .pth checkpoint file")
