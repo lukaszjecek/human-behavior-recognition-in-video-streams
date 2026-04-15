@@ -1,6 +1,8 @@
 from pathlib import Path
 import cv2
 
+from src.inference.engine import InferenceEngine
+
 def run_video(video_path: str) -> None:
     """
     Runs offline inference on a single video file.
@@ -25,7 +27,9 @@ def run_video(video_path: str) -> None:
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video file: {path}")
 
+    engine = InferenceEngine()
     frame_count = 0
+    inference_count = 0
 
     while True:
         ret, frame = cap.read()
@@ -34,7 +38,15 @@ def run_video(video_path: str) -> None:
             break
 
         frame_count += 1
+        result = engine.process_frame(frame)
+
+        if result is not None:
+            inference_count += 1
 
     cap.release()
 
     print(f"Processed {frame_count} frames")
+    print(f"Generated {inference_count} inference windows")
+
+if __name__ == "__main__":
+    run_video("data/raw/car_drops_off_person/0BD540FB-26D7-4814-8229-5572B9132328-306-00000008A9AAB259_1.mp4")
