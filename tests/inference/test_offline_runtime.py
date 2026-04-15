@@ -3,6 +3,7 @@ import numpy as np
 
 from src.inference.offline_runtime import run_video
 
+
 def test_run_video_processes_sample_mp4(tmp_path):
 
     video_path = tmp_path / "video.mp4"

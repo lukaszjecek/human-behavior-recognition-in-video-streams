@@ -1,3 +1,4 @@
+"""Offline producer-consumer runtime for MP4 inference."""
 from pathlib import Path
 from queue import Queue
 from threading import Thread
@@ -10,8 +11,7 @@ EOF_SENTINEL = object()
 
 
 def produce_frames(video_path: str, frame_queue: Queue) -> None:
-    """
-    Reads frames from a video file in source order and pushes them to a queue.
+    """Reads frames from a video file in source order and pushes them to a queue.
 
     Args:
         video_path (str): Path to the input video file.
@@ -21,7 +21,6 @@ def produce_frames(video_path: str, frame_queue: Queue) -> None:
         FileNotFoundError: If the video file does not exist.
         RuntimeError: If the video cannot be opened.
     """
-
     path = Path(video_path)
 
     if not path.exists():
@@ -45,8 +44,7 @@ def produce_frames(video_path: str, frame_queue: Queue) -> None:
         frame_queue.put(EOF_SENTINEL)
 
 def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict) -> None:
-    """
-    Consumes frames from a queue with an inference engine and updates runtime stats.
+    """Consumes frames from a queue with an inference engine and updates runtime stats.
 
     Args:
         frame_queue (Queue): Queue providing video frames.
@@ -72,8 +70,7 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
     stats["inference_count"] = inference_count
 
 def run_video(video_path: str) -> tuple[int, int]:
-    """
-    Runs offline inference on a single video file.
+    """Runs offline inference on a single video file.
 
     Args:
         video_path (str): Path to the input video file.
