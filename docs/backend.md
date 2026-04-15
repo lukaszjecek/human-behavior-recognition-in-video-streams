@@ -102,3 +102,14 @@ The schema enforces:
 - **Writer**: `src/inference/json_writer.py` - ActionEventWriter for serialization
 - **Tests**: `tests/inference/test_action_event.py` - Comprehensive test suite
 - **Validation Script**: `scripts/validate_modules.py` - Standalone validation and sample generation
+- **Sample Output**: `tests/inference/data/logs/sample_actions.json` - Example output file (canonical location)
+
+### Regenerating Sample Output
+
+To regenerate the sample output file, run:
+
+```bash
+python scripts/validate_modules.py
+```
+
+This script validates all inference modules and updates the sample file at the canonical location: `tests/inference/data/logs/sample_actions.json`

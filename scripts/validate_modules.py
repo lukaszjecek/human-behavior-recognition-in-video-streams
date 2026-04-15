@@ -8,6 +8,11 @@ import json
 import sys
 from pathlib import Path
 
+# Add parent directory to path to enable imports from src/
+repo_root = Path(__file__).parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
 from src.inference.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
@@ -196,8 +201,15 @@ def main() -> bool:
         for event in sample_events:
             sample_log.add_event(event)
 
-        # Save to file
-        output_path = Path(__file__).parent / "data" / "sample_actions.json"
+        # Save to file in tests/inference/data/logs (canonical location)
+        output_path = (
+            Path(__file__).parent.parent
+            / "tests"
+            / "inference"
+            / "data"
+            / "logs"
+            / "sample_actions.json"
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         sample_log.save_to_file(str(output_path))
 
