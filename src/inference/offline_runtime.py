@@ -38,7 +38,3 @@ def run_video(video_path: str) -> None:
     cap.release()
 
     print(f"Processed {frame_count} frames")
-
-
-if __name__ == "__main__":
-    run_video("data/raw/car_drops_off_person/0BD540FB-26D7-4814-8229-5572B9132328-306-00000008A9AAB259_1.mp4")
