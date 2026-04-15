@@ -1,6 +1,4 @@
-"""
-Validation module for the baseline behavior recognition model.
-"""
+"""Validation module for the baseline behavior recognition model."""
 
 import argparse
 import json
