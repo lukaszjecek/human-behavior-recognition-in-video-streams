@@ -3,15 +3,12 @@ import cv2
 
 from src.inference.engine import InferenceEngine
 
-def run_video(video_path: str) -> None:
+def read_video_frames(video_path: str):
     """
-    Runs offline inference on a single video file.
-
-    Opens the video file, validates access, and prepares it for
-    frame-by-frame processing in the offline runtime pipeline.
+    Yields frames from a video file in source order.
 
     Args:
-        video_path (str): Path to the input .mp4 video file.
+        video_path (str): Path to the input video file.
 
     Raises:
         FileNotFoundError: If the video file does not exist.
@@ -27,26 +24,55 @@ def run_video(video_path: str) -> None:
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video file: {path}")
 
-    engine = InferenceEngine()
+    try:
+        while True:
+            ret, frame = cap.read()
+
+            if not ret:
+                break
+
+            yield frame
+    finally:
+        cap.release()
+
+def consume_frames(frames, engine: InferenceEngine) -> tuple[int, int]:
+    """
+    Consumes frames with an inference engine and counts processed frames and results.
+
+    Args:
+        frames: Iterable of video frames.
+        engine (InferenceEngine): Engine used to process frames.
+
+    Returns:
+        tuple[int, int]: Number of processed frames and generated inference results.
+    """
     frame_count = 0
     inference_count = 0
 
-    while True:
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-
+    for frame in frames:
         frame_count += 1
         result = engine.process_frame(frame)
 
         if result is not None:
             inference_count += 1
 
-    cap.release()
+    return frame_count, inference_count
+
+def run_video(video_path: str) -> tuple[int, int]:
+    """
+    Runs offline inference on a single video file.
+
+    Args:
+        video_path (str): Path to the input video file.
+
+    Returns:
+        tuple[int, int]: Number of processed frames and generated inference results.
+    """
+    engine = InferenceEngine()
+    frames = read_video_frames(video_path)
+    frame_count, inference_count = consume_frames(frames, engine)
 
     print(f"Processed {frame_count} frames")
     print(f"Generated {inference_count} inference windows")
 
-if __name__ == "__main__":
-    run_video("data/raw/car_drops_off_person/0BD540FB-26D7-4814-8229-5572B9132328-306-00000008A9AAB259_1.mp4")
+    return frame_count, inference_count
