@@ -1,8 +1,13 @@
 import cv2
 import numpy as np
+import pytest
 
 from src.inference.offline_runtime import run_video
 
+
+def test_run_video_raises_on_invalid_path_without_hanging():
+    with pytest.raises(FileNotFoundError):
+        run_video("path/that/does/not/exist.mp4")
 
 def test_run_video_processes_sample_mp4(tmp_path):
 
@@ -23,7 +28,16 @@ def test_run_video_processes_sample_mp4(tmp_path):
 
     writer.release()
 
-    processed_frames, inference_windows = run_video(str(video_path))
+    processed_frames, inference_windows, inference_results = run_video(str(video_path))
 
     assert processed_frames == 20
     assert inference_windows > 0
+    assert len(inference_results) == inference_windows
+
+    first_result = inference_results[0]
+    assert first_result.start_frame_index >= 1
+    assert first_result.end_frame_index >= first_result.start_frame_index
+
+    assert first_result.start_timestamp is not None
+    assert first_result.end_timestamp is not None
+    assert first_result.end_timestamp >= first_result.start_timestamp

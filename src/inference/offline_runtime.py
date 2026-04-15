@@ -21,27 +21,36 @@ def produce_frames(video_path: str, frame_queue: Queue) -> None:
         FileNotFoundError: If the video file does not exist.
         RuntimeError: If the video cannot be opened.
     """
-    path = Path(video_path)
-
-    if not path.exists():
-        raise FileNotFoundError(f"Video file not found: {path}")
-
-    cap = cv2.VideoCapture(str(path))
-
-    if not cap.isOpened():
-        raise RuntimeError(f"Could not open video file: {path}")
-
     try:
-        while True:
-            ret, frame = cap.read()
+        path = Path(video_path)
 
-            if not ret:
-                break
+        if not path.exists():
+            raise FileNotFoundError(f"Video file not found: {path}")
 
-            frame_queue.put(frame)
+        cap = cv2.VideoCapture(str(path))
+
+        if not cap.isOpened():
+            raise RuntimeError(f"Could not open video file: {path}")
+
+        try:
+            while True:
+                ret, frame = cap.read()
+
+                if not ret:
+                    break
+
+                frame_queue.put(frame)
+        finally:
+            cap.release()
     finally:
-        cap.release()
         frame_queue.put(EOF_SENTINEL)
+
+def produce_frames_safe(video_path: str, frame_queue: Queue, stats: dict) -> None:
+    """Runs the frame producer and stores any raised exception in stats."""
+    try:
+        produce_frames(video_path, frame_queue)
+    except Exception as exc:
+        stats["producer_error"] = exc
 
 def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict) -> None:
     """Consumes frames from a queue with an inference engine and updates runtime stats.
@@ -52,7 +61,7 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
         stats (dict): Mutable stats dictionary with frame and inference counts.
     """
     frame_count = 0
-    inference_count = 0
+    inference_results = []
 
     while True:
         frame = frame_queue.get()
@@ -64,25 +73,32 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
         result = engine.process_frame(frame)
 
         if result is not None:
-            inference_count += 1
+            inference_results.append(result)
 
     stats["frame_count"] = frame_count
-    stats["inference_count"] = inference_count
+    stats["inference_count"] = len(inference_results)
+    stats["inference_results"] = inference_results
 
-def run_video(video_path: str) -> tuple[int, int]:
+def run_video(video_path: str) -> tuple[int, int, list]:
     """Runs offline inference on a single video file.
 
     Args:
         video_path (str): Path to the input video file.
 
     Returns:
-        tuple[int, int]: Number of processed frames and generated inference results.
+        tuple[int, int, list]: Number of processed frames, generated inference results and collected inference
+        metadata/results.
     """
     engine = InferenceEngine()
     frame_queue = Queue()
-    stats = {"frame_count": 0, "inference_count": 0}
+    stats = {
+        "frame_count": 0,
+        "inference_count": 0,
+        "inference_results": [],
+        "producer_error": None,
+    }
 
-    producer = Thread(target=produce_frames, args=(video_path, frame_queue))
+    producer = Thread(target=produce_frames_safe, args=(video_path, frame_queue, stats))
     consumer = Thread(target=consume_frame_queue, args=(frame_queue, engine, stats))
 
     producer.start()
@@ -91,10 +107,14 @@ def run_video(video_path: str) -> tuple[int, int]:
     producer.join()
     consumer.join()
 
+    if stats["producer_error"] is not None:
+        raise stats["producer_error"]
+
     frame_count = stats["frame_count"]
     inference_count = stats["inference_count"]
+    inference_results = stats["inference_results"]
 
     print(f"Processed {frame_count} frames")
     print(f"Generated {inference_count} inference windows")
 
-    return frame_count, inference_count
+    return frame_count, inference_count, inference_results
