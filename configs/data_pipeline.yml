@@ -1,7 +1,7 @@
 directories:
   raw: "/app/data/raw"
   processed: "/app/data/processed"
-  manifests: "/app/data/manifests"
+  manifests: "/app/data/manifests"          
 
 pipeline:
   seed: 42
