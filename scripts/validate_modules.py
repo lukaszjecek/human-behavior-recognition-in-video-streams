@@ -13,9 +13,9 @@ repo_root = Path(__file__).parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-from src.inference.action_event import ActionEvent, ActionEventLog
-from src.inference.engine import InferenceResult
-from src.inference.json_writer import ActionEventWriter
+from src.inference.action_event import ActionEvent, ActionEventLog  # noqa: E402
+from src.inference.engine import InferenceResult  # noqa: E402
+from src.inference.json_writer import ActionEventWriter  # noqa: E402
 
 
 def main() -> bool:
