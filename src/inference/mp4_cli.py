@@ -41,7 +41,7 @@ class WindowModelAdapter:
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: torch.nn.Module,  # is model based on torch.nn.Module?
         tensorizer: FrameTensorizer,
         device: torch.device,
     ) -> None:
@@ -74,7 +74,7 @@ class WindowModelAdapter:
         if output.ndim == 1:
             return output.detach().cpu()
 
-        if output.ndim == 2:
+        if output.ndim == 2:  # warging: in the future, there will be bug caused by ignoring other batch
             if output.shape[0] < 1:
                 raise ValueError(
                     "model output batch dimension must not be empty")
@@ -92,7 +92,8 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         raise ValueError("input_path must point to an .mp4 file")
 
     settings = load_runtime_settings(request.config_path)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available()
+                          else "cpu")  # it ignores mac
     model = load_model_from_checkpoint(request.checkpoint_path, device)
 
     tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
@@ -114,6 +115,7 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer.save(str(request.output_path))
+    # change to log
     print(
         f"[OK] Wrote {len(writer.get_log().events)} action events to: {request.output_path}")
 
@@ -183,7 +185,9 @@ def load_model_from_checkpoint(
         raise ValueError(
             f"Checkpoint path must point to a file: {checkpoint_path}")
 
-    raw_checkpoint = torch.load(str(checkpoint_path), map_location=device)
+    raw_checkpoint = torch.load(
+        # against Arbitrary Code Execution
+        str(checkpoint_path), map_location=device, weights_only=True)
     if not isinstance(raw_checkpoint, dict):
         raise TypeError("Checkpoint must contain a mapping/object payload")
 
@@ -332,6 +336,7 @@ def _validate_state_dict(value: object) -> dict[str, torch.Tensor]:
     return normalized
 
 
+# count of class should not be related to model, rather store it in metadata
 def _infer_num_classes(state_dict: dict[str, torch.Tensor]) -> int:
     """Infer output class count from fc.weight shape."""
     key_candidates = ("model.fc.weight", "fc.weight")
