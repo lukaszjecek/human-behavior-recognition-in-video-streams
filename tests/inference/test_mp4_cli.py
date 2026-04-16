@@ -160,6 +160,42 @@ def test_window_model_adapter_returns_full_batch_for_2d_output():
     )
 
 
+def test_window_model_adapter_accepts_callable_non_module_model():
+    class _CallableModel:
+        def __call__(self, _: torch.Tensor) -> torch.Tensor:
+            return torch.tensor([0.3, 0.7], dtype=torch.float32)
+
+    adapter = WindowModelAdapter(
+        model=_CallableModel(),
+        tensorizer=FrameTensorizer(target_resolution=(8, 8)),
+        device=torch.device("cpu"),
+    )
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    prediction = adapter((frame,))
+    assert torch.allclose(
+        prediction,
+        torch.tensor([0.3, 0.7], dtype=torch.float32),
+    )
+
+
+def test_window_model_adapter_accepts_predict_only_model():
+    class _PredictModel:
+        def predict(self, _: torch.Tensor) -> torch.Tensor:
+            return torch.tensor([0.4, 0.6], dtype=torch.float32)
+
+    adapter = WindowModelAdapter(
+        model=_PredictModel(),
+        tensorizer=FrameTensorizer(target_resolution=(8, 8)),
+        device=torch.device("cpu"),
+    )
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    prediction = adapter((frame,))
+    assert torch.allclose(
+        prediction,
+        torch.tensor([0.4, 0.6], dtype=torch.float32),
+    )
+
+
 def test_expand_batched_inference_results_splits_batch_prediction():
     result = InferenceResult(
         window=tuple(),

@@ -46,13 +46,15 @@ class WindowModelAdapter:
 
     def __init__(
         self,
-        model: torch.nn.Module,  # is model based on torch.nn.Module?
+        model: Any,
         tensorizer: FrameTensorizer,
         device: torch.device,
     ) -> None:
         """Initialize the adapter with a model, tensorizer, and target device."""
-        if not isinstance(model, torch.nn.Module):
-            raise TypeError("model must be a torch.nn.Module instance")
+        has_predict = callable(getattr(model, "predict", None))
+        # model does not have to be nn.Module
+        if not callable(model) and not has_predict:
+            raise TypeError("model must be callable or expose predict(tensor)")
         if not isinstance(tensorizer, FrameTensorizer):
             raise TypeError("tensorizer must be a FrameTensorizer instance")
         if not isinstance(device, torch.device):
@@ -71,7 +73,10 @@ class WindowModelAdapter:
 
         tensor = self._tensorizer.tensorize(list(window)).to(self._device)
         with torch.no_grad():
-            output = self._model(tensor)
+            if callable(self._model):
+                output = self._model(tensor)
+            else:
+                output = self._model.predict(tensor)
 
         if not isinstance(output, torch.Tensor):
             raise TypeError("model output must be a torch.Tensor")
@@ -169,7 +174,8 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     class_labels = _parse_class_labels(inference_cfg.get("class_labels"))
     default_track_id = _parse_optional_track_id(
         tracking_cfg.get("default_track_id"))
-    device = _parse_optional_device(inference_cfg.get("device"), "inference.device")
+    device = _parse_optional_device(
+        inference_cfg.get("device"), "inference.device")
 
     return InferenceRuntimeSettings(
         target_resolution=target_resolution,
@@ -267,7 +273,8 @@ def _expand_batched_inference_results(
         prediction = result.prediction
         if isinstance(prediction, torch.Tensor) and prediction.ndim == 2:
             if prediction.shape[0] < 1:
-                raise ValueError("model output batch dimension must not be empty")
+                raise ValueError(
+                    "model output batch dimension must not be empty")
             for item_prediction in prediction:
                 expanded_results.append(
                     InferenceResult(
