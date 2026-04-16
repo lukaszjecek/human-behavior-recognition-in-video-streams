@@ -83,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="data/logs/actions.json",
         help="Path where action inference JSON should be written",
     )
+    parser.add_argument(
+        "--device",
+        dest="device",
+        type=str,
+        default=None,
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Optional device override for inference (auto, cpu, cuda, mps)",
+    )
     return parser
 
 
@@ -93,6 +101,7 @@ def _run_inference_mode(args: argparse.Namespace) -> int:
         checkpoint_path=Path(args.checkpoint_path),
         config_path=Path(args.config_path),
         output_path=Path(args.output_path),
+        device=args.device,
     )
 
     try:

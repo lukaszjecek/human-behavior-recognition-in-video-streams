@@ -23,6 +23,7 @@ class InferenceCliRequest:
     checkpoint_path: Path
     config_path: Path
     output_path: Path
+    device: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class InferenceRuntimeSettings:
     stride: int
     class_labels: list[str]
     default_track_id: int | None
+    device: str | None
 
 
 class WindowModelAdapter:
@@ -92,8 +94,10 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         raise ValueError("input_path must point to an .mp4 file")
 
     settings = load_runtime_settings(request.config_path)
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          else "cpu")  # it ignores mac
+    device = resolve_inference_device(
+        cli_device=request.device,
+        config_device=settings.device,
+    )
     model = load_model_from_checkpoint(request.checkpoint_path, device)
 
     tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
@@ -160,6 +164,7 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     class_labels = _parse_class_labels(inference_cfg.get("class_labels"))
     default_track_id = _parse_optional_track_id(
         tracking_cfg.get("default_track_id"))
+    device = _parse_optional_device(inference_cfg.get("device"), "inference.device")
 
     return InferenceRuntimeSettings(
         target_resolution=target_resolution,
@@ -167,6 +172,7 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
         stride=stride,
         class_labels=class_labels,
         default_track_id=default_track_id,
+        device=device,
     )
 
 
@@ -291,6 +297,8 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
         raise TypeError("request.config_path must be a pathlib.Path instance")
     if not isinstance(request.output_path, Path):
         raise TypeError("request.output_path must be a pathlib.Path instance")
+    if request.device is not None and not isinstance(request.device, str):
+        raise TypeError("request.device must be a string or None")
 
 
 def _parse_positive_int(value: object, field_name: str) -> int:
@@ -343,6 +351,62 @@ def _parse_optional_track_id(value: object) -> int | None:
     if value < 0:
         raise ValueError("tracking.default_track_id must be >= 0")
     return value
+
+
+def _parse_optional_device(value: object, field_name: str) -> str | None:
+    """Parse optional inference device override."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be one of: auto, cpu, cuda, mps")
+    normalized = value.strip().lower()
+    if normalized not in {"auto", "cpu", "cuda", "mps"}:
+        raise ValueError(f"{field_name} must be one of: auto, cpu, cuda, mps")
+    return normalized
+
+
+def resolve_inference_device(
+    cli_device: str | None,
+    config_device: str | None,
+) -> torch.device:
+    """Resolve torch device from CLI/config overrides and available backends."""
+    cli_choice = _parse_optional_device(cli_device, "request.device")
+    config_choice = _parse_optional_device(config_device, "inference.device")
+    preferred_device = cli_choice if cli_choice is not None else config_choice
+
+    if preferred_device in {None, "auto"}:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if _is_mps_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    if preferred_device == "cpu":
+        return torch.device("cpu")
+
+    if preferred_device == "cuda":
+        if not torch.cuda.is_available():
+            raise ValueError(
+                "CUDA device requested but not available on this machine",
+            )
+        return torch.device("cuda")
+
+    if preferred_device == "mps":
+        if not _is_mps_available():
+            raise ValueError(
+                "MPS device requested but not available on this machine",
+            )
+        return torch.device("mps")
+
+    raise ValueError(f"Unsupported device selection: {preferred_device}")
+
+
+def _is_mps_available() -> bool:
+    """Return True when torch MPS backend is available."""
+    mps_backend = getattr(torch.backends, "mps", None)
+    if mps_backend is None or not hasattr(mps_backend, "is_available"):
+        return False
+    return bool(mps_backend.is_available())
 
 
 def _validate_state_dict(value: object) -> dict[str, torch.Tensor]:

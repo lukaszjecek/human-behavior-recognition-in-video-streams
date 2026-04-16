@@ -15,6 +15,7 @@ from src.inference.mp4_cli import (
     build_track_ids,
     load_model_from_checkpoint,
     load_runtime_settings,
+    resolve_inference_device,
     run_mp4_to_json_action_inference,
 )
 from src.inference.tensorize import FrameTensorizer
@@ -78,6 +79,24 @@ def test_load_runtime_settings_rejects_invalid_target_resolution(tmp_path):
 
     with pytest.raises(TypeError, match="pipeline.target_resolution"):
         load_runtime_settings(config_path)
+
+
+def test_load_runtime_settings_reads_device_override(tmp_path):
+    config_path = tmp_path / "inference.yml"
+    config_path.write_text(
+        (
+            "pipeline:\n"
+            "  target_resolution: [64, 64]\n"
+            "  temporal_window: 4\n"
+            "inference:\n"
+            "  stride: 1\n"
+            "  device: mps\n"
+        ),
+        encoding="utf-8",
+    )
+
+    settings = load_runtime_settings(config_path)
+    assert settings.device == "mps"
 
 
 def test_load_model_from_checkpoint_rejects_invalid_payload(tmp_path):
@@ -156,3 +175,29 @@ def test_expand_batched_inference_results_splits_batch_prediction():
     assert len(expanded) == 2
     assert torch.allclose(expanded[0].prediction, torch.tensor([0.1, 0.9]))
     assert torch.allclose(expanded[1].prediction, torch.tensor([0.8, 0.2]))
+
+
+def test_resolve_inference_device_prefers_cli_over_config(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    class _MPSBackend:
+        @staticmethod
+        def is_available():
+            return True
+
+    monkeypatch.setattr(torch.backends, "mps", _MPSBackend())
+    device = resolve_inference_device(cli_device="cpu", config_device="mps")
+    assert device.type == "cpu"
+
+
+def test_resolve_inference_device_auto_uses_mps_when_cuda_unavailable(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    class _MPSBackend:
+        @staticmethod
+        def is_available():
+            return True
+
+    monkeypatch.setattr(torch.backends, "mps", _MPSBackend())
+    device = resolve_inference_device(cli_device=None, config_device=None)
+    assert device.type == "mps"

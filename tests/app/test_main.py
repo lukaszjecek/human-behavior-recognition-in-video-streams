@@ -62,6 +62,8 @@ def test_main_dispatches_inference_mode(monkeypatch, tmp_path):
             str(config_path),
             "--output",
             str(output_path),
+            "--device",
+            "cpu",
         ]
     )
     assert result == 0
@@ -69,6 +71,7 @@ def test_main_dispatches_inference_mode(monkeypatch, tmp_path):
     assert captured["request"].checkpoint_path == checkpoint_path
     assert captured["request"].config_path == config_path
     assert captured["request"].output_path == output_path
+    assert captured["request"].device == "cpu"
 
 
 def test_main_inference_returns_non_zero_on_failure(monkeypatch, tmp_path):

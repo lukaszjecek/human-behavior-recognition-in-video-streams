@@ -12,7 +12,8 @@ python -m src.main `
   --input data\raw\walking\sample.mp4 `
   --checkpoint data\logs\checkpoints\baseline_epoch_10.pth `
   --config configs\data_pipeline.yml `
-  --output data\logs\actions.json
+  --output data\logs\actions.json `
+  --device auto
 ```
 
 ### Arguments
@@ -23,6 +24,7 @@ python -m src.main `
 | `--checkpoint` | Yes (in inference mode) | Model checkpoint (`.pth`) |
 | `--config` | No | YAML config with runtime options (default: `configs/data_pipeline.yml`) |
 | `--output` | No | JSON output path (default: `data/logs/actions.json`) |
+| `--device` | No | Device override: `auto`, `cpu`, `cuda`, `mps` (CLI override has priority over config) |
 
 `--input` and `--checkpoint` must be provided together.
 If neither is provided, `src.main` runs startup summary mode.
@@ -46,12 +48,18 @@ pipeline:
 inference:
   stride: 1
   class_labels: []  # optional list of labels by class index
+  device: auto      # optional: auto/cpu/cuda/mps
 
 tracking:
   default_track_id: null  # optional integer
 ```
 
 If `tracking.default_track_id` is set, that track ID is attached to every emitted event.
+
+Device resolution order:
+1. `--device` (CLI override)
+2. `inference.device` in YAML config
+3. automatic fallback: `cuda` -> `mps` -> `cpu`
 
 ## Checkpoint metadata requirements
 

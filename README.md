@@ -38,7 +38,8 @@ python -m src.main `
   --input data\raw\walking\sample.mp4 `
   --checkpoint data\logs\checkpoints\baseline_epoch_10.pth `
   --config configs\data_pipeline.yml `
-  --output data\logs\actions.json
+  --output data\logs\actions.json `
+  --device auto
 ```
 
 Run the same flow in Docker:
