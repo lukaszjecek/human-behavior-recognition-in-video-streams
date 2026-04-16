@@ -1,6 +1,7 @@
 """MP4-to-JSON action inference CLI helpers."""
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,8 @@ from src.inference.offline_runtime import run_video
 from src.inference.tensorize import FrameTensorizer
 from src.models.baseline import BaselineBehaviorModel
 from src.models.dummy import DummyBehaviorModel
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -120,9 +123,11 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer.save(str(request.output_path))
-    # change to log
-    print(
-        f"[OK] Wrote {len(writer.get_log().events)} action events to: {request.output_path}")
+    logger.info(
+        "[OK] Wrote %d action events to: %s",
+        len(writer.get_log().events),
+        request.output_path,
+    )
 
     return 0
 
