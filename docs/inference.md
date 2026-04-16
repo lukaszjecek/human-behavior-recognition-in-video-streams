@@ -7,14 +7,36 @@
 
 The Sprint 2 milestone is exposed through `src.main` inference mode:
 
-```powershell
-python -m src.main `
-  --input data\raw\walking\sample.mp4 `
-  --checkpoint data\logs\checkpoints\baseline_epoch_10.pth `
-  --config configs\data_pipeline.yml `
-  --output data\logs\actions.json `
+
+(the commands below are for bash, below commands are for bash on Windows, if you are using Powershel, remove 'MSYS_NO_PATHCONV=1')
+
+Run in this order:
+```
+MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m src.data.sample --config /app/configs/data_pipeline.yml --output manifest.jsonl
+```
+
+If the first step prints "No videos found", it means that there is no data in the data/raw on the host and it needs to be placed there first.
+
+Check if the file has been created:
+```
+MSYS_NO_PATHCONV=1 docker compose run --rm inference sh -lc "ls -l /app/data/manifests/manifest.jsonl"
+```
+
+Then training:
+```
+MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m scripts.train
+```
+
+At the end, the inference:
+```
+MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m src.main \
+  --input /app/data/raw/walking/sample.mp4 \
+  --checkpoint /app/data/logs/checkpoints/baseline_epoch_10.pth \
+  --config /app/configs/data_pipeline.yml \
+  --output /app/data/logs/actions.json \
   --device auto
 ```
+
 
 ### Arguments
 
