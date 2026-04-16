@@ -78,7 +78,7 @@ class WindowModelAdapter:
             if output.shape[0] < 1:
                 raise ValueError(
                     "model output batch dimension must not be empty")
-            return output[0].detach().cpu()
+            return output.detach().cpu()
 
         raise ValueError("model output tensor must be 1D or 2D")
 
@@ -108,6 +108,7 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     )
 
     _, _, inference_results = run_video(str(request.input_path), engine=engine)
+    inference_results = _expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(inference_results, settings.default_track_id)
 
     writer = ActionEventWriter(class_labels=settings.class_labels)
@@ -244,6 +245,32 @@ def build_track_ids(
     if default_track_id is None:
         return [None] * len(results)
     return [default_track_id] * len(results)
+
+
+def _expand_batched_inference_results(
+    results: list[InferenceResult],
+) -> list[InferenceResult]:
+    """Expand 2D tensor predictions (batch, classes) into per-item results."""
+    expanded_results: list[InferenceResult] = []
+    for result in results:
+        prediction = result.prediction
+        if isinstance(prediction, torch.Tensor) and prediction.ndim == 2:
+            if prediction.shape[0] < 1:
+                raise ValueError("model output batch dimension must not be empty")
+            for item_prediction in prediction:
+                expanded_results.append(
+                    InferenceResult(
+                        window=result.window,
+                        start_frame_index=result.start_frame_index,
+                        end_frame_index=result.end_frame_index,
+                        start_timestamp=result.start_timestamp,
+                        end_timestamp=result.end_timestamp,
+                        prediction=item_prediction,
+                    )
+                )
+            continue
+        expanded_results.append(result)
+    return expanded_results
 
 
 def _ensure_mapping(value: object, field_name: str) -> dict[str, Any]:

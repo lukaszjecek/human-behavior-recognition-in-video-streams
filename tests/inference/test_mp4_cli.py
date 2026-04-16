@@ -2,6 +2,7 @@
 
 import json
 
+import numpy as np
 import pytest
 import torch
 import yaml
@@ -9,11 +10,14 @@ import yaml
 from src.inference.engine import InferenceResult
 from src.inference.mp4_cli import (
     InferenceCliRequest,
+    WindowModelAdapter,
+    _expand_batched_inference_results,
     build_track_ids,
     load_model_from_checkpoint,
     load_runtime_settings,
     run_mp4_to_json_action_inference,
 )
+from src.inference.tensorize import FrameTensorizer
 from src.models.dummy import DummyBehaviorModel
 
 
@@ -99,3 +103,40 @@ def test_build_track_ids_supports_none_track_id():
     )
     track_ids = build_track_ids([result], default_track_id=None)
     assert track_ids == [None]
+
+
+def test_window_model_adapter_returns_full_batch_for_2d_output():
+    class _BatchModel(torch.nn.Module):
+        def forward(self, _: torch.Tensor) -> torch.Tensor:
+            return torch.tensor([[0.1, 0.9], [0.8, 0.2]], dtype=torch.float32)
+
+    adapter = WindowModelAdapter(
+        model=_BatchModel(),
+        tensorizer=FrameTensorizer(target_resolution=(8, 8)),
+        device=torch.device("cpu"),
+    )
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    prediction = adapter((frame,))
+
+    assert prediction.shape == (2, 2)
+    assert torch.allclose(
+        prediction,
+        torch.tensor([[0.1, 0.9], [0.8, 0.2]], dtype=torch.float32),
+    )
+
+
+def test_expand_batched_inference_results_splits_batch_prediction():
+    result = InferenceResult(
+        window=tuple(),
+        start_frame_index=0,
+        end_frame_index=3,
+        start_timestamp=0.0,
+        end_timestamp=0.1,
+        prediction=torch.tensor([[0.1, 0.9], [0.8, 0.2]], dtype=torch.float32),
+    )
+
+    expanded = _expand_batched_inference_results([result])
+
+    assert len(expanded) == 2
+    assert torch.allclose(expanded[0].prediction, torch.tensor([0.1, 0.9]))
+    assert torch.allclose(expanded[1].prediction, torch.tensor([0.8, 0.2]))
