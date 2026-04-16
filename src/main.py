@@ -1,14 +1,27 @@
+"""Application entrypoints for startup summary and MP4-to-JSON inference CLI."""
+
+import argparse
 import json
 import sys
-from pathlib import Path
 from os import getenv
+from pathlib import Path
+from typing import Sequence
+
+import yaml
+
+from src.inference.mp4_cli import (
+    InferenceCliRequest,
+    run_mp4_to_json_action_inference,
+)
 
 DATA_DIR = Path(getenv("DATA_DIR", "/app/data/raw"))
 LOG_DIR = Path(getenv("LOG_DIR", "/app/data/logs"))
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
-def main() -> int:
+
+def run_startup_summary() -> int:
+    """Scan dataset folder and write startup summary JSON."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     if not DATA_DIR.exists():
@@ -33,5 +46,87 @@ def main() -> int:
 
     return 0
 
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build CLI parser for startup summary and Sprint 2 inference flow."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run startup summary (default) or MP4-to-JSON action inference "
+            "when --input and --checkpoint are provided."
+        ),
+    )
+    parser.add_argument(
+        "--input",
+        dest="input_path",
+        type=str,
+        default=None,
+        help="Path to input .mp4 file for inference mode",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        dest="checkpoint_path",
+        type=str,
+        default=None,
+        help="Path to model checkpoint (.pth) for inference mode",
+    )
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        type=str,
+        default="configs/data_pipeline.yml",
+        help="Path to YAML config with runtime settings",
+    )
+    parser.add_argument(
+        "--output",
+        dest="output_path",
+        type=str,
+        default="data/logs/actions.json",
+        help="Path where action inference JSON should be written",
+    )
+    return parser
+
+
+def _run_inference_mode(args: argparse.Namespace) -> int:
+    """Execute MP4-to-JSON inference mode from parsed CLI args."""
+    request = InferenceCliRequest(
+        input_path=Path(args.input_path),
+        checkpoint_path=Path(args.checkpoint_path),
+        config_path=Path(args.config_path),
+        output_path=Path(args.output_path),
+    )
+
+    try:
+        return run_mp4_to_json_action_inference(request)
+    except (
+        FileNotFoundError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        yaml.YAMLError,
+    ) as error:
+        print(f"[ERROR] {error}")
+        return 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run app in startup-summary mode or MP4 inference mode."""
+    parser = build_parser()
+    parsed_args = parser.parse_args(list(argv) if argv is not None else [])
+
+    has_input = parsed_args.input_path is not None
+    has_checkpoint = parsed_args.checkpoint_path is not None
+
+    if not has_input and not has_checkpoint:
+        return run_startup_summary()
+
+    if has_input != has_checkpoint:
+        print("[ERROR] --input and --checkpoint must be provided together")
+        return 2
+
+    return _run_inference_mode(parsed_args)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
