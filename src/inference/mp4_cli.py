@@ -76,7 +76,8 @@ class WindowModelAdapter:
 
         if output.ndim == 2:
             if output.shape[0] < 1:
-                raise ValueError("model output batch dimension must not be empty")
+                raise ValueError(
+                    "model output batch dimension must not be empty")
             return output[0].detach().cpu()
 
         raise ValueError("model output tensor must be 1D or 2D")
@@ -95,7 +96,10 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     model = load_model_from_checkpoint(request.checkpoint_path, device)
 
     tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
-    model_adapter = WindowModelAdapter(model=model, tensorizer=tensorizer, device=device)
+    model_adapter = WindowModelAdapter(
+        model=model, tensorizer=tensorizer, device=device)
+
+    # initializing of engine in this place is more flexible than in the run_video()
     engine = InferenceEngine(
         window_size=settings.window_size,
         stride=settings.stride,
@@ -110,7 +114,8 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer.save(str(request.output_path))
-    print(f"[OK] Wrote {len(writer.get_log().events)} action events to: {request.output_path}")
+    print(
+        f"[OK] Wrote {len(writer.get_log().events)} action events to: {request.output_path}")
 
     return 0
 
@@ -122,6 +127,7 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
     if not config_path.is_file():
+        # found but it is not a file
         raise ValueError(f"Config path must point to a file: {config_path}")
 
     with config_path.open("r", encoding="utf-8") as config_file:
@@ -133,7 +139,8 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
         raise TypeError("Config root must be a mapping/object")
 
     pipeline_cfg = _ensure_mapping(raw_config.get("pipeline", {}), "pipeline")
-    inference_cfg = _ensure_mapping(raw_config.get("inference", {}), "inference")
+    inference_cfg = _ensure_mapping(
+        raw_config.get("inference", {}), "inference")
     tracking_cfg = _ensure_mapping(raw_config.get("tracking", {}), "tracking")
 
     target_resolution = _parse_target_resolution(
@@ -148,7 +155,8 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
         "inference.stride",
     )
     class_labels = _parse_class_labels(inference_cfg.get("class_labels"))
-    default_track_id = _parse_optional_track_id(tracking_cfg.get("default_track_id"))
+    default_track_id = _parse_optional_track_id(
+        tracking_cfg.get("default_track_id"))
 
     return InferenceRuntimeSettings(
         target_resolution=target_resolution,
@@ -169,9 +177,11 @@ def load_model_from_checkpoint(
     if not isinstance(device, torch.device):
         raise TypeError("device must be a torch.device instance")
     if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+        raise FileNotFoundError(
+            f"Checkpoint file not found: {checkpoint_path}")
     if not checkpoint_path.is_file():
-        raise ValueError(f"Checkpoint path must point to a file: {checkpoint_path}")
+        raise ValueError(
+            f"Checkpoint path must point to a file: {checkpoint_path}")
 
     raw_checkpoint = torch.load(str(checkpoint_path), map_location=device)
     if not isinstance(raw_checkpoint, dict):
@@ -183,7 +193,8 @@ def load_model_from_checkpoint(
 
     model_name = raw_checkpoint.get("model_name")
     if model_name is not None and not isinstance(model_name, str):
-        raise TypeError("model_name in checkpoint must be a string when provided")
+        raise TypeError(
+            "model_name in checkpoint must be a string when provided")
 
     candidates = _resolve_model_candidates(model_name)
     errors: list[str] = []
@@ -214,7 +225,8 @@ def build_track_ids(
     if not isinstance(results, list):
         raise TypeError("results must be a list of InferenceResult objects")
     if default_track_id is not None and (
-        not isinstance(default_track_id, int) or isinstance(default_track_id, bool)
+        not isinstance(default_track_id, int) or isinstance(
+            default_track_id, bool)
     ):
         raise TypeError("default_track_id must be an integer or None")
     if isinstance(default_track_id, int) and default_track_id < 0:
@@ -222,7 +234,8 @@ def build_track_ids(
 
     for result in results:
         if not isinstance(result, InferenceResult):
-            raise TypeError("results must only contain InferenceResult objects")
+            raise TypeError(
+                "results must only contain InferenceResult objects")
 
     if default_track_id is None:
         return [None] * len(results)
@@ -241,7 +254,8 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
     if not isinstance(request.input_path, Path):
         raise TypeError("request.input_path must be a pathlib.Path instance")
     if not isinstance(request.checkpoint_path, Path):
-        raise TypeError("request.checkpoint_path must be a pathlib.Path instance")
+        raise TypeError(
+            "request.checkpoint_path must be a pathlib.Path instance")
     if not isinstance(request.config_path, Path):
         raise TypeError("request.config_path must be a pathlib.Path instance")
     if not isinstance(request.output_path, Path):
@@ -250,7 +264,7 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
 
 def _parse_positive_int(value: object, field_name: str) -> int:
     """Parse a positive integer while rejecting booleans."""
-    if not isinstance(value, int) or isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):  # bool inherit from int
         raise TypeError(f"{field_name} must be an integer")
     if value <= 0:
         raise ValueError(f"{field_name} must be > 0")
@@ -260,9 +274,11 @@ def _parse_positive_int(value: object, field_name: str) -> int:
 def _parse_target_resolution(value: object) -> tuple[int, int]:
     """Parse and validate target resolution as (width, height)."""
     if not isinstance(value, (list, tuple)):
-        raise TypeError("pipeline.target_resolution must be a list/tuple of two integers")
+        raise TypeError(
+            "pipeline.target_resolution must be a list/tuple of two integers")
     if len(value) != 2:
-        raise ValueError("pipeline.target_resolution must contain exactly 2 values")
+        raise ValueError(
+            "pipeline.target_resolution must contain exactly 2 values")
 
     width = _parse_positive_int(value[0], "pipeline.target_resolution[0]")
     height = _parse_positive_int(value[1], "pipeline.target_resolution[1]")
@@ -281,7 +297,8 @@ def _parse_class_labels(value: object) -> list[str]:
         if not isinstance(label, str):
             raise TypeError("inference.class_labels must contain only strings")
         if not label.strip():
-            raise ValueError("inference.class_labels must not contain empty strings")
+            raise ValueError(
+                "inference.class_labels must not contain empty strings")
         class_labels.append(label)
     return class_labels
 
@@ -309,7 +326,8 @@ def _validate_state_dict(value: object) -> dict[str, torch.Tensor]:
         if not isinstance(key, str):
             raise TypeError("model_state_dict keys must be strings")
         if not isinstance(tensor, torch.Tensor):
-            raise TypeError("model_state_dict values must be torch.Tensor objects")
+            raise TypeError(
+                "model_state_dict values must be torch.Tensor objects")
         normalized[key] = tensor
     return normalized
 

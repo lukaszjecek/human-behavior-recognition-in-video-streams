@@ -98,7 +98,7 @@ def run_video(
         tuple[int, int, list]: Number of processed frames, generated inference results and collected
         inferencemetadata/results.
     """
-    runtime_engine = engine
+    runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
         runtime_engine = InferenceEngine()
     elif not isinstance(runtime_engine, InferenceEngine):
@@ -112,8 +112,10 @@ def run_video(
         "producer_error": None,
     }
 
-    producer = Thread(target=produce_frames_safe, args=(video_path, frame_queue, stats))
-    consumer = Thread(target=consume_frame_queue, args=(frame_queue, runtime_engine, stats))
+    producer = Thread(target=produce_frames_safe,
+                      args=(video_path, frame_queue, stats))
+    consumer = Thread(target=consume_frame_queue, args=(
+        frame_queue, runtime_engine, stats))
 
     producer.start()
     consumer.start()
