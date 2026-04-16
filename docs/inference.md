@@ -52,3 +52,12 @@ tracking:
 ```
 
 If `tracking.default_track_id` is set, that track ID is attached to every emitted event.
+
+## Checkpoint metadata requirements
+
+Inference expects checkpoint metadata fields:
+- `model_name` (supported: `baseline`, `dummy`)
+- `num_classes` (positive integer)
+- `model_state_dict`
+
+The loader uses `num_classes` from metadata and does not infer class count from specific layer names (for example `fc`, `head`, or `classifier`).

@@ -26,6 +26,7 @@ def _write_dummy_checkpoint(checkpoint_path):
     model = DummyBehaviorModel(num_classes=2)
     checkpoint = {
         "model_name": "dummy",
+        "num_classes": 2,
         "model_state_dict": model.state_dict(),
     }
     torch.save(checkpoint, str(checkpoint_path))
@@ -84,6 +85,21 @@ def test_load_model_from_checkpoint_rejects_invalid_payload(tmp_path):
     torch.save(["not", "a", "dict"], str(checkpoint_path))
 
     with pytest.raises(TypeError, match="Checkpoint must contain"):
+        load_model_from_checkpoint(checkpoint_path, torch.device("cpu"))
+
+
+def test_load_model_from_checkpoint_requires_num_classes_metadata(tmp_path):
+    checkpoint_path = tmp_path / "missing_num_classes.pth"
+    model = DummyBehaviorModel(num_classes=2)
+    torch.save(
+        {
+            "model_name": "dummy",
+            "model_state_dict": model.state_dict(),
+        },
+        str(checkpoint_path),
+    )
+
+    with pytest.raises(TypeError, match="num_classes in checkpoint"):
         load_model_from_checkpoint(checkpoint_path, torch.device("cpu"))
 
 

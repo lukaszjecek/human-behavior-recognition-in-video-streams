@@ -16,6 +16,11 @@ docker compose run --rm inference python -m scripts.train
 * **Model checkpoints:** Saved to `./data/logs/checkpoints/`.
 * **Training metrics:** Performance logs (JSONL) are saved to `./data/logs/metrics/`.
 
+Saved checkpoints include metadata required by inference:
+- `model_name: baseline`
+- `num_classes`
+- `model_state_dict`
+
 **Class Configuration:**
 The `num_classes` parameter is intentionally derived dynamically from the dataset manifest during runtime. This approach ensures that the model architecture (specifically the final linear layer) always matches the number of unique labels present in the current data subset, avoiding configuration drift and manual errors.
 

@@ -104,6 +104,8 @@ def main() -> int:
     checkpoints_path = checkpoints_dir / f'baseline_epoch_{epochs}.pth'
     torch.save({
         'epoch': epochs,
+        'model_name': 'baseline',
+        'num_classes': num_classes,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': avg_loss,
