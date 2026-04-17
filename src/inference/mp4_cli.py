@@ -1,7 +1,7 @@
 """MP4-to-JSON action inference CLI helpers."""
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +46,7 @@ class WindowModelAdapter:
 
     def __init__(
         self,
-        model: Any,
+        model: torch.nn.Module,
         tensorizer: FrameTensorizer,
         device: torch.device,
     ) -> None:
@@ -84,7 +84,8 @@ class WindowModelAdapter:
         if output.ndim == 1:
             return output.detach().cpu()
 
-        if output.ndim == 2:  # warging: in the future, there will be bug caused by ignoring other batch
+        # warning: in the future, there will be bug caused by ignoring other batch
+        if output.ndim == 2:
             if output.shape[0] < 1:
                 raise ValueError(
                     "model output batch dimension must not be empty")
