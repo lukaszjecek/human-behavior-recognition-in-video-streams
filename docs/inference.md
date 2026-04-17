@@ -1,6 +1,6 @@
 # Inference
 ## Coauthor: [Aleksander Kaźmierczak](https://github.com/blanqtoja)
-## Coauthor: [Ireneusz Bartoszek](...)
+## Coauthor: [Ireneusz Bartoszek](https://github.com/bartoszir)
 
 [Back to README](../README.md)
 
