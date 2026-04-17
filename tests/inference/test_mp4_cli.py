@@ -27,7 +27,6 @@ def _write_dummy_checkpoint(checkpoint_path):
     model = DummyBehaviorModel(num_classes=2)
     checkpoint = {
         "model_name": "dummy",
-        "num_classes": 2,
         "model_state_dict": model.state_dict(),
     }
     torch.save(checkpoint, str(checkpoint_path))
@@ -107,8 +106,8 @@ def test_load_model_from_checkpoint_rejects_invalid_payload(tmp_path):
         load_model_from_checkpoint(checkpoint_path, torch.device("cpu"))
 
 
-def test_load_model_from_checkpoint_requires_num_classes_metadata(tmp_path):
-    checkpoint_path = tmp_path / "missing_num_classes.pth"
+def test_load_model_from_checkpoint_infers_num_classes_from_state_dict(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint.pth"
     model = DummyBehaviorModel(num_classes=2)
     torch.save(
         {
@@ -118,8 +117,8 @@ def test_load_model_from_checkpoint_requires_num_classes_metadata(tmp_path):
         str(checkpoint_path),
     )
 
-    with pytest.raises(TypeError, match="num_classes in checkpoint"):
-        load_model_from_checkpoint(checkpoint_path, torch.device("cpu"))
+    loaded_model = load_model_from_checkpoint(checkpoint_path, torch.device("cpu"))
+    assert isinstance(loaded_model, DummyBehaviorModel)
 
 
 def test_build_track_ids_rejects_invalid_results_type():
