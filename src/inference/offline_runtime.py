@@ -2,11 +2,13 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
-from typing import Any
+from typing import Any, Optional
 
 import cv2
 
 from src.inference.engine import InferenceEngine
+from src.inference.json_writer import ActionEventWriter
+from src.inference.tracker import BaseTracker, SingleTrackTracker
 
 EOF_SENTINEL = object()
 
@@ -85,18 +87,21 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
 
 def run_video(
     video_path: str,
-    engine: InferenceEngine | None = None,
-) -> tuple[int, int, list[Any]]:
+    engine: Optional[InferenceEngine] = None,
+    tracker: Optional[BaseTracker] = None
+) -> tuple[int, int, list[Any], list[Any]]:
     """Runs offline inference on a single video file.
 
     Args:
         video_path (str): Path to the input video file.
-        engine (InferenceEngine | None): Optional inference engine instance. If None,
-            a default InferenceEngine is created.
+        engine: Optional inference engine instance. If None, a default
+            InferenceEngine is created.
+        tracker: Optional tracker used to assign track IDs to inference results.
 
     Returns:
-        tuple[int, int, list]: Number of processed frames, generated inference results and collected
-        inferencemetadata/results.
+        tuple[int, int, list[Any], list[Any]]: Number of processed frames,
+        number of inference windows, collected inference results, and output
+        action events.
     """
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
@@ -114,8 +119,8 @@ def run_video(
 
     producer = Thread(target=produce_frames_safe,
                       args=(video_path, frame_queue, stats))
-    consumer = Thread(target=consume_frame_queue, args=(
-        frame_queue, runtime_engine, stats))
+    consumer = Thread(target=consume_frame_queue,
+                      args=(frame_queue, runtime_engine, stats))
 
     producer.start()
     consumer.start()
@@ -130,7 +135,15 @@ def run_video(
     inference_count = stats["inference_count"]
     inference_results = stats["inference_results"]
 
+    tracker = tracker or SingleTrackTracker()
+    track_ids = tracker.assign_track_ids(inference_results)
+
+    writer = ActionEventWriter()
+    writer.add_results(inference_results, track_ids=track_ids)
+    action_events = writer.get_log().events
+
     print(f"Processed {frame_count} frames")
     print(f"Generated {inference_count} inference windows")
+    print(f"Generated {len(action_events)} action events")
 
-    return frame_count, inference_count, inference_results
+    return frame_count, inference_count, inference_results, action_events

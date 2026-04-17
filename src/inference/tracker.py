@@ -22,7 +22,17 @@ class BaseTracker(ABC):
         raise NotImplementedError
 
 class SingleTrackTracker(BaseTracker):
-    """Simple tracker that assigns a single persistent track ID to all results."""
+    """Simple tracker that assigns a single persistent track ID to all results.
+
+    Assumptions:
+        - The current pipeline represents a single continuous subject/track.
+        - Results belong to one identity across consecutive inference windows.
+
+    Limitations:
+        - Does not perform multi-object association.
+        - Does not use spatial matching, bounding boxes, or re-identification.
+        - Intended as an initial stable backend until richer tracking inputs are available.
+    """
 
     def __init__(self, track_id: int = 1) -> None:
         """Initialize the tracker with a fixed track ID."""
