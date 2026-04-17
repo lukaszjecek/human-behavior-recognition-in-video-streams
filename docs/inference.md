@@ -1,5 +1,6 @@
 # Inference
-## Author: [Aleksander Kaźmierczak](https://github.com/blanqtoja)
+## Coauthor: [Aleksander Kaźmierczak](https://github.com/blanqtoja)
+## Coauthor: [Ireneusz Bartoszek](...)
 
 [Back to README](../README.md)
 
@@ -38,6 +39,19 @@ If neither is provided, `src.main` runs startup summary mode.
 5. Convert `InferenceResult` objects to `ActionEvent` records.
 6. Save action log JSON with `ActionEventWriter`.
 
+### Offline runtime details
+
+The offline runtime processes video frames using a producer-consumer pattern:
+
+- A producer thread reads frames from the input MP4 file in source order.
+- A consumer thread feeds frames into the `InferenceEngine`.
+- Frame buffering and windowing are handled internally by the engine.
+
+The runtime guarantees:
+- deterministic frame ordering
+- safe shutdown using an EOF sentinel
+- propagation of frame indices and timestamps in `InferenceResult`
+
 ## Supported config keys
 
 ```yaml
@@ -66,3 +80,31 @@ Device resolution order:
 Inference expects checkpoint metadata fields:
 - `model_name` (supported: `baseline`, `dummy`)
 - `model_state_dict`
+
+## Tracking
+
+Tracking is implemented through a simple abstraction layer:
+
+- `BaseTracker` defines the interface for assigning track IDs
+- `SingleTrackTracker` is the initial backend implementation
+
+### Current behavior
+
+- A single persistent `track_id` is assigned to all inference results
+- Track IDs are propagated into `ActionEvent` records
+- Tracking operates on inference windows, not raw frames
+
+### Integration in pipeline
+
+1. `InferenceEngine` produces `InferenceResult` objects
+2. Tracker assigns `track_id` values to each result
+3. `ActionEventWriter` includes `track_id` in output events
+
+### Limitations
+
+- Assumes a single continuous subject or identity
+- No multi-object tracking support
+- No spatial matching (no bounding boxes or IoU-based association)
+- No re-identification across disjoint segments
+
+This implementation serves as a baseline for future multi-object tracking extensions.
