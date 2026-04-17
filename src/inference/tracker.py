@@ -36,8 +36,11 @@ class SingleTrackTracker(BaseTracker):
 
     def __init__(self, track_id: int = 1) -> None:
         """Initialize the tracker with a fixed track ID."""
+        if not isinstance(track_id, int) or isinstance(track_id, bool):
+            raise TypeError("track_id must be an integer")
+
         self.track_id = track_id
 
     def assign_track_ids(self, results: List[InferenceResult]) -> List[Optional[int]]:
         """Assign the same track ID to every result."""
-        return [self.track_id for _ in results]
+        return [self.track_id] * len(results)
