@@ -15,6 +15,6 @@ services:
       - ./data/logs:/app/data/logs
 
 
-    command: [ "sh", "-lc", "python src/main.py && tail -f /dev/null" ]
+    command: [ "sh", "-lc", "python -m src.main && tail -f /dev/null" ]
     stdin_open: true
     tty: true
