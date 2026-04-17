@@ -10,7 +10,12 @@ pipeline:
 
 inference:
   stride: 1
-  class_labels: []
+  class_labels:
+    - car_drops_off_person
+    - car_makes_u_turn
+    - motorcycle_makes_u_turn
+    - motorcycle_turns_right
+    - person_sits_down
 
 tracking:
   default_track_id: null
