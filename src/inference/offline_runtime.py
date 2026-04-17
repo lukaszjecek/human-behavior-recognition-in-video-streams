@@ -2,6 +2,7 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Any
 
 import cv2
 
@@ -45,12 +46,14 @@ def produce_frames(video_path: str, frame_queue: Queue) -> None:
     finally:
         frame_queue.put(EOF_SENTINEL)
 
+
 def produce_frames_safe(video_path: str, frame_queue: Queue, stats: dict) -> None:
     """Runs the frame producer and stores any raised exception in stats."""
     try:
         produce_frames(video_path, frame_queue)
     except Exception as exc:
         stats["producer_error"] = exc
+
 
 def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict) -> None:
     """Consumes frames from a queue with an inference engine and updates runtime stats.
@@ -79,17 +82,28 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
     stats["inference_count"] = len(inference_results)
     stats["inference_results"] = inference_results
 
-def run_video(video_path: str) -> tuple[int, int, list]:
+
+def run_video(
+    video_path: str,
+    engine: InferenceEngine | None = None,
+) -> tuple[int, int, list[Any]]:
     """Runs offline inference on a single video file.
 
     Args:
         video_path (str): Path to the input video file.
+        engine (InferenceEngine | None): Optional inference engine instance. If None,
+            a default InferenceEngine is created.
 
     Returns:
         tuple[int, int, list]: Number of processed frames, generated inference results and collected
         inferencemetadata/results.
     """
-    engine = InferenceEngine()
+    runtime_engine = engine  # engine initialization moved to mp4_cli.py
+    if runtime_engine is None:
+        runtime_engine = InferenceEngine()
+    elif not isinstance(runtime_engine, InferenceEngine):
+        raise TypeError("engine must be an InferenceEngine instance or None")
+
     frame_queue = Queue()
     stats = {
         "frame_count": 0,
@@ -98,8 +112,10 @@ def run_video(video_path: str) -> tuple[int, int, list]:
         "producer_error": None,
     }
 
-    producer = Thread(target=produce_frames_safe, args=(video_path, frame_queue, stats))
-    consumer = Thread(target=consume_frame_queue, args=(frame_queue, engine, stats))
+    producer = Thread(target=produce_frames_safe,
+                      args=(video_path, frame_queue, stats))
+    consumer = Thread(target=consume_frame_queue, args=(
+        frame_queue, runtime_engine, stats))
 
     producer.start()
     consumer.start()

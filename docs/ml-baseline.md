@@ -14,6 +14,11 @@ docker compose run --rm inference python -m scripts.train
 
 Training outputs:
 
+Saved checkpoints include metadata required by inference:
+- `model_name: baseline`
+- `model_state_dict`
+
+**Class Configuration:**
 - Model checkpoints: Saved to `./data/logs/checkpoints/`.
 - Training metrics: Performance logs (JSONL) are saved to `./data/logs/metrics/`.
 
