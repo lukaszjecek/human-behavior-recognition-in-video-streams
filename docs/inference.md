@@ -5,33 +5,11 @@
 
 ## Sprint 2 CLI: MP4 to JSON
 
-The Sprint 2 milestone is exposed through `src.main` inference mode:
-
-
-(the commands below are for bash, below commands are for bash on Windows, if you are using Powershel, remove 'MSYS_NO_PATHCONV=1')
-
-Run in this order:
+To run in inference mode:
 ```
-MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m src.data.sample --config /app/configs/data_pipeline.yml --output manifest.jsonl
-```
-
-If the first step prints "No videos found", it means that there is no data in the data/raw on the host and it needs to be placed there first.
-
-Check if the file has been created:
-```
-MSYS_NO_PATHCONV=1 docker compose run --rm inference sh -lc "ls -l /app/data/manifests/manifest.jsonl"
-```
-
-Then training:
-```
-MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m scripts.train
-```
-
-At the end, the inference:
-```
-MSYS_NO_PATHCONV=1 docker compose run --rm inference python -m src.main \
-  --input /app/data/raw/walking/sample.mp4 \
-  --checkpoint /app/data/logs/checkpoints/baseline_epoch_10.pth \
+docker compose run --rm inference python -m src.main \
+  --input /app/data/raw/car_drops_off_person/0BD540FB-26D7-4814-8229-5572B9132328-306-00000008A9AAB259_1.mp4 \
+  --checkpoint /app/data/logs/checkpoints/baseline_epoch_50.pth \
   --config /app/configs/data_pipeline.yml \
   --output /app/data/logs/actions.json \
   --device auto
@@ -87,7 +65,4 @@ Device resolution order:
 
 Inference expects checkpoint metadata fields:
 - `model_name` (supported: `baseline`, `dummy`)
-- `num_classes` (positive integer)
 - `model_state_dict`
-
-The loader uses `num_classes` from metadata and does not infer class count from specific layer names (for example `fc`, `head`, or `classifier`).

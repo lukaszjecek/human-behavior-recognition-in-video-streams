@@ -211,7 +211,7 @@ def load_model_from_checkpoint(
 
     raw_state_dict = raw_checkpoint.get("model_state_dict", raw_checkpoint)
     state_dict = _validate_state_dict(raw_state_dict)
-    num_classes = _parse_num_classes(raw_checkpoint.get("num_classes"))
+    num_classes = _infer_num_classes(state_dict)
 
     model_name = raw_checkpoint.get("model_name")
     if model_name is not None and not isinstance(model_name, str):
@@ -439,13 +439,24 @@ def _validate_state_dict(value: object) -> dict[str, torch.Tensor]:
     return normalized
 
 
-def _parse_num_classes(value: object) -> int:
-    """Parse model class count from checkpoint metadata."""
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError("num_classes in checkpoint must be an integer")
-    if value <= 0:
-        raise ValueError("num_classes in checkpoint must be > 0")
-    return value
+# checpoint file does not contain class count
+def _infer_num_classes(state_dict: dict[str, torch.Tensor]) -> int:
+    """Infer output class count from fc.weight shape."""
+    key_candidates = ("model.fc.weight", "fc.weight")
+    for key in key_candidates:
+        maybe_weight = state_dict.get(key)
+        if maybe_weight is None:
+            continue
+        if not isinstance(maybe_weight, torch.Tensor):
+            raise TypeError(f"{key} must be a torch.Tensor")
+        if maybe_weight.ndim != 2:
+            raise ValueError(f"{key} must be a rank-2 tensor")
+        return int(maybe_weight.shape[0])
+
+    raise ValueError(
+        "Could not infer number of classes from checkpoint. "
+        "Expected key 'model.fc.weight' or 'fc.weight'.",
+    )
 
 
 def _resolve_model_candidates(model_name: str | None) -> list[str]:

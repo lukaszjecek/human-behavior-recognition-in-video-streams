@@ -18,7 +18,6 @@ docker compose run --rm inference python -m scripts.train
 
 Saved checkpoints include metadata required by inference:
 - `model_name: baseline`
-- `num_classes`
 - `model_state_dict`
 
 **Class Configuration:**
