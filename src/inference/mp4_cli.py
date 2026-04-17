@@ -120,7 +120,7 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         model=model_adapter,
     )
 
-    _, _, inference_results = run_video(str(request.input_path), engine=engine)
+    _, _, inference_results,_ = run_video(str(request.input_path), engine=engine)
     inference_results = _expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(inference_results, settings.default_track_id)
 

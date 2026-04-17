@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
+from src.inference.engine import InferenceEngine
 from src.inference.offline_runtime import run_video
 
 
@@ -31,9 +32,11 @@ def test_run_video_processes_sample_mp4_and_exposes_track_id(tmp_path):
 
     writer.release()
 
+    engine = InferenceEngine(model=DummyPredictionModel())
+
     processed_frames, inference_windows, inference_results, action_events = run_video(
         str(video_path),
-        model=DummyPredictionModel(),
+        engine=engine,
     )
 
     assert processed_frames == 20
