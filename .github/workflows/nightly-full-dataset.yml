@@ -67,7 +67,7 @@ jobs:
           docker compose run --rm \
             -e DATA_DIR=/app/data/nightly_raw \
             -e LOG_DIR=/app/data/nightly_logs \
-            inference sh -lc "python src/main.py"
+            inference sh -lc "python -m src.main"
 
       - name: Validate startup summary
         shell: bash
