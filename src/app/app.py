@@ -3,14 +3,18 @@
 Provides create_app() that wires configuration, routers and basic error handling.
 """
 from typing import Optional
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from starlette.requests import Request
 
-# Application imports (settings and routers)
-from src.app.core.settings import Settings, settings as default_settings
-from src.app.endpoints.health import router as health_router
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
+
+# Application imports (settings and routers)
+from src.app.core.settings import Settings
+from src.app.core.settings import settings as default_settings
+from src.app.endpoints.health import router as health_router
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
@@ -18,6 +22,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     
     Args:
         settings: Optional pre-built Settings instance (useful for tests).
+
     Returns:
         Configured FastAPI instance with routers mounted.
     """
@@ -35,10 +40,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     # Globalna obsługa błędów
     @app.exception_handler(Exception)
-    async def global_exception_handler(request, exc):
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Handle uncaught exceptions and return a generic 500 response."""
         return JSONResponse(
-            status_code=500, 
-            content={"detail": "Internal server error"}
+            status_code=500,
+            content={"detail": "Internal server error"},
         )
 
     return app

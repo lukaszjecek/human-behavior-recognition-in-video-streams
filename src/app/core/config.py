@@ -1,7 +1,9 @@
 """Centralized configuration loading using Pydantic."""
 
 from pathlib import Path
+
 from pydantic import BaseSettings, Field
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""

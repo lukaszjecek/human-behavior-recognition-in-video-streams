@@ -8,12 +8,14 @@ router = APIRouter()
 
 
 @router.get("/ping", summary="Websocket ping placeholder")
-async def ws_ping():
+async def ws_ping() -> dict[str, str]:
+    """HTTP placeholder endpoint for websocket namespace."""
     return {"message": "websocket placeholder"}
 
 
 @router.websocket("/echo")
-async def websocket_echo(ws: WebSocket):
+async def websocket_echo(ws: WebSocket) -> None:
+    """Simple echo websocket that sends back received text prefixed with 'echo: '."""
     await ws.accept()
     try:
         while True:

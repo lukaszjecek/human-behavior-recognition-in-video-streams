@@ -3,12 +3,12 @@
 Verifies health and readiness endpoints respond as expected.
 """
 
-from fastapi.testclient import TestClient
-
 from src.app.app import create_app
 
 
 def test_health_and_readiness_endpoints():
+    from fastapi.testclient import TestClient
+
     app = create_app()
     client = TestClient(app)
 
@@ -25,6 +25,8 @@ def test_health_and_readiness_endpoints():
 
 
 def test_api_root():
+    from fastapi.testclient import TestClient
+
     app = create_app()
     client = TestClient(app)
 

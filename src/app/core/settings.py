@@ -6,7 +6,7 @@ updated for Pydantic V2 compatibility.
 from pathlib import Path
 
 # Dodajemy import ConfigDict dla Pydantic V2
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 

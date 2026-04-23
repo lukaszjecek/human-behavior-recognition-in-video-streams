@@ -10,12 +10,12 @@ router = APIRouter()
 
 
 @router.get("/health", summary="Health check")
-async def health():
+async def health() -> dict[str, object]:
     """Simple liveness/health endpoint."""
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat() + "Z"}
 
 
 @router.get("/readiness", summary="Readiness probe")
-async def readiness():
+async def readiness() -> dict[str, object]:
     """Readiness endpoint - placeholder for future checks (DB, queues, etc.)."""
     return {"ready": True, "status": "ok"}
