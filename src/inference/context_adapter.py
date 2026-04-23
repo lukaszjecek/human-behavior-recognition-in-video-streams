@@ -12,7 +12,7 @@ class ContextModule:
 
     def __init__(self) -> None:
         """Initialize the ContextModule with pre-trained MobileNetV2."""
-        self.model = models.mobilenet_v2(weights=models.MobileNetV2_Weights.IMAGENET1K_V2)
+        self.model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V2)
         self.model.eval()
 
         self.transform = T.Compose([
