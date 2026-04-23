@@ -1,8 +1,12 @@
 """Local verification for Context Module determinism."""
-from src.inference.context_adapter import ContextModule
+
 from PIL import Image
 
-def test_context_determinism():
+from src.inference.context_adapter import ContextModule
+
+
+def test_context_determinism() -> None:
+    """Verify that the module returns deterministic context outputs."""
     module = ContextModule()
     fake_frame = Image.new('RGB', (224, 224), color=(128, 128, 128))
     

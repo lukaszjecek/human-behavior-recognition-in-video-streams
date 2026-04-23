@@ -4,11 +4,11 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from PIL import Image
 
+import cv2
 import torch
 import yaml
-import cv2
+from PIL import Image
 
 from src.inference.context_adapter import ContextModule
 from src.inference.engine import InferenceEngine, InferenceResult
