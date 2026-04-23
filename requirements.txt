@@ -6,8 +6,8 @@ numpy
 matplotlib==3.8.3
 seaborn==0.13.2
 torchvision
-fastapi==0.104.1
-uvicorn==0.24.0
 pydantic>=2.0.0
+fastapi>=0.110.0
+uvicorn==0.24.0
 pydantic-settings
-httpx
+httpx>=0.27.0
