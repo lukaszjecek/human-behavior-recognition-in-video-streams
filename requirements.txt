@@ -7,3 +7,5 @@ pytest
 matplotlib==3.8.3
 seaborn==0.13.2
 torchvision
+fastapi==0.104.1
+uvicorn==0.24.0
