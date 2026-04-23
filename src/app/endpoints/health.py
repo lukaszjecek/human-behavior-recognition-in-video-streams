@@ -2,7 +2,7 @@
 
 This module provides simple liveness and readiness probes under /health and /readiness.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
@@ -12,7 +12,11 @@ router = APIRouter()
 @router.get("/health", summary="Health check")
 async def health() -> dict[str, object]:
     """Simple liveness/health endpoint."""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat() + "Z"}
+    # Używamy datetime.now(timezone.utc), aby uniknąć problemów z 'naive' datetime
+    return {
+        "status": "ok", 
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    }
 
 
 @router.get("/readiness", summary="Readiness probe")

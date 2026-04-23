@@ -2,6 +2,7 @@
 
 Covers app settings propagation, global exception handler, and websocket echo.
 """
+
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
@@ -25,7 +26,7 @@ def test_global_exception_handler():
     app.add_api_route("/boom", _boom, methods=["GET"])
     client = TestClient(app, raise_server_exceptions=False)
 
-    r = client.get("/boom") 
+    r = client.get("/boom")
     assert r.status_code == 500
     assert r.json().get("detail") == "Internal server error"
 

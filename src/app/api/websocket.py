@@ -2,7 +2,7 @@
 
 Provides a namespace for future websocket endpoints.
 """
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
@@ -21,5 +21,16 @@ async def websocket_echo(ws: WebSocket) -> None:
         while True:
             data = await ws.receive_text()
             await ws.send_text(f"echo: {data}")
+    except WebSocketDisconnect:
+        # Normalne rozłączenie klienta - nie traktujemy tego jako błąd
+        pass
     except Exception:
-        await ws.close()
+        # Obsługa nieoczekiwanych błędów
+        pass
+    finally:
+        # Upewniamy się, że połączenie zostanie zamknięte, jeśli jeszcze nie jest
+        try:
+            await ws.close()
+        except RuntimeError:
+            # Rzucane, jeśli socket został już zamknięty przez klienta
+            pass
