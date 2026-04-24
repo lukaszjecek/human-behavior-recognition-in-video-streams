@@ -1,6 +1,7 @@
 # Inference
 ## Coauthor: [Aleksander Kaźmierczak](https://github.com/blanqtoja)
 ## Coauthor: [Ireneusz Bartoszek](https://github.com/bartoszir)
+## Coauthor: [Łukasz Murza](https://github.com/XEN00000)
 
 [Back to README](../README.md)
 
@@ -15,7 +16,6 @@ docker compose run --rm inference python -m src.main \
   --output /app/data/logs/actions.json \
   --device auto
 ```
-
 
 ### Arguments
 
@@ -108,3 +108,35 @@ Tracking is implemented through a simple abstraction layer:
 - No re-identification across disjoint segments
 
 This implementation serves as a baseline for future multi-object tracking extensions.
+
+## Sprint 3: Minimal Context Module
+
+### Overview
+To support context-aware alerting in Sprint 3, a lightweight **Context Module** has been integrated into the inference pipeline. This module identifies the environmental setting of a video clip without requiring retraining of the primary action-recognition baseline.
+
+### Technical Implementation
+- **Model:** Pre-trained MobileNetV2 (ImageNetV2 weights).
+- **Approach:** Zero-shot scene classification via index mapping. The module analyzes the first frame of each video to determine the global context.
+- **Performance:** Deterministic output confirmed via local verification tests (`tests/inference/test_context.py`).
+
+### Output Contract
+The `ContextModule` extends the `ActionEvent` schema. Every event produced in `actions.json` now includes a `context` object:
+
+```json
+"context": {
+  "scene_tag": "string",
+  "confidence": 0.85
+}
+```
+
+**Supported Tags:**
+- `outdoor`: Parks, streets, open areas.
+- `indoor`: Rooms, hallways, office spaces.
+- `vehicle_setting`: Car interiors or immediate transport surroundings.
+- `unknown`: Fallback for low-confidence or ambiguous scenes.
+
+### Integration Assumptions for Alerting
+The alerting logic (downstream in Sprint 3) is expected to consume the `scene_tag` to apply conditional filters:
+1. **Contextual Thresholds:** Alerts for "running" might have a higher priority in `indoor` settings compared to `outdoor`.
+2. **Deterministic Mapping:** The alerting system can rely on the `scene_tag` being consistent across the entire video duration as it is derived from the initial state.
+3. **Fallback Logic:** If `scene_tag` is `unknown`, the alerting system should default to the most restrictive safety policy.
