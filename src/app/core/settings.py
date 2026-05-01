@@ -5,7 +5,6 @@ updated for Pydantic V2 compatibility.
 """
 from pathlib import Path
 
-# Dodajemy import ConfigDict dla Pydantic V2
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
@@ -14,9 +13,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = ConfigDict(
-        env_file=".env", 
+        env_file=".env",
         case_sensitive=False,
-        extra="ignore"  
+        extra="ignore"
     )
 
     app_name: str = Field("HBR Backend")
@@ -24,9 +23,17 @@ class Settings(BaseSettings):
     debug: bool = Field(False)
     host: str = Field("0.0.0.0")
     port: int = Field(8000)
-    
+
     data_dir: Path = Field(Path("/app/data/raw"))
     log_dir: Path = Field(Path("/app/data/logs"))
+
+    # Database configuration
+    db_host: str = Field("localhost")
+    db_port: int = Field(5432)
+    db_user: str = Field("hbr_user")
+    db_password: str = Field("hbr_password")
+    postgres_db: str = Field("hbr_db")
+    database_url: str = Field("postgresql://hbr_user:hbr_password@localhost:5432/hbr_db")
 
 
 settings = Settings()
