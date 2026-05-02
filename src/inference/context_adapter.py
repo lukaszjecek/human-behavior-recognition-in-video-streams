@@ -22,7 +22,7 @@ class ContextModule:
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        # Semantycznie poprawne mapowanie klas pod monitoring (Addressing Łukasz's review)
+        
         self.context_map = {
             "outdoor": [
                 919, 920, # Street sign, traffic light
