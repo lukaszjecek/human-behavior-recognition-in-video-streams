@@ -145,16 +145,15 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
 
     context_data = {"scene_tag": "unknown", "confidence": 0.0}
     
-    if ret and context_module:
+    if context_module and inference_results:
         try:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_frame = Image.fromarray(rgb_frame)            
-            context_data = context_module.get_context(pil_frame)
-        except Exception as e:
-            logger.error("Context inference failed: %s", e)
+            first_frame = inference_results[0].window[0]
+            context_data = context_module.get_context(first_frame)
+        except (IndexError, TypeError, RuntimeError) as e:
+            logger.error("Context inference failed, using fallback: %s", e)
 
-        for event in writer.get_log().events:
-            event.context = context_data
+    for event in writer.get_log().events:
+        event.context = context_data
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer.save(str(request.output_path))

@@ -76,6 +76,15 @@ class ActionEvent:
         if self.context is not None:
             if not isinstance(self.context, dict):
                 raise TypeError("context must be a dictionary")
+            
+            if "scene_tag" not in self.context or "confidence" not in self.context:
+                raise ValueError("context missing required keys: 'scene_tag' or 'confidence'")
+                
+            if not isinstance(self.context["scene_tag"], str):
+                raise TypeError("scene_tag must be a string")
+            
+            if not isinstance(self.context["confidence"], (float, int)) or isinstance(self.context["confidence"], bool):
+                raise TypeError("confidence must be a float")
 
     def to_dict(self) -> dict:
         """Convert to dictionary, filtering out None values."""

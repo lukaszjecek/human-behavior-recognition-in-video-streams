@@ -1,14 +1,14 @@
 """Minimal context module for Sprint 3 context-aware alerting."""
 
+from PIL.Image import Image
 import torch
 import torch.nn.functional as F
 import torchvision.models as models
 import torchvision.transforms as T
-from PIL.Image import Image
 
 
 class ContextModule:
-    """Extracts scene tags from video frames without retraining."""
+    """Extracts security-relevant scene tags from video frames."""
 
     def __init__(self) -> None:
         """Initialize the ContextModule with pre-trained MobileNetV2."""
@@ -22,17 +22,32 @@ class ContextModule:
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
+        # Semantycznie poprawne mapowanie klas pod monitoring (Addressing Łukasz's review)
         self.context_map = {
-            "outdoor": range(400, 900),
-            "indoor": range(0, 400),
-            "vehicle_setting": range(900, 1000),
+            "outdoor": [
+                919, 920, # Street sign, traffic light
+                673, 555, # Mouse (picket fence), fence
+                970, 971, # Alp, valley (landscape)
+                704, 705  # Parking meter, park bench
+            ],
+            "indoor": [
+                498, 500, # Cinema, home theater
+                508, 603, # Computer desk, heater
+                724, 743, # Office, prison
+                849, 850  # Store, sliding door
+            ],
+            "vehicle_setting": [
+                817, 511, # Bus, car
+                407, 751, # Ambulance, racer
+                654, 656  # Minibus, minivan
+            ]
         }
 
     def get_context(self, frame_tensor: Image) -> dict:
         """Extract context from a given frame.
 
         Args:
-            frame_tensor: PIL Image or Tensor frame.
+            frame_tensor: PIL Image.
 
         Returns:
             dict: Context output contract with scene_tag and confidence.
