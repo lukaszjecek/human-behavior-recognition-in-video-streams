@@ -110,6 +110,13 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         cli_device=request.device,
         config_device=settings.device,
     )
+
+    context_module = None
+    try:
+        context_module = ContextModule()
+    except Exception as e:
+        logger.warning("ContextModule failed to initialize: %s", e)
+
     model = load_model_from_checkpoint(request.checkpoint_path, device)
 
     tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
@@ -135,13 +142,17 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     cap = cv2.VideoCapture(str(request.input_path))
     ret, frame = cap.read()
     cap.release()
+
+    context_data = {"scene_tag": "unknown", "confidence": 0.0}
     
-    if ret:
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_frame = Image.fromarray(rgb_frame)
-        
-        context_data = ContextModule().get_context(pil_frame)
-        
+    if ret and context_module:
+        try:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_frame = Image.fromarray(rgb_frame)            
+            context_data = context_module.get_context(pil_frame)
+        except Exception as e:
+            logger.error("Context inference failed: %s", e)
+
         for event in writer.get_log().events:
             event.context = context_data
 
