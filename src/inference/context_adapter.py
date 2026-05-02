@@ -1,10 +1,10 @@
 """Minimal context module for Sprint 3 context-aware alerting."""
 
-from PIL.Image import Image
 import torch
 import torch.nn.functional as F
 import torchvision.models as models
 import torchvision.transforms as T
+from PIL.Image import Image
 
 
 class ContextModule:
