@@ -138,5 +138,8 @@ The `ContextModule` extends the `ActionEvent` schema. Every event produced in `a
 ### Integration Assumptions for Alerting
 The alerting logic (downstream in Sprint 3) is expected to consume the `scene_tag` to apply conditional filters:
 1. **Contextual Thresholds:** Alerts for "running" might have a higher priority in `indoor` settings compared to `outdoor`.
-2. **Deterministic Mapping:** The alerting system can rely on the `scene_tag` being consistent across the entire video duration as it is derived from the initial state.
+2. **First-Frame Context Assumption (Global Context):** 
+   - **Crucial:** The `scene_tag` is extracted ONLY from the first valid frame of the video and applied uniformly to all events in the stream.
+   - It does NOT support dynamic scene changes (e.g., transitioning from indoor to outdoor within a single clip). 
+   - Downstream logic must treat this as a "Global Scene Label" for the entire inference session.
 3. **Fallback Logic:** If `scene_tag` is `unknown`, the alerting system should default to the most restrictive safety policy.
