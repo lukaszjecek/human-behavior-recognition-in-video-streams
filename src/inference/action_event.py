@@ -83,7 +83,8 @@ class ActionEvent:
             if not isinstance(self.context["scene_tag"], str):
                 raise TypeError("scene_tag must be a string")
             
-            if not isinstance(self.context["confidence"], (float, int)) or isinstance(self.context["confidence"], bool):
+            conf = self.context["confidence"]
+            if not isinstance(conf, (float, int)) or isinstance(conf, bool):
                 raise TypeError("confidence must be a float")
 
     def to_dict(self) -> dict:
