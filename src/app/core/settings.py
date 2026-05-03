@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     host: str = Field("0.0.0.0")
     port: int = Field(8000)
 
-    data_dir: Path = Field(Path("./data/raw"))
-    log_dir: Path = Field(Path("./data/logs"))
+    data_dir: Path = Field(Path("/app/data/raw"))
+    log_dir: Path = Field(Path("/app/data/logs"))
 
     # Database configuration
     db_host: str = Field("localhost")
