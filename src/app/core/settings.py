@@ -4,8 +4,9 @@ Provides a Settings class and a default settings instance used by the app factor
 updated for Pydantic V2 compatibility.
 """
 from pathlib import Path
+from typing import Optional
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -33,7 +34,17 @@ class Settings(BaseSettings):
     db_user: str = Field("hbr_user")
     db_password: str = Field("hbr_password")
     postgres_db: str = Field("hbr_db")
-    database_url: str = Field("postgresql://hbr_user:hbr_password@localhost:5432/hbr_db")
+    database_url: Optional[str] = Field(None)
+
+    @model_validator(mode="after")
+    def set_database_url(self) -> "Settings":
+        """Build database_url from individual fields if not explicitly set."""
+        if self.database_url is None:
+            self.database_url = (
+                f"postgresql://{self.db_user}:{self.db_password}"
+                f"@{self.db_host}:{self.db_port}/{self.postgres_db}"
+            )
+        return self
 
 
 settings = Settings()

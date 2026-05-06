@@ -49,13 +49,13 @@ services:
       - ./data/raw:/app/data/raw
       - ./data/logs:/app/data/logs
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:${PORT:-8000}"
     networks:
       - hbr-network
     depends_on:
       db:
         condition: service_healthy
-    command: [ "sh", "-lc", "uvicorn src.app.app:create_app --host 0.0.0.0 --port 8000 --factory" ]
+    command: [ "sh", "-lc", "uvicorn src.app.app:create_app --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --factory" ]
     stdin_open: true
     tty: true
 

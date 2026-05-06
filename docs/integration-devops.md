@@ -58,7 +58,7 @@ POSTGRES_DB=hbr_db (configurable via POSTGRES_DB)
 - **Container Name**: `hbr_api`
 - **Port**: 8000 (configurable via PORT)
 - **Network**: `hbr-network`
-- **Command**: `uvicorn src.app.app:create_app --host 0.0.0.0 --port 8000 --factory`
+- **Command**: `uvicorn src.app.app:create_app --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --factory`
 - **Depends On**: `db` service (with health check condition)
 
 **Environment Variables**:
