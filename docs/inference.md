@@ -68,6 +68,9 @@ The service returns a typed in-memory result with:
 - generated `ActionEvent` records
 - resolved runtime settings and selected torch device
 
+`run_mp4_to_json_action_inference` (CLI wrapper) now delegates runtime execution to
+this service entrypoint and handles only output-file serialization.
+
 ### Offline runtime details
 
 The offline runtime processes video frames using a producer-consumer pattern:

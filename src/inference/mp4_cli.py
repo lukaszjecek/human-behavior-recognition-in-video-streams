@@ -8,9 +8,8 @@ from typing import Any
 import torch
 import yaml
 
-from src.inference.engine import InferenceEngine, InferenceResult
+from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import run_video
 from src.inference.tensorize import FrameTensorizer
 from src.models.baseline import BaselineBehaviorModel
 from src.models.dummy import DummyBehaviorModel
@@ -102,36 +101,29 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     if request.input_path.suffix.lower() != ".mp4":
         raise ValueError("input_path must point to an .mp4 file")
 
-    settings = load_runtime_settings(request.config_path)
-    device = resolve_inference_device(
-        cli_device=request.device,
-        config_device=settings.device,
-    )
-    model = load_model_from_checkpoint(request.checkpoint_path, device)
-
-    tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
-    model_adapter = WindowModelAdapter(
-        model=model, tensorizer=tensorizer, device=device)
-
-    # initializing of engine in this place is more flexible than in the run_video()
-    engine = InferenceEngine(
-        window_size=settings.window_size,
-        stride=settings.stride,
-        model=model_adapter,
+    from src.inference.service import (
+        InferenceServiceRequest,
+        run_offline_mp4_inference,
     )
 
-    _, _, inference_results,_ = run_video(str(request.input_path), engine=engine)
-    inference_results = _expand_batched_inference_results(inference_results)
-    track_ids = build_track_ids(inference_results, settings.default_track_id)
-
-    writer = ActionEventWriter(class_labels=settings.class_labels)
-    writer.add_results(inference_results, track_ids=track_ids)
+    service_result = run_offline_mp4_inference(
+        InferenceServiceRequest(
+            video_path=request.input_path,
+            checkpoint_path=request.checkpoint_path,
+            config_path=request.config_path,
+            device=request.device,
+        )
+    )
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = ActionEventWriter(
+        class_labels=service_result.runtime_settings.class_labels,
+    )
+    writer.get_log().add_events(list(service_result.action_events))
     writer.save(str(request.output_path))
     logger.info(
         "[OK] Wrote %d action events to: %s",
-        len(writer.get_log().events),
+        service_result.event_count,
         request.output_path,
     )
 
