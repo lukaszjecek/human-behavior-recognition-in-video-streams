@@ -88,7 +88,8 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
 def run_video(
     video_path: str,
     engine: Optional[InferenceEngine] = None,
-    tracker: Optional[BaseTracker] = None
+    tracker: Optional[BaseTracker] = None,
+    emit_runtime_summary: bool = True,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Runs offline inference on a single video file.
 
@@ -97,6 +98,7 @@ def run_video(
         engine: Optional inference engine instance. If None, a default
             InferenceEngine is created.
         tracker: Optional tracker used to assign track IDs to inference results.
+        emit_runtime_summary: Whether to print processed frame/window/event stats.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -142,8 +144,9 @@ def run_video(
     writer.add_results(inference_results, track_ids=track_ids)
     action_events = writer.get_log().events
 
-    print(f"Processed {frame_count} frames")
-    print(f"Generated {inference_count} inference windows")
-    print(f"Generated {len(action_events)} action events")
+    if emit_runtime_summary:
+        print(f"Processed {frame_count} frames")
+        print(f"Generated {inference_count} inference windows")
+        print(f"Generated {len(action_events)} action events")
 
     return frame_count, inference_count, inference_results, action_events

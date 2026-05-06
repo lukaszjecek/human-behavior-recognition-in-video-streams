@@ -39,6 +39,35 @@ If neither is provided, `src.main` runs startup summary mode.
 5. Convert `InferenceResult` objects to `ActionEvent` records.
 6. Save action log JSON with `ActionEventWriter`.
 
+## Reusable service entrypoint
+
+For programmatic integrations (for example upcoming backend routes), use the
+service API instead of the CLI wrapper:
+
+```python
+from pathlib import Path
+
+from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+
+result = run_offline_mp4_inference(
+    InferenceServiceRequest(
+        video_path=Path("data/raw/walking/sample.mp4"),
+        checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
+        config_path=Path("configs/data_pipeline.yml"),
+        device="auto",
+    )
+)
+
+print(result.frame_count, result.inference_count, result.event_count)
+```
+
+The service returns a typed in-memory result with:
+- processed frame count
+- inference window count
+- expanded `InferenceResult` items
+- generated `ActionEvent` records
+- resolved runtime settings and selected torch device
+
 ### Offline runtime details
 
 The offline runtime processes video frames using a producer-consumer pattern:

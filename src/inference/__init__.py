@@ -3,6 +3,11 @@
 from src.inference.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.service import (
+    InferenceServiceRequest,
+    InferenceServiceResult,
+    run_offline_mp4_inference,
+)
 
 __all__ = [
     "ActionEvent",
@@ -10,4 +15,7 @@ __all__ = [
     "ActionEventWriter",
     "InferenceEngine",
     "InferenceResult",
+    "InferenceServiceRequest",
+    "InferenceServiceResult",
+    "run_offline_mp4_inference",
 ]
