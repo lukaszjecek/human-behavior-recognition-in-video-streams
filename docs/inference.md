@@ -71,6 +71,11 @@ The service returns a typed in-memory result with:
 `run_mp4_to_json_action_inference` (CLI wrapper) now delegates runtime execution to
 this service entrypoint and handles only output-file serialization.
 
+Shared runtime primitives are implemented in `src/inference/runtime.py` and reused
+by both the service and CLI layers (`load_runtime_settings`, device resolution,
+checkpoint loading, `WindowModelAdapter`, track-id building, and
+`expand_batched_inference_results`).
+
 ### Offline runtime details
 
 The offline runtime processes video frames using a producer-consumer pattern:

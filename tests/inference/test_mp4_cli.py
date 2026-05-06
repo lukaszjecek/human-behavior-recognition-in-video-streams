@@ -11,14 +11,16 @@ from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceResult
 from src.inference.mp4_cli import (
     InferenceCliRequest,
+    run_mp4_to_json_action_inference,
+)
+from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
-    _expand_batched_inference_results,
     build_track_ids,
+    expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
     resolve_inference_device,
-    run_mp4_to_json_action_inference,
 )
 from src.inference.service import InferenceServiceResult
 from src.inference.tensorize import FrameTensorizer
@@ -116,7 +118,7 @@ def test_run_mp4_to_json_action_inference_uses_service_layer(monkeypatch, tmp_pa
         )
 
     monkeypatch.setattr(
-        "src.inference.service.run_offline_mp4_inference",
+        "src.inference.mp4_cli.run_offline_mp4_inference",
         _fake_service_runner,
     )
 
@@ -273,7 +275,7 @@ def test_expand_batched_inference_results_splits_batch_prediction():
         prediction=torch.tensor([[0.1, 0.9], [0.8, 0.2]], dtype=torch.float32),
     )
 
-    expanded = _expand_batched_inference_results([result])
+    expanded = expand_batched_inference_results([result])
 
     assert len(expanded) == 2
     assert torch.allclose(expanded[0].prediction, torch.tensor([0.1, 0.9]))

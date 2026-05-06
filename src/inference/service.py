@@ -8,16 +8,16 @@ import torch
 from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.mp4_cli import (
+from src.inference.offline_runtime import run_video
+from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
-    _expand_batched_inference_results,
     build_track_ids,
+    expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
     resolve_inference_device,
 )
-from src.inference.offline_runtime import run_video
 from src.inference.tensorize import FrameTensorizer
 
 
@@ -79,7 +79,7 @@ def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServ
         engine=engine,
         emit_runtime_summary=False,
     )
-    expanded_results = _expand_batched_inference_results(inference_results)
+    expanded_results = expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(expanded_results, settings.default_track_id)
 
     writer = ActionEventWriter(class_labels=settings.class_labels)
