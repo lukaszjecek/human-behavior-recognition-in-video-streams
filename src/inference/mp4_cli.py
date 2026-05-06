@@ -4,16 +4,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.inference import runtime as runtime_primitives
 from src.inference.json_writer import ActionEventWriter
-from src.inference.runtime import (
-    InferenceRuntimeSettings,
-    WindowModelAdapter,
-    build_track_ids,
-    expand_batched_inference_results,
-    load_model_from_checkpoint,
-    load_runtime_settings,
-    resolve_inference_device,
-)
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
 logger = logging.getLogger(__name__)
@@ -77,4 +69,11 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
 
 
 # Backward-compatible private alias while shared runtime helper is now public.
+InferenceRuntimeSettings = runtime_primitives.InferenceRuntimeSettings
+WindowModelAdapter = runtime_primitives.WindowModelAdapter
+build_track_ids = runtime_primitives.build_track_ids
+expand_batched_inference_results = runtime_primitives.expand_batched_inference_results
+load_model_from_checkpoint = runtime_primitives.load_model_from_checkpoint
+load_runtime_settings = runtime_primitives.load_runtime_settings
+resolve_inference_device = runtime_primitives.resolve_inference_device
 _expand_batched_inference_results = expand_batched_inference_results
