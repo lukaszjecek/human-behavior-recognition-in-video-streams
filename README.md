@@ -67,7 +67,7 @@ src/app/
 # Start all services
 docker compose up --build
 
-# Or start only the API service (requires manual DB setup)
+# Or start the API service and its declared dependencies (for example, the database)
 docker compose up api --build
 ```
 
