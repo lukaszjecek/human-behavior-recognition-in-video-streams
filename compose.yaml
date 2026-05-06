@@ -39,6 +39,7 @@ services:
       DB_PORT: 5432
       DB_USER: ${DB_USER:-hbr_user}
       DB_PASSWORD: ${DB_PASSWORD:-hbr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-hbr_db}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${DB_USER:-hbr_user}:${DB_PASSWORD:-hbr_password}@db:5432/${POSTGRES_DB:-hbr_db}}
       DATA_DIR: /app/data/raw
       LOG_DIR: /app/data/logs
