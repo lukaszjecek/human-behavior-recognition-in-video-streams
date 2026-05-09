@@ -29,6 +29,7 @@ class ActionEvent:
     start_timestamp: Optional[float] = None
     end_timestamp: Optional[float] = None
     track_id: Optional[int] = None
+    context: Optional[dict] = None
 
     def __post_init__(self) -> None:
         """Validate fields after initialization."""
@@ -71,6 +72,20 @@ class ActionEvent:
         if self.track_id is not None:
             if not isinstance(self.track_id, int) or isinstance(self.track_id, bool):
                 raise TypeError("track_id must be an integer")
+
+        if self.context is not None:
+            if not isinstance(self.context, dict):
+                raise TypeError("context must be a dictionary")
+            
+            if "scene_tag" not in self.context or "confidence" not in self.context:
+                raise ValueError("context missing required keys: 'scene_tag' or 'confidence'")
+                
+            if not isinstance(self.context["scene_tag"], str):
+                raise TypeError("scene_tag must be a string")
+            
+            conf = self.context["confidence"]
+            if not isinstance(conf, (float, int)) or isinstance(conf, bool):
+                raise TypeError("confidence must be a float")
 
     def to_dict(self) -> dict:
         """Convert to dictionary, filtering out None values."""

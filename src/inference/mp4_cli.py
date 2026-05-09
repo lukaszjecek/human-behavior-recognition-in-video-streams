@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import cv2
 import torch
 import yaml
 
+from src.inference.context_adapter import ContextModule
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import run_video
@@ -107,6 +109,13 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         cli_device=request.device,
         config_device=settings.device,
     )
+
+    context_module = None
+    try:
+        context_module = ContextModule()
+    except Exception as e:
+        logger.warning("ContextModule failed to initialize: %s", e)
+
     model = load_model_from_checkpoint(request.checkpoint_path, device)
 
     tensorizer = FrameTensorizer(target_resolution=settings.target_resolution)
@@ -120,12 +129,30 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         model=model_adapter,
     )
 
-    _, _, inference_results,_ = run_video(str(request.input_path), engine=engine)
+    result = run_video(str(request.input_path), engine=engine)
+    inference_results = result[2] 
+    
     inference_results = _expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(inference_results, settings.default_track_id)
 
     writer = ActionEventWriter(class_labels=settings.class_labels)
     writer.add_results(inference_results, track_ids=track_ids)
+
+    cap = cv2.VideoCapture(str(request.input_path))
+    ret, frame = cap.read()
+    cap.release()
+
+    context_data = {"scene_tag": "unknown", "confidence": 0.0}
+    
+    if context_module and inference_results:
+        try:
+            first_frame = inference_results[0].window[0]
+            context_data = context_module.get_context(first_frame)
+        except (IndexError, TypeError, RuntimeError) as e:
+            logger.error("Context inference failed, using fallback: %s", e)
+
+    for event in writer.get_log().events:
+        event.context = context_data
 
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer.save(str(request.output_path))
