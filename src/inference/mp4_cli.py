@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.inference import runtime as runtime_primitives
+from src.inference.context_adapter import ContextModule
 from src.inference.json_writer import ActionEventWriter
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
@@ -39,10 +40,22 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         )
     )
 
+    context_data = {"scene_tag": "unknown", "confidence": 0.0}
+    context_module = _try_create_context_module()
+
+    if context_module and service_result.inference_results:
+        try:
+            first_frame = service_result.inference_results[0].window[0]
+            context_data = context_module.get_context(first_frame)
+        except (IndexError, TypeError, RuntimeError, ValueError) as error:
+            logger.error("Context inference failed, using fallback: %s", error)
+
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     writer = ActionEventWriter(
         class_labels=service_result.runtime_settings.class_labels,
     )
+    for event in service_result.action_events:
+        event.context = context_data
     writer.get_log().add_events(list(service_result.action_events))
     writer.save(str(request.output_path))
     logger.info(
@@ -66,6 +79,15 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
         raise TypeError("request.output_path must be a pathlib.Path instance")
     if request.device is not None and not isinstance(request.device, str):
         raise TypeError("request.device must be a string or None")
+
+
+def _try_create_context_module() -> ContextModule | None:
+    """Initialize ContextModule with explicit fallback for unavailable runtime deps."""
+    try:
+        return ContextModule()
+    except (ImportError, OSError, RuntimeError, ValueError) as error:
+        logger.warning("ContextModule failed to initialize: %s", error)
+        return None
 
 
 # Backward-compatible private alias while shared runtime helper is now public.
