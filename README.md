@@ -10,24 +10,103 @@ End-to-end software engineering project focused on human behavior recognition fr
 - dataset subset in `./data/raw`
 
 ### Run
+
+Start all services (API, database, and inference):
+
 ```bash
 docker compose up --build
 ```
 
-### Expected output
-After startup, the container should create:
-- `./data/logs/startup_summary.json`
-
-If the dataset subset is mounted correctly, the logs should include the number of discovered video files and classes.
-
-### Windows note
 On Windows PowerShell, create the folders manually if they do not already exist:
 
 ```powershell
 mkdir data\raw
 mkdir data\logs
+mkdir data\subset
 docker compose up --build
 ```
+
+### Expected Output
+
+After startup, the services will initialize:
+
+- **API Service** - FastAPI backend running on `http://localhost:8000`
+  - Health endpoint: `GET http://localhost:8000/health`
+  - API documentation: `http://localhost:8000/docs`
+
+- **Database Service** - PostgreSQL running on `localhost:5432`
+  - Credentials: `hbr_user` / `hbr_password`
+  - Database: `hbr_db`
+
+- **Inference Service** - Model inference service
+  - Logs: `./data/logs/startup_summary.json`
+  - If dataset subset is mounted correctly, logs include discovered video files and classes
+
+## Backend (Sprint 3)
+
+### API Development
+
+The FastAPI backend is located in `src/app/`:
+
+```
+src/app/
+├── __init__.py
+├── app.py           # Application factory
+├── api/
+│   ├── routes.py    # API endpoints
+│   └── websocket.py # WebSocket handlers
+├── core/
+│   └── settings.py  # Configuration (Pydantic V2)
+└── endpoints/
+    └── health.py    # Health check endpoint
+```
+
+### Running Backend Locally
+
+```bash
+# Start all services
+docker compose up --build
+
+# Or start the API service and its declared dependencies (for example, the database)
+docker compose up api --build
+```
+
+### Testing API Endpoints
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# API documentation (Swagger UI)
+open http://localhost:8000/docs
+
+# API documentation (ReDoc)
+open http://localhost:8000/redoc
+```
+
+### Configuration
+
+Backend configuration is managed through environment variables in `src/app/core/settings.py`:
+
+- `HOST` - API host (default: `0.0.0.0`)
+- `PORT` - API port (default: `8000`)
+- `DB_HOST` - Database host (default: `db` in Docker, `localhost` locally)
+- `DB_PORT` - Database port (default: `5432`)
+- `DB_USER` - Database user (default: `hbr_user`)
+- `DB_PASSWORD` - Database password (default: `hbr_password`)
+- `DATABASE_URL` - Full connection string (auto-generated if not provided)
+- `DEBUG` - Debug mode (default: `False`)
+
+Create a `.env` file to override defaults:
+
+```bash
+# .env
+DB_USER=my_user
+DB_PASSWORD=secure_password
+DEBUG=true
+```
+
+For detailed integration and DevOps documentation, see [Integration and DevOps](docs/integration-devops.md).
 
 ## Sprint 2 MP4 to JSON CLI
 
@@ -64,3 +143,4 @@ Inference mode requires `--input` and `--checkpoint` together. Without these arg
 - [Integration and DevOps](docs/integration-devops.md)
 - [Contributing](docs/contributing.md)
 - [CI Workflows](docs/ci-workflows.md)
+

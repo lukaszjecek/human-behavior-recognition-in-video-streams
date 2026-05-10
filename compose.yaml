@@ -1,4 +1,64 @@
+version: "3.9"
+
+networks:
+  hbr-network:
+    driver: bridge
+
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: hbr_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-hbr_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hbr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-hbr_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - hbr-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-hbr_user} -d ${POSTGRES_DB:-hbr_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: hbr_api
+    environment:
+      PYTHONUNBUFFERED: "1"
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8000}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-hbr_user}
+      DB_PASSWORD: ${DB_PASSWORD:-hbr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-hbr_db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${DB_USER:-hbr_user}:${DB_PASSWORD:-hbr_password}@db:5432/${POSTGRES_DB:-hbr_db}}
+      DATA_DIR: /app/data/raw
+      LOG_DIR: /app/data/logs
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./data/raw:/app/data/raw
+      - ./data/logs:/app/data/logs
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    networks:
+      - hbr-network
+    depends_on:
+      db:
+        condition: service_healthy
+    command: [ "sh", "-lc", "uvicorn src.app.app:create_app --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --factory" ]
+    stdin_open: true
+    tty: true
+
   inference:
     build:
       context: .
@@ -13,8 +73,11 @@ services:
       - ./:/app
       - ./data/subset:/app/data/subset:ro
       - ./data/logs:/app/data/logs
-
-
+    networks:
+      - hbr-network
     command: [ "sh", "-lc", "python -m src.main && tail -f /dev/null" ]
     stdin_open: true
     tty: true
+
+volumes:
+  db_data:
