@@ -7,17 +7,22 @@ import pytest
 import torch
 import yaml
 
+from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceResult
 from src.inference.mp4_cli import (
     InferenceCliRequest,
+    run_mp4_to_json_action_inference,
+)
+from src.inference.runtime import (
+    InferenceRuntimeSettings,
     WindowModelAdapter,
-    _expand_batched_inference_results,
     build_track_ids,
+    expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
     resolve_inference_device,
-    run_mp4_to_json_action_inference,
 )
+from src.inference.service import InferenceServiceResult
 from src.inference.tensorize import FrameTensorizer
 from src.models.dummy import DummyBehaviorModel
 
@@ -69,6 +74,71 @@ def test_run_mp4_to_json_action_inference_writes_output(dummy_video, tmp_path):
     assert payload["event_count"] > 0
     assert len(payload["events"]) == payload["event_count"]
     assert "confidence" in payload["events"][0]
+    assert payload["events"][0]["track_id"] == 1
+
+
+def test_run_mp4_to_json_action_inference_uses_service_layer(monkeypatch, tmp_path):
+    input_path = tmp_path / "sample.mp4"
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    output_path = tmp_path / "actions.json"
+
+    input_path.write_bytes(b"")
+    _write_dummy_checkpoint(checkpoint_path)
+    config_path.write_text("pipeline: {}", encoding="utf-8")
+
+    captured = {}
+
+    def _fake_service_runner(request):
+        captured["request"] = request
+        return InferenceServiceResult(
+            frame_count=1,
+            inference_count=1,
+            inference_results=tuple(),
+            action_events=(
+                ActionEvent(
+                    start_frame_index=0,
+                    end_frame_index=0,
+                    start_timestamp=0.0,
+                    end_timestamp=0.0,
+                    label="class_0",
+                    confidence=0.9,
+                    track_id=1,
+                ),
+            ),
+            runtime_settings=InferenceRuntimeSettings(
+                target_resolution=(64, 64),
+                window_size=4,
+                stride=1,
+                class_labels=[],
+                default_track_id=1,
+                device=None,
+            ),
+            resolved_device=torch.device("cpu"),
+        )
+
+    monkeypatch.setattr(
+        "src.inference.mp4_cli.run_offline_mp4_inference",
+        _fake_service_runner,
+    )
+
+    request = InferenceCliRequest(
+        input_path=input_path,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+        output_path=output_path,
+        device="cpu",
+    )
+    exit_code = run_mp4_to_json_action_inference(request)
+
+    assert exit_code == 0
+    assert captured["request"].video_path == input_path
+    assert captured["request"].checkpoint_path == checkpoint_path
+    assert captured["request"].config_path == config_path
+    assert captured["request"].device == "cpu"
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["event_count"] == 1
     assert payload["events"][0]["track_id"] == 1
 
 
@@ -205,7 +275,7 @@ def test_expand_batched_inference_results_splits_batch_prediction():
         prediction=torch.tensor([[0.1, 0.9], [0.8, 0.2]], dtype=torch.float32),
     )
 
-    expanded = _expand_batched_inference_results([result])
+    expanded = expand_batched_inference_results([result])
 
     assert len(expanded) == 2
     assert torch.allclose(expanded[0].prediction, torch.tensor([0.1, 0.9]))
