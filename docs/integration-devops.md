@@ -202,7 +202,7 @@ log_dir: Path = "/app/data/logs"
 - **Solution**: Check that `db` service is healthy (`docker compose ps`). View logs: `docker compose logs db`
 
 **Problem**: Port 8000 already in use
-- **Solution**: Changing `PORT` in `.env` alone will not fix this in the current Docker Compose setup. Stop the conflicting process or run `docker compose down` before starting. If you need a different port, update the Compose port mapping and the API startup port together.
+- **Solution**: Set `PORT=<free_port>` in `.env` (e.g., `PORT=8001`), then recreate containers with `docker compose down && docker compose up`. The Compose configuration automatically uses the same port for both the published port mapping and uvicorn startup.
 
 **Problem**: Permission denied on `/app/data` volumes
 - **Solution**: Ensure directories exist: `mkdir -p data/raw data/logs data/subset`
