@@ -39,3 +39,40 @@ def test_websocket_echo():
         ws.send_text("hello")
         msg = ws.receive_text()
         assert msg == "echo: hello"
+
+
+def test_database_url_auto_generated_from_fields():
+    """database_url is built from individual DB fields when not explicitly set."""
+    s = Settings(
+        db_user="alice",
+        db_password="secret",
+        db_host="pghost",
+        db_port=5433,
+        postgres_db="mydb",
+    )
+    assert s.database_url == "postgresql://alice:secret@pghost:5433/mydb"
+
+
+def test_database_url_explicit_overrides_auto_generation():
+    """Explicit DATABASE_URL takes precedence over individual DB fields."""
+    explicit_url = "postgresql://other:pass@otherhost:5432/otherdb"
+    s = Settings(
+        db_user="alice",
+        db_password="secret",
+        db_host="pghost",
+        db_port=5433,
+        postgres_db="mydb",
+        database_url=explicit_url,
+    )
+    assert s.database_url == explicit_url
+
+
+def test_default_settings_db_fields():
+    """Default DB settings are present and consistent."""
+    s = Settings()
+    assert s.db_host == "localhost"
+    assert s.db_port == 5432
+    assert s.db_user == "hbr_user"
+    assert s.db_password == "hbr_password"
+    assert s.postgres_db == "hbr_db"
+    assert s.database_url == "postgresql://hbr_user:hbr_password@localhost:5432/hbr_db"
