@@ -30,9 +30,9 @@ from src.inference.tensorize import FrameTensorizer
 class InferenceServiceRequest:
     """Input contract for programmatic inference over file/RTSP sources."""
 
-    video_path: Path | None
     checkpoint_path: Path
     config_path: Path
+    video_path: Path | None = None
     source_uri: str | None = None
     source_type: str = "file"
     device: str | None = None
