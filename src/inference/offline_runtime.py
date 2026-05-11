@@ -1,39 +1,38 @@
-"""Offline producer-consumer runtime for MP4 inference."""
+"""Offline producer-consumer runtime for adapter-based inference inputs."""
 from pathlib import Path
 from queue import Queue
 from threading import Thread
 from typing import Any, Optional
 
-import cv2
-
 from src.inference.engine import InferenceEngine
 from src.inference.json_writer import ActionEventWriter
+from src.inference.source_adapters import FileSourceAdapter, InferenceSourceAdapter
 from src.inference.tracker import BaseTracker, SingleTrackTracker
 
 EOF_SENTINEL = object()
 
 
-def produce_frames(video_path: str, frame_queue: Queue) -> None:
-    """Reads frames from a video file in source order and pushes them to a queue.
+def produce_frames_from_source(
+    source_adapter: InferenceSourceAdapter,
+    frame_queue: Queue,
+) -> None:
+    """Reads frames from a source adapter in source order and pushes them to a queue.
 
     Args:
-        video_path (str): Path to the input video file.
+        source_adapter (InferenceSourceAdapter): Source adapter to open and read.
         frame_queue (Queue): Queue used to pass frames to the consumer.
 
     Raises:
-        FileNotFoundError: If the video file does not exist.
-        RuntimeError: If the video cannot be opened.
+        RuntimeError: If the source cannot be opened.
     """
     try:
-        path = Path(video_path)
-
-        if not path.exists():
-            raise FileNotFoundError(f"Video file not found: {path}")
-
-        cap = cv2.VideoCapture(str(path))
+        cap = source_adapter.open_capture()
 
         if not cap.isOpened():
-            raise RuntimeError(f"Could not open video file: {path}")
+            raise RuntimeError(
+                "Could not open "
+                f"{source_adapter.source_type} source: {source_adapter.source_ref}",
+            )
 
         try:
             while True:
@@ -49,10 +48,23 @@ def produce_frames(video_path: str, frame_queue: Queue) -> None:
         frame_queue.put(EOF_SENTINEL)
 
 
-def produce_frames_safe(video_path: str, frame_queue: Queue, stats: dict) -> None:
+def produce_frames(video_path: str, frame_queue: Queue) -> None:
+    """Backward-compatible file-source producer."""
+    if not isinstance(video_path, str):
+        raise TypeError("video_path must be a string")
+
+    source_adapter = FileSourceAdapter(video_path=Path(video_path))
+    produce_frames_from_source(source_adapter, frame_queue)
+
+
+def produce_frames_safe(
+    source_adapter: InferenceSourceAdapter,
+    frame_queue: Queue,
+    stats: dict,
+) -> None:
     """Runs the frame producer and stores any raised exception in stats."""
     try:
-        produce_frames(video_path, frame_queue)
+        produce_frames_from_source(source_adapter, frame_queue)
     except Exception as exc:
         stats["producer_error"] = exc
 
@@ -85,16 +97,16 @@ def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict
     stats["inference_results"] = inference_results
 
 
-def run_video(
-    video_path: str,
+def run_source(
+    source_adapter: InferenceSourceAdapter,
     engine: Optional[InferenceEngine] = None,
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
 ) -> tuple[int, int, list[Any], list[Any]]:
-    """Runs offline inference on a single video file.
+    """Runs offline inference on a generic source adapter.
 
     Args:
-        video_path (str): Path to the input video file.
+        source_adapter: Adapter that provides inference input frames.
         engine: Optional inference engine instance. If None, a default
             InferenceEngine is created.
         tracker: Optional tracker used to assign track IDs to inference results.
@@ -105,6 +117,9 @@ def run_video(
         number of inference windows, collected inference results, and output
         action events.
     """
+    if not isinstance(source_adapter, InferenceSourceAdapter):
+        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
+
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
         runtime_engine = InferenceEngine()
@@ -120,7 +135,7 @@ def run_video(
     }
 
     producer = Thread(target=produce_frames_safe,
-                      args=(video_path, frame_queue, stats))
+                      args=(source_adapter, frame_queue, stats))
     consumer = Thread(target=consume_frame_queue,
                       args=(frame_queue, runtime_engine, stats))
 
@@ -150,3 +165,22 @@ def run_video(
         print(f"Generated {len(action_events)} action events")
 
     return frame_count, inference_count, inference_results, action_events
+
+
+def run_video(
+    video_path: str,
+    engine: Optional[InferenceEngine] = None,
+    tracker: Optional[BaseTracker] = None,
+    emit_runtime_summary: bool = True,
+) -> tuple[int, int, list[Any], list[Any]]:
+    """Runs offline inference on a single local video file."""
+    if not isinstance(video_path, str):
+        raise TypeError("video_path must be a string")
+
+    source_adapter = FileSourceAdapter(video_path=Path(video_path))
+    return run_source(
+        source_adapter=source_adapter,
+        engine=engine,
+        tracker=tracker,
+        emit_runtime_summary=emit_runtime_summary,
+    )

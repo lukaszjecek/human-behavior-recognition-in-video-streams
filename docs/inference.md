@@ -51,9 +51,11 @@ from src.inference.service import InferenceServiceRequest, run_offline_mp4_infer
 
 result = run_offline_mp4_inference(
     InferenceServiceRequest(
-        video_path=Path("data/raw/walking/sample.mp4"),
         checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
         config_path=Path("configs/data_pipeline.yml"),
+        video_path=Path("data/raw/walking/sample.mp4"),  # file source
+        # source_type="rtsp",
+        # source_uri="rtsp://user:password@camera-host:554/stream",
         device="auto",
     )
 )
@@ -75,6 +77,13 @@ Shared runtime primitives are implemented in `src/inference/runtime.py` and reus
 by both the service and CLI layers (`load_runtime_settings`, device resolution,
 checkpoint loading, `WindowModelAdapter`, track-id building, and
 `expand_batched_inference_results`).
+
+Input-source adapters are implemented in `src/inference/source_adapters.py`:
+- `FileSourceAdapter` for local file paths
+- `RtspSourceAdapter` for `rtsp://` and `rtsps://` streams
+
+The reusable service selects adapters via `InferenceServiceRequest.source_type`
+(`file` by default) and `video_path`/`source_uri`.
 
 ### Offline runtime details
 

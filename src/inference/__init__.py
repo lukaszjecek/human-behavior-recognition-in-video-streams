@@ -6,7 +6,14 @@ from src.inference.json_writer import ActionEventWriter
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
+    run_inference,
     run_offline_mp4_inference,
+)
+from src.inference.source_adapters import (
+    FileSourceAdapter,
+    InferenceSourceAdapter,
+    RtspSourceAdapter,
+    build_source_adapter,
 )
 
 __all__ = [
@@ -17,5 +24,10 @@ __all__ = [
     "InferenceResult",
     "InferenceServiceRequest",
     "InferenceServiceResult",
+    "InferenceSourceAdapter",
+    "FileSourceAdapter",
+    "RtspSourceAdapter",
+    "build_source_adapter",
+    "run_inference",
     "run_offline_mp4_inference",
 ]

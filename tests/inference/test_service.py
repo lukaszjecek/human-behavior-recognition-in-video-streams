@@ -4,8 +4,11 @@ import yaml
 
 from src.inference.service import (
     InferenceServiceRequest,
+    _build_request_source_adapter,
+    run_inference,
     run_offline_mp4_inference,
 )
+from src.inference.source_adapters import FileSourceAdapter, RtspSourceAdapter
 from src.models.dummy import DummyBehaviorModel
 
 
@@ -56,19 +59,44 @@ def test_run_offline_mp4_inference_returns_typed_result(dummy_video, tmp_path):
     assert result.action_events[0].track_id == 1
 
 
-def test_run_offline_mp4_inference_rejects_non_mp4_video_path(tmp_path):
+def test_build_request_source_adapter_accepts_non_mp4_file_path(tmp_path):
     video_path = tmp_path / "sample.avi"
-    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
-    config_path = tmp_path / "inference.yml"
-
-    video_path.write_bytes(b"not-an-mp4")
-    _write_dummy_checkpoint(checkpoint_path)
-    config_path.write_text("pipeline: {}", encoding="utf-8")
+    video_path.write_bytes(b"")
 
     request = InferenceServiceRequest(
         video_path=video_path,
-        checkpoint_path=checkpoint_path,
-        config_path=config_path,
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
     )
-    with pytest.raises(ValueError, match=r"\.mp4"):
-        run_offline_mp4_inference(request)
+
+    adapter = _build_request_source_adapter(request)
+
+    assert isinstance(adapter, FileSourceAdapter)
+    assert adapter.source_ref == str(video_path)
+
+
+def test_build_request_source_adapter_creates_rtsp_adapter(tmp_path):
+    request = InferenceServiceRequest(
+        video_path=None,
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
+        source_type="rtsp",
+        source_uri="rtsp://camera.local/stream",
+    )
+
+    adapter = _build_request_source_adapter(request)
+
+    assert isinstance(adapter, RtspSourceAdapter)
+    assert adapter.source_ref == "rtsp://camera.local/stream"
+
+
+def test_run_inference_rejects_rtsp_request_without_uri(tmp_path):
+    request = InferenceServiceRequest(
+        video_path=None,
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
+        source_type="rtsp",
+    )
+
+    with pytest.raises(ValueError, match="request.source_uri"):
+        run_inference(request)
