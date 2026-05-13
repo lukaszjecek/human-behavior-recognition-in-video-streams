@@ -86,6 +86,15 @@ class EventPayload(BaseModel):
     event_type: EventType
     data: Union[AlertData, ActionEvent]
 
+    @model_validator(mode="after")
+    def validate_event_type_matches_data(self) -> "EventPayload":
+        """Ensure the declared event type matches the concrete data payload."""
+        if self.event_type == EventType.DETECTION and not isinstance(self.data, ActionEvent):
+            raise ValueError("event_type DETECTION requires data to be an ActionEvent")
+        if self.event_type == EventType.ALERT and not isinstance(self.data, AlertData):
+            raise ValueError("event_type ALERT requires data to be an AlertData")
+        return self
+
 
 class ActionEventLog(BaseModel):
     """Container for a log of action events with serialization support."""
