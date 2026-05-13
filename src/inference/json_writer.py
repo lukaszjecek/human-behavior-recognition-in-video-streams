@@ -1,3 +1,4 @@
+import pydantic
 """JSON writer for converting inference results to action event records.
 
 Handles serialization of InferenceResult objects to ActionEvent format
@@ -10,7 +11,7 @@ from typing import Optional, Union
 import numpy as np
 import torch
 
-from src.inference.action_event import ActionEvent, ActionEventLog
+from src.app.schemas.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceResult
 
 logger = logging.getLogger(__name__)

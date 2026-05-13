@@ -5,7 +5,7 @@ from pathlib import Path
 
 import torch
 
-from src.inference.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import run_video

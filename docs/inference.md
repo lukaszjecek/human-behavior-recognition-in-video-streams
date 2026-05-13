@@ -157,7 +157,7 @@ To support context-aware alerting in Sprint 3, a lightweight **Context Module** 
 - **Performance:** Deterministic output confirmed via local verification tests (`tests/inference/test_context.py`).
 
 ### Output Contract
-The `ContextModule` extends the `ActionEvent` schema. Every event produced in `actions.json` now includes a `context` object:
+The `ContextModule` extends the `ActionEvent` schema, which is now part of the unified `EventPayload` structure defined in `src/app/schemas/action_event.py`. Every event produced in `actions.json` includes a `context` object within the detection payload:
 
 ```json
 "context": {

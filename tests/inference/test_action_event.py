@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 import torch
 
-from src.inference.action_event import ActionEvent, ActionEventLog
+import pydantic
+from src.app.schemas.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
 
@@ -36,7 +37,7 @@ class TestActionEvent:
 
     def test_action_event_invalid_frames(self):
         """Test ActionEvent validation for invalid frame indices."""
-        with pytest.raises(ValueError, match="end_frame_index must be >= start_frame_index"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=10,
                 end_frame_index=5,
@@ -46,7 +47,7 @@ class TestActionEvent:
 
     def test_action_event_invalid_confidence(self):
         """Test ActionEvent validation for invalid confidence."""
-        with pytest.raises(ValueError, match="confidence must be between"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -54,7 +55,7 @@ class TestActionEvent:
                 confidence=1.5,
             )
 
-        with pytest.raises(ValueError, match="confidence must be between"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -64,7 +65,7 @@ class TestActionEvent:
 
     def test_action_event_empty_label(self):
         """Test ActionEvent validation for empty label."""
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -74,7 +75,7 @@ class TestActionEvent:
 
     def test_action_event_negative_frame_index(self):
         """Test ActionEvent validation for negative frame index."""
-        with pytest.raises(ValueError, match="start_frame_index must be >= 0"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=-1,
                 end_frame_index=15,
@@ -84,7 +85,7 @@ class TestActionEvent:
 
     def test_action_event_invalid_timestamps(self):
         """Test ActionEvent validation for invalid timestamps."""
-        with pytest.raises(ValueError, match="end_timestamp must be >= start_timestamp"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -170,8 +171,8 @@ class TestActionEventLog:
         """Test adding multiple events to log."""
         log = ActionEventLog()
         events = [
-            ActionEvent(0, 15, "walking", 0.95),
-            ActionEvent(16, 31, "running", 0.87),
+            ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95),
+            ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87),
         ]
         log.add_events(events)
         assert len(log.events) == 2
@@ -179,8 +180,8 @@ class TestActionEventLog:
     def test_action_event_log_to_dict(self):
         """Test log serialization to dict."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(0, 15, "walking", 0.95))
-        log.add_event(ActionEvent(16, 31, "running", 0.87))
+        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
+        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
 
         data = log.to_dict()
         assert data["event_count"] == 2
@@ -189,7 +190,7 @@ class TestActionEventLog:
     def test_action_event_log_to_json(self):
         """Test log JSON serialization."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(0, 15, "walking", 0.95))
+        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
         json_str = log.to_json()
         data = json.loads(json_str)
         assert data["event_count"] == 1
@@ -197,8 +198,8 @@ class TestActionEventLog:
     def test_action_event_log_save_and_load(self):
         """Test saving and loading log from file."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(0, 15, "walking", 0.95))
-        log.add_event(ActionEvent(16, 31, "running", 0.87))
+        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
+        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.json"
@@ -214,7 +215,7 @@ class TestActionEventLog:
     def test_action_event_log_clear(self):
         """Test clearing events from log."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(0, 15, "walking", 0.95))
+        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
         assert len(log.events) == 1
 
         log.clear()
@@ -426,7 +427,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_confidence_string(self):
         """Test ActionEvent rejects string confidence (issue #48)."""
-        with pytest.raises(TypeError, match="confidence must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -436,7 +437,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_confidence_dict(self):
         """Test ActionEvent rejects dict confidence."""
-        with pytest.raises(TypeError, match="confidence must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -446,7 +447,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_label(self):
         """Test ActionEvent rejects non-string label."""
-        with pytest.raises(TypeError, match="label must be a string"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -456,7 +457,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_start_frame(self):
         """Test ActionEvent rejects non-int start_frame_index."""
-        with pytest.raises(TypeError, match="start_frame_index must be an integer"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0.5,
                 end_frame_index=15,
@@ -466,7 +467,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_end_frame(self):
         """Test ActionEvent rejects non-int end_frame_index."""
-        with pytest.raises(TypeError, match="end_frame_index must be an integer"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index="15",
@@ -476,7 +477,7 @@ class TestActionEventValidation:
 
     def test_action_event_negative_start_timestamp(self):
         """Test ActionEvent rejects negative start_timestamp (issue #48)."""
-        with pytest.raises(ValueError, match="start_timestamp must be >= 0"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -487,7 +488,7 @@ class TestActionEventValidation:
 
     def test_action_event_negative_end_timestamp(self):
         """Test ActionEvent rejects negative end_timestamp (issue #48)."""
-        with pytest.raises(ValueError, match="end_timestamp must be >= 0"):
+        with pytest.raises(pydantic.ValidationError):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -498,7 +499,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_start_timestamp(self):
         """Test ActionEvent rejects non-float start_timestamp."""
-        with pytest.raises(TypeError, match="start_timestamp must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -509,7 +510,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_end_timestamp(self):
         """Test ActionEvent rejects non-float end_timestamp."""
-        with pytest.raises(TypeError, match="end_timestamp must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -520,7 +521,7 @@ class TestActionEventValidation:
 
     def test_action_event_type_check_track_id(self):
         """Test ActionEvent rejects non-int track_id."""
-        with pytest.raises(TypeError, match="track_id must be an integer"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -531,7 +532,7 @@ class TestActionEventValidation:
 
     def test_action_event_rejects_bool_confidence(self):
         """Test ActionEvent rejects bool as confidence (bool is subclass of int in Python)."""
-        with pytest.raises(TypeError, match="confidence must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -541,7 +542,7 @@ class TestActionEventValidation:
 
     def test_action_event_rejects_bool_timestamps(self):
         """Test ActionEvent rejects bool as timestamps."""
-        with pytest.raises(TypeError, match="start_timestamp must be a float"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             ActionEvent(
                 start_frame_index=0,
                 end_frame_index=15,
@@ -557,19 +558,19 @@ class TestActionEventLogValidation:
     def test_action_event_log_add_event_type_check(self):
         """Test add_event rejects non-ActionEvent objects (issue #48)."""
         log = ActionEventLog()
-        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             log.add_event({"label": "zaq1"})
 
     def test_action_event_log_add_event_rejects_string(self):
         """Test add_event rejects string."""
         log = ActionEventLog()
-        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             log.add_event("invalid")
 
     def test_action_event_log_add_event_rejects_dict(self):
         """Test add_event rejects dict."""
         log = ActionEventLog()
-        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             log.add_event({
                 "start_frame_index": 0,
                 "end_frame_index": 15,
@@ -580,14 +581,14 @@ class TestActionEventLogValidation:
     def test_action_event_log_add_event_rejects_none(self):
         """Test add_event rejects None."""
         log = ActionEventLog()
-        with pytest.raises(TypeError, match="event must be an ActionEvent instance"):
+        with pytest.raises((TypeError, pydantic.ValidationError)):
             log.add_event(None)
 
     def test_action_event_log_load_valid_event_count(self):
         """Test load_from_file validates event_count consistency (issue #48)."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(0, 15, "walking", 0.95))
-        log.add_event(ActionEvent(16, 31, "running", 0.87))
+        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
+        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.json"
@@ -622,7 +623,7 @@ class TestActionEventLogValidation:
             with open(filepath, "w") as f:
                 json.dump(bad_data, f)
 
-            with pytest.raises(ValueError, match="event_count mismatch"):
+            with pytest.raises(ValueError):
                 ActionEventLog.load_from_file(str(filepath))
 
     def test_action_event_log_load_no_event_count(self):
