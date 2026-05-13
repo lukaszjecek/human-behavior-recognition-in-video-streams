@@ -1,4 +1,3 @@
-import pydantic
 """JSON writer for converting inference results to action event records.
 
 Handles serialization of InferenceResult objects to ActionEvent format
