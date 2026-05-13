@@ -7,7 +7,7 @@ and temporal/spatial metadata.
 import json
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -51,6 +51,8 @@ class ActionEvent(BaseModel):
         """Validate interdependent fields."""
         if self.end_frame_index < self.start_frame_index:
             raise ValueError("end_frame_index must be >= start_frame_index")
+        if not self.label.strip():
+            raise ValueError("label must not be blank")
         if self.start_timestamp is not None and self.end_timestamp is not None:
             if self.end_timestamp < self.start_timestamp:
                 raise ValueError("end_timestamp must be >= start_timestamp")
@@ -105,7 +107,7 @@ class ActionEventLog(BaseModel):
         """Return the number of events in the log."""
         return len(self.events)
 
-    def add_event(self, event: Any) -> None:
+    def add_event(self, event: object) -> None:
         """Add an action event to the log.
         
         Args:

@@ -73,6 +73,16 @@ class TestActionEvent:
                 confidence=0.95,
             )
 
+    def test_action_event_whitespace_only_label(self):
+        """Test ActionEvent validation for whitespace-only label."""
+        with pytest.raises(pydantic.ValidationError):
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="   \t",
+                confidence=0.95,
+            )
+
     def test_action_event_negative_frame_index(self):
         """Test ActionEvent validation for negative frame index."""
         with pytest.raises(pydantic.ValidationError):
