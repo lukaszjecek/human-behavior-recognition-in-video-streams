@@ -5,12 +5,20 @@ and temporal/spatial metadata.
 """
 
 import json
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-from uuid import UUID, uuid4
 from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, List, Optional, Union
+from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, ConfigDict, StrictInt, StrictFloat, StrictStr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
 
 class EventType(str, Enum):

@@ -7,10 +7,10 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pydantic
 import pytest
 import torch
 
-import pydantic
 from src.app.schemas.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
@@ -171,8 +171,18 @@ class TestActionEventLog:
         """Test adding multiple events to log."""
         log = ActionEventLog()
         events = [
-            ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95),
-            ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87),
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95
+            ),
+            ActionEvent(
+                start_frame_index=16,
+                end_frame_index=31,
+                label="running",
+                confidence=0.87
+            ),
         ]
         log.add_events(events)
         assert len(log.events) == 2
@@ -180,8 +190,18 @@ class TestActionEventLog:
     def test_action_event_log_to_dict(self):
         """Test log serialization to dict."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
-        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
+        log.add_event(ActionEvent(
+            start_frame_index=0,
+            end_frame_index=15,
+            label="walking",
+            confidence=0.95
+        ))
+        log.add_event(ActionEvent(
+            start_frame_index=16,
+            end_frame_index=31,
+            label="running",
+            confidence=0.87
+        ))
 
         data = log.to_dict()
         assert data["event_count"] == 2
@@ -190,7 +210,12 @@ class TestActionEventLog:
     def test_action_event_log_to_json(self):
         """Test log JSON serialization."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
+        log.add_event(ActionEvent(
+            start_frame_index=0,
+            end_frame_index=15,
+            label="walking",
+            confidence=0.95
+        ))
         json_str = log.to_json()
         data = json.loads(json_str)
         assert data["event_count"] == 1
@@ -198,8 +223,18 @@ class TestActionEventLog:
     def test_action_event_log_save_and_load(self):
         """Test saving and loading log from file."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
-        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
+        log.add_event(ActionEvent(
+            start_frame_index=0,
+            end_frame_index=15,
+            label="walking",
+            confidence=0.95
+        ))
+        log.add_event(ActionEvent(
+            start_frame_index=16,
+            end_frame_index=31,
+            label="running",
+            confidence=0.87
+        ))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.json"
@@ -215,7 +250,14 @@ class TestActionEventLog:
     def test_action_event_log_clear(self):
         """Test clearing events from log."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
+        log.add_event(
+            ActionEvent(
+                start_frame_index=0,
+                end_frame_index=15,
+                label="walking",
+                confidence=0.95
+            )
+        )
         assert len(log.events) == 1
 
         log.clear()
@@ -587,8 +629,18 @@ class TestActionEventLogValidation:
     def test_action_event_log_load_valid_event_count(self):
         """Test load_from_file validates event_count consistency (issue #48)."""
         log = ActionEventLog()
-        log.add_event(ActionEvent(start_frame_index=0, end_frame_index=15, label="walking", confidence=0.95))
-        log.add_event(ActionEvent(start_frame_index=16, end_frame_index=31, label="running", confidence=0.87))
+        log.add_event(ActionEvent(
+            start_frame_index=0,
+            end_frame_index=15,
+            label="walking",
+            confidence=0.95
+        ))
+        log.add_event(ActionEvent(
+            start_frame_index=16,
+            end_frame_index=31,
+            label="running",
+            confidence=0.87
+        ))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.json"
