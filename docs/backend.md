@@ -26,7 +26,7 @@ All events emitted in the system are wrapped in an `EventPayload` structure.
 
 ### ActionEvent Record (data for event_type: DETECTION)
 
-Represents a single detected action or behavior. Time is relative to the video segment via `start_timestamp`/`end_timestamp` and `frame_index`.
+Represents a single detected action or behavior. Time is relative to the video segment via `start_timestamp`/`end_timestamp` and frame boundaries defined by `start_frame_index`/`end_frame_index`.
 
 ```json
 {
