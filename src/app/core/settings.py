@@ -6,14 +6,14 @@ updated for Pydantic V2 compatibility.
 from pathlib import Path
 from typing import Optional
 
-from pydantic import ConfigDict, Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = ConfigDict(
+    model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
         extra="ignore"

@@ -56,6 +56,8 @@ class ActionEvent(BaseModel):
         if self.start_timestamp is not None and self.end_timestamp is not None:
             if self.end_timestamp < self.start_timestamp:
                 raise ValueError("end_timestamp must be >= start_timestamp")
+        if not self.label.strip():
+            raise ValueError("label must be a non-empty string")
         return self
 
     def to_dict(self) -> dict:
