@@ -22,6 +22,7 @@ from pydantic import (
 
 
 class EventType(str, Enum):
+    """Supported event categories for serialized event payloads."""
     DETECTION = "DETECTION"
     ALERT = "ALERT"
 
