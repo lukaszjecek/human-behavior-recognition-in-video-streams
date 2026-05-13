@@ -93,6 +93,7 @@ class ActionEventLog(BaseModel):
 
     @property
     def event_count(self) -> int:
+        """Return the number of events in the log."""
         return len(self.events)
 
     def add_event(self, event: Any) -> None:
