@@ -1,4 +1,4 @@
-"""Reusable service entrypoint for offline MP4 inference."""
+"""Reusable service entrypoint for adapter-based inference sources."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +8,7 @@ import torch
 from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import run_video
+from src.inference.offline_runtime import run_source
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -18,22 +18,29 @@ from src.inference.runtime import (
     load_runtime_settings,
     resolve_inference_device,
 )
+from src.inference.source_adapters import (
+    InferenceSourceAdapter,
+    build_source_adapter,
+    normalize_source_type,
+)
 from src.inference.tensorize import FrameTensorizer
 
 
 @dataclass(frozen=True)
 class InferenceServiceRequest:
-    """Input contract for programmatic offline MP4 inference."""
+    """Input contract for programmatic inference over file/RTSP sources."""
 
-    video_path: Path
     checkpoint_path: Path
     config_path: Path
+    video_path: Path | None = None
+    source_uri: str | None = None
+    source_type: str = "file"
     device: str | None = None
 
 
 @dataclass(frozen=True)
 class InferenceServiceResult:
-    """Result object returned by the offline inference service."""
+    """Result object returned by the reusable inference service."""
 
     frame_count: int
     inference_count: int
@@ -48,12 +55,13 @@ class InferenceServiceResult:
         return len(self.action_events)
 
 
-def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
-    """Run offline MP4 inference and return typed in-memory results."""
+def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
+    """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
 
     _validate_request(request)
+    source_adapter = _build_request_source_adapter(request)
 
     settings = load_runtime_settings(request.config_path)
     device = resolve_inference_device(
@@ -74,8 +82,8 @@ def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServ
         model=model_adapter,
     )
 
-    frame_count, inference_count, inference_results, _ = run_video(
-        str(request.video_path),
+    frame_count, inference_count, inference_results, _ = run_source(
+        source_adapter=source_adapter,
         engine=engine,
         emit_runtime_summary=False,
     )
@@ -95,20 +103,70 @@ def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServ
     )
 
 
+def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
+    """Run offline inference for local MP4 files only."""
+    if not isinstance(request, InferenceServiceRequest):
+        raise TypeError("request must be an InferenceServiceRequest instance")
+    _validate_offline_mp4_request(request)
+    return run_inference(request)
+
+
+def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
+    """Validate MP4-only constraints for the backward-compatible wrapper."""
+    source_type = normalize_source_type(request.source_type)
+    if source_type != "file":
+        raise ValueError(
+            "run_offline_mp4_inference supports only file sources (source_type='file')"
+        )
+    if request.video_path is None:
+        raise ValueError(
+            "run_offline_mp4_inference requires request.video_path pointing to an .mp4 file"
+        )
+    if request.source_uri is not None:
+        raise ValueError(
+            "run_offline_mp4_inference does not accept request.source_uri; "
+            "provide request.video_path"
+        )
+    if request.video_path.suffix.lower() != ".mp4":
+        raise ValueError(
+            "run_offline_mp4_inference requires request.video_path with .mp4 extension"
+        )
+
+
 def _validate_request(request: InferenceServiceRequest) -> None:
     """Validate request shape and path requirements."""
-    if not isinstance(request.video_path, Path):
-        raise TypeError("request.video_path must be a pathlib.Path instance")
     if not isinstance(request.checkpoint_path, Path):
         raise TypeError("request.checkpoint_path must be a pathlib.Path instance")
     if not isinstance(request.config_path, Path):
         raise TypeError("request.config_path must be a pathlib.Path instance")
+    if request.video_path is not None and not isinstance(request.video_path, Path):
+        raise TypeError("request.video_path must be a pathlib.Path instance or None")
+    if request.source_uri is not None and not isinstance(request.source_uri, str):
+        raise TypeError("request.source_uri must be a string or None")
+    normalize_source_type(request.source_type)
     if request.device is not None and not isinstance(request.device, str):
         raise TypeError("request.device must be a string or None")
 
-    if not request.video_path.exists():
-        raise FileNotFoundError(f"Video file not found: {request.video_path}")
-    if not request.video_path.is_file():
-        raise ValueError(f"Video path must point to a file: {request.video_path}")
-    if request.video_path.suffix.lower() != ".mp4":
-        raise ValueError("video_path must point to an .mp4 file")
+    if request.video_path is not None and request.source_uri is not None:
+        raise ValueError("Provide either request.video_path or request.source_uri, not both")
+
+    source_type = normalize_source_type(request.source_type)
+    if source_type == "file" and request.video_path is None and request.source_uri is None:
+        raise ValueError("File source requires request.video_path or request.source_uri")
+    if source_type == "rtsp" and request.source_uri is None:
+        raise ValueError("RTSP source requires request.source_uri")
+
+
+def _build_request_source_adapter(request: InferenceServiceRequest) -> InferenceSourceAdapter:
+    """Build source adapter from request fields."""
+    source_type = normalize_source_type(request.source_type)
+    if source_type == "file":
+        if request.video_path is not None:
+            return build_source_adapter(source_type="file", source_ref=request.video_path)
+        if request.source_uri is None:
+            raise ValueError("File source requires request.video_path or request.source_uri")
+        return build_source_adapter(source_type="file", source_ref=Path(request.source_uri))
+
+    if request.source_uri is None:
+        raise ValueError("RTSP source requires request.source_uri")
+    return build_source_adapter(source_type="rtsp", source_ref=request.source_uri)

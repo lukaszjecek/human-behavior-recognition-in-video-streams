@@ -47,19 +47,34 @@ service API instead of the CLI wrapper:
 ```python
 from pathlib import Path
 
-from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+from src.inference.service import InferenceServiceRequest, run_inference
 
-result = run_offline_mp4_inference(
+file_result = run_inference(
     InferenceServiceRequest(
-        video_path=Path("data/raw/walking/sample.mp4"),
         checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
         config_path=Path("configs/data_pipeline.yml"),
+        video_path=Path("data/raw/walking/sample.mp4"),  # file source
         device="auto",
     )
 )
 
-print(result.frame_count, result.inference_count, result.event_count)
+rtsp_result = run_inference(
+    InferenceServiceRequest(
+        checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
+        config_path=Path("configs/data_pipeline.yml"),
+        video_path=None,
+        source_type="rtsp",
+        source_uri="rtsp://user:password@camera-host:554/stream",
+        device="auto",
+    )
+)
+
+print(file_result.event_count, rtsp_result.event_count)
 ```
+
+For MP4-only offline callers, `run_offline_mp4_inference` is kept as a compatibility wrapper.
+Use this wrapper only for legacy MP4/offline integrations (including the MP4 CLI wrapper).
+It validates `source_type="file"`, requires `video_path`, and requires an `.mp4` suffix.
 
 The service returns a typed in-memory result with:
 - processed frame count
@@ -75,6 +90,13 @@ Shared runtime primitives are implemented in `src/inference/runtime.py` and reus
 by both the service and CLI layers (`load_runtime_settings`, device resolution,
 checkpoint loading, `WindowModelAdapter`, track-id building, and
 `expand_batched_inference_results`).
+
+Input-source adapters are implemented in `src/inference/source_adapters.py`:
+- `FileSourceAdapter` for local file paths
+- `RtspSourceAdapter` for `rtsp://` and `rtsps://` streams
+
+The reusable service selects adapters via `InferenceServiceRequest.source_type`
+(`file` by default) and `video_path`/`source_uri`.
 
 ### Offline runtime details
 
