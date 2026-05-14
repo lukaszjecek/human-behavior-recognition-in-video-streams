@@ -49,21 +49,31 @@ from pathlib import Path
 
 from src.inference.service import InferenceServiceRequest, run_inference
 
-result = run_inference(
+file_result = run_inference(
     InferenceServiceRequest(
         checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
         config_path=Path("configs/data_pipeline.yml"),
         video_path=Path("data/raw/walking/sample.mp4"),  # file source
-        # source_type="rtsp",
-        # source_uri="rtsp://user:password@camera-host:554/stream",
         device="auto",
     )
 )
 
-print(result.frame_count, result.inference_count, result.event_count)
+rtsp_result = run_inference(
+    InferenceServiceRequest(
+        checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
+        config_path=Path("configs/data_pipeline.yml"),
+        video_path=None,
+        source_type="rtsp",
+        source_uri="rtsp://user:password@camera-host:554/stream",
+        device="auto",
+    )
+)
+
+print(file_result.event_count, rtsp_result.event_count)
 ```
 
 For MP4-only offline callers, `run_offline_mp4_inference` is kept as a compatibility wrapper.
+Use this wrapper only for legacy MP4/offline integrations (including the MP4 CLI wrapper).
 It validates `source_type="file"`, requires `video_path`, and requires an `.mp4` suffix.
 
 The service returns a typed in-memory result with:
