@@ -104,8 +104,33 @@ def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
 
 
 def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
-    """Backward-compatible wrapper around the generic inference service."""
+    """Run offline inference for local MP4 files only."""
+    if not isinstance(request, InferenceServiceRequest):
+        raise TypeError("request must be an InferenceServiceRequest instance")
+    _validate_offline_mp4_request(request)
     return run_inference(request)
+
+
+def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
+    """Validate MP4-only constraints for the backward-compatible wrapper."""
+    source_type = normalize_source_type(request.source_type)
+    if source_type != "file":
+        raise ValueError(
+            "run_offline_mp4_inference supports only file sources (source_type='file')"
+        )
+    if request.video_path is None:
+        raise ValueError(
+            "run_offline_mp4_inference requires request.video_path pointing to an .mp4 file"
+        )
+    if request.source_uri is not None:
+        raise ValueError(
+            "run_offline_mp4_inference does not accept request.source_uri; "
+            "provide request.video_path"
+        )
+    if request.video_path.suffix.lower() != ".mp4":
+        raise ValueError(
+            "run_offline_mp4_inference requires request.video_path with .mp4 extension"
+        )
 
 
 def _validate_request(request: InferenceServiceRequest) -> None:

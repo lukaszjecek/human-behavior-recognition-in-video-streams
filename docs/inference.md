@@ -47,9 +47,9 @@ service API instead of the CLI wrapper:
 ```python
 from pathlib import Path
 
-from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+from src.inference.service import InferenceServiceRequest, run_inference
 
-result = run_offline_mp4_inference(
+result = run_inference(
     InferenceServiceRequest(
         checkpoint_path=Path("data/logs/checkpoints/baseline_epoch_10.pth"),
         config_path=Path("configs/data_pipeline.yml"),
@@ -62,6 +62,9 @@ result = run_offline_mp4_inference(
 
 print(result.frame_count, result.inference_count, result.event_count)
 ```
+
+For MP4-only offline callers, `run_offline_mp4_inference` is kept as a compatibility wrapper.
+It validates `source_type="file"`, requires `video_path`, and requires an `.mp4` suffix.
 
 The service returns a typed in-memory result with:
 - processed frame count

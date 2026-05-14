@@ -100,3 +100,39 @@ def test_run_inference_rejects_rtsp_request_without_uri(tmp_path):
 
     with pytest.raises(ValueError, match="request.source_uri"):
         run_inference(request)
+
+
+def test_run_offline_mp4_inference_rejects_rtsp_request(tmp_path):
+    request = InferenceServiceRequest(
+        video_path=None,
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
+        source_type="rtsp",
+        source_uri="rtsp://camera.local/stream",
+    )
+
+    with pytest.raises(ValueError, match="supports only file sources"):
+        run_offline_mp4_inference(request)
+
+
+def test_run_offline_mp4_inference_rejects_non_mp4_input(tmp_path):
+    request = InferenceServiceRequest(
+        video_path=tmp_path / "sample.avi",
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
+    )
+
+    with pytest.raises(ValueError, match=r"\.mp4 extension"):
+        run_offline_mp4_inference(request)
+
+
+def test_run_offline_mp4_inference_rejects_source_uri(tmp_path):
+    request = InferenceServiceRequest(
+        video_path=tmp_path / "sample.mp4",
+        checkpoint_path=tmp_path / "dummy_checkpoint.pth",
+        config_path=tmp_path / "inference.yml",
+        source_uri="sample.mp4",
+    )
+
+    with pytest.raises(ValueError, match="does not accept request.source_uri"):
+        run_offline_mp4_inference(request)
