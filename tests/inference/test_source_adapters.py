@@ -1,3 +1,5 @@
+import pytest
+
 from src.inference.source_adapters import (
     FileSourceAdapter,
     RtspSourceAdapter,
@@ -66,9 +68,5 @@ def test_rtsp_source_adapter_open_capture_uses_rtsp_uri(monkeypatch):
 
 
 def test_rtsp_source_adapter_rejects_non_rtsp_uri():
-    try:
+    with pytest.raises(ValueError, match="rtsp_uri must start with rtsp:// or rtsps://"):
         RtspSourceAdapter(rtsp_uri="http://localhost/live")
-    except ValueError as error:
-        assert "rtsp_uri must start with rtsp://" in str(error)
-    else:
-        raise AssertionError("Expected ValueError for non-RTSP URI")
