@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 import yaml
@@ -22,12 +23,7 @@ def _write_dummy_checkpoint(checkpoint_path):
     torch.save(checkpoint, str(checkpoint_path))
 
 
-def test_run_offline_mp4_inference_returns_typed_result(dummy_video, tmp_path):
-    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
-    config_path = tmp_path / "inference.yml"
-
-    _write_dummy_checkpoint(checkpoint_path)
-
+def _write_inference_config(config_path):
     config = {
         "pipeline": {
             "target_resolution": [64, 64],
@@ -43,6 +39,14 @@ def test_run_offline_mp4_inference_returns_typed_result(dummy_video, tmp_path):
     }
     config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
 
+
+def test_run_offline_mp4_inference_returns_typed_result(dummy_video, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
     request = InferenceServiceRequest(
         video_path=dummy_video,
         checkpoint_path=checkpoint_path,
@@ -57,6 +61,58 @@ def test_run_offline_mp4_inference_returns_typed_result(dummy_video, tmp_path):
     assert result.event_count > 0
     assert len(result.action_events) == result.event_count
     assert result.action_events[0].track_id == 1
+
+
+def test_run_inference_processes_rtsp_frames_with_runtime(monkeypatch, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
+    frames = [np.full((64, 64, 3), fill_value=i * 10, dtype=np.uint8) for i in range(10)]
+    capture_state = {}
+
+    class _FakeCapture:
+        def __init__(self, source_ref):
+            self._frames = list(frames)
+            self.released = False
+            self.source_ref = source_ref
+
+        def isOpened(self):
+            return True
+
+        def read(self):
+            if not self._frames:
+                return False, None
+            return True, self._frames.pop(0)
+
+        def release(self):
+            self.released = True
+
+    def _fake_video_capture(source_ref):
+        capture = _FakeCapture(source_ref)
+        capture_state["source_ref"] = source_ref
+        capture_state["capture"] = capture
+        return capture
+
+    monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake_video_capture)
+
+    request = InferenceServiceRequest(
+        video_path=None,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+        source_type="rtsp",
+        source_uri="rtsp://camera.local/stream",
+    )
+    result = run_inference(request)
+
+    assert capture_state["source_ref"] == "rtsp://camera.local/stream"
+    assert capture_state["capture"].released is True
+    assert result.frame_count == len(frames)
+    assert result.inference_count > 0
+    assert len(result.inference_results) > 0
+    assert result.event_count > 0
+    assert all(event.track_id == 1 for event in result.action_events)
 
 
 def test_build_request_source_adapter_accepts_non_mp4_file_path(tmp_path):
