@@ -5,10 +5,12 @@
 ## CI
 
 - Trigger: `pull_request` to `main`, `workflow_dispatch`
-- Purpose: run Python tests and Ruff linting
+- Purpose: run Python tests, Ruff linting, and frontend quality checks
 - Behavior:
   - on pull requests, Ruff checks changed Python files
   - on manual runs, Ruff checks all Python files under `src` and `tests`
+  - frontend checks use Node.js 20 with npm caching from `frontend/package-lock.json`
+  - frontend checks run `npm ci`, `npm run lint`, and `npm run build` from `frontend/`
 
 ## Docker Smoke
 
