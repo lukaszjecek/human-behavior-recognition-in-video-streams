@@ -59,9 +59,6 @@ class InferenceSession:
             if threading.current_thread() != self._thread:
                 self._thread.join(timeout=5.0)
 
-        with self._lock:
-            if self._status == SessionStatus.RUNNING:
-                self._status = SessionStatus.STOPPED
 
     def status(self) -> SessionStatus:
         """Get the current lifecycle status of the session."""
