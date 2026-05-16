@@ -111,6 +111,28 @@ The runtime guarantees:
 - safe shutdown using an EOF sentinel
 - propagation of frame indices and timestamps in `InferenceResult`
 
+### Session lifecycle API
+
+For non-blocking operations, such as when integrating with a web framework (like FastAPI), use `InferenceSession` instead of the blocking `run_inference` method. It exposes lifecycle hooks to manage the underlying thread safely.
+
+```python
+from src.inference import InferenceSession, SessionStatus
+
+session = InferenceSession(request)
+
+# Starts a background thread, state becomes SessionStatus.RUNNING
+session.start()
+
+# Query the status (IDLE, RUNNING, FINISHED, STOPPED, ERROR)
+print(session.status())
+
+# Get the typed InferenceServiceResult when finished (or None if still running/error)
+result = session.result()
+
+# Safely interrupt and clean up the background thread
+session.stop()
+```
+
 ## Supported config keys
 
 ```yaml
