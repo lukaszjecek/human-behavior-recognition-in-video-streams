@@ -75,18 +75,27 @@ def produce_frames_safe(
         stats["producer_error"] = exc
 
 
-def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict) -> None:
+def consume_frame_queue(
+    frame_queue: Queue,
+    engine: InferenceEngine,
+    stats: dict,
+    stop_event: Optional[Event] = None,
+) -> None:
     """Consumes frames from a queue with an inference engine and updates runtime stats.
 
     Args:
         frame_queue (Queue): Queue providing video frames.
         engine (InferenceEngine): Engine used to process frames.
         stats (dict): Mutable stats dictionary with frame and inference counts.
+        stop_event (Optional[Event]): Event to signal early termination.
     """
     frame_count = 0
     inference_results = []
 
     while True:
+        if stop_event is not None and stop_event.is_set():
+            break
+
         frame = frame_queue.get()
 
         if frame is EOF_SENTINEL:
@@ -144,7 +153,7 @@ def run_source(
     producer = Thread(target=produce_frames_safe,
                       args=(source_adapter, frame_queue, stats, stop_event))
     consumer = Thread(target=consume_frame_queue,
-                      args=(frame_queue, runtime_engine, stats))
+                      args=(frame_queue, runtime_engine, stats, stop_event))
 
     producer.start()
     consumer.start()
