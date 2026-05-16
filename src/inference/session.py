@@ -27,7 +27,8 @@ class InferenceSession:
     def __init__(self, request: InferenceServiceRequest) -> None:
         """Initialize an idle session with the given request."""
         if not isinstance(request, InferenceServiceRequest):
-            raise TypeError("request must be an InferenceServiceRequest instance")
+            raise TypeError(
+                "request must be an InferenceServiceRequest instance")
 
         self._request = request
         self._status = SessionStatus.IDLE
@@ -40,16 +41,23 @@ class InferenceSession:
         """Start the inference session in a background thread."""
         with self._lock:
             if self._status != SessionStatus.IDLE:
-                raise RuntimeError(f"Cannot start session in state {self._status.name}")
+                raise RuntimeError(
+                    f"Cannot start session in state {self._status.name}")
 
             self._status = SessionStatus.RUNNING
-            self._thread = threading.Thread(target=self._run_worker, daemon=True)
+            self._thread = threading.Thread(
+                target=self._run_worker, daemon=True)
             self._thread.start()
 
     def stop(self) -> None:
         """Signal the session to stop and wait for it to clean up."""
         with self._lock:
-            if self._status in (SessionStatus.IDLE, SessionStatus.FINISHED, SessionStatus.ERROR, SessionStatus.STOPPED):
+            if self._status in (
+                SessionStatus.IDLE,
+                SessionStatus.FINISHED,
+                SessionStatus.ERROR,
+                SessionStatus.STOPPED,
+            ):
                 return
 
         self._stop_event.set()
@@ -58,7 +66,6 @@ class InferenceSession:
             # Don't join the thread if we are calling stop() from the thread itself
             if threading.current_thread() != self._thread:
                 self._thread.join(timeout=5.0)
-
 
     def status(self) -> SessionStatus:
         """Get the current lifecycle status of the session."""
