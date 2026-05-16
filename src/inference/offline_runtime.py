@@ -127,6 +127,7 @@ def run_source(
             InferenceEngine is created.
         tracker: Optional tracker used to assign track IDs to inference results.
         emit_runtime_summary: Whether to print processed frame/window/event stats.
+        stop_event: Optional event to signal early termination.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -134,7 +135,8 @@ def run_source(
         action events.
     """
     if not isinstance(source_adapter, InferenceSourceAdapter):
-        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
+        raise TypeError(
+            "source_adapter must be an InferenceSourceAdapter instance")
 
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
