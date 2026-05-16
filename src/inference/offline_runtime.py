@@ -108,6 +108,7 @@ def run_source(
     engine: Optional[InferenceEngine] = None,
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
+    stop_event: Optional[Event] = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Runs offline inference on a generic source adapter.
 
@@ -141,7 +142,7 @@ def run_source(
     }
 
     producer = Thread(target=produce_frames_safe,
-                      args=(source_adapter, frame_queue, stats))
+                      args=(source_adapter, frame_queue, stats, stop_event))
     consumer = Thread(target=consume_frame_queue,
                       args=(frame_queue, runtime_engine, stats))
 
