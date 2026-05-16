@@ -57,7 +57,7 @@ class InferenceSession:
         if self._thread is not None and self._thread.is_alive():
             # Don't join the thread if we are calling stop() from the thread itself
             if threading.current_thread() != self._thread:
-                self._thread.join()
+                self._thread.join(timeout=5.0)
 
         with self._lock:
             if self._status == SessionStatus.RUNNING:
