@@ -1,7 +1,7 @@
 """Offline producer-consumer runtime for adapter-based inference inputs."""
 from pathlib import Path
 from queue import Queue
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, Optional
 
 from src.inference.engine import InferenceEngine
@@ -15,12 +15,14 @@ EOF_SENTINEL = object()
 def produce_frames_from_source(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
+    stop_event: Optional[Event] = None,
 ) -> None:
     """Reads frames from a source adapter in source order and pushes them to a queue.
 
     Args:
         source_adapter (InferenceSourceAdapter): Source adapter to open and read.
         frame_queue (Queue): Queue used to pass frames to the consumer.
+        stop_event (Optional[Event]): Event to signal early termination.
 
     Raises:
         RuntimeError: If the source cannot be opened.
@@ -36,6 +38,9 @@ def produce_frames_from_source(
 
         try:
             while True:
+                if stop_event is not None and stop_event.is_set():
+                    break
+
                 ret, frame = cap.read()
 
                 if not ret:
@@ -61,10 +66,11 @@ def produce_frames_safe(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
     stats: dict,
+    stop_event: Optional[Event] = None,
 ) -> None:
     """Runs the frame producer and stores any raised exception in stats."""
     try:
-        produce_frames_from_source(source_adapter, frame_queue)
+        produce_frames_from_source(source_adapter, frame_queue, stop_event)
     except Exception as exc:
         stats["producer_error"] = exc
 
