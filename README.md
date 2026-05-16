@@ -42,6 +42,9 @@ After startup, the services will initialize:
   - Logs: `./data/logs/startup_summary.json`
   - If dataset subset is mounted correctly, logs include discovered video files and classes
 
+- **Frontend Service** - React (Vite) frontend application
+  - URL: `http://localhost:5173`
+
 ## Backend (Sprint 3)
 
 ### API Development
