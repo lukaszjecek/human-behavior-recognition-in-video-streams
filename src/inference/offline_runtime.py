@@ -419,7 +419,8 @@ def run_source(
         action events.
     """
     if not isinstance(source_adapter, InferenceSourceAdapter):
-        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
+        raise TypeError(
+            "source_adapter must be an InferenceSourceAdapter instance")
 
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:

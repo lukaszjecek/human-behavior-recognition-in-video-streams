@@ -16,6 +16,7 @@ from src.inference.service import (
     run_inference,
     run_offline_mp4_inference,
 )
+from src.inference.session import InferenceSession, SessionStatus
 from src.inference.source_adapters import (
     FileSourceAdapter,
     InferenceSourceAdapter,
@@ -33,8 +34,10 @@ __all__ = [
     "InferenceServiceResult",
     "InferenceSourceAdapter",
     "FileSourceAdapter",
+    "InferenceSession",
     "RuntimeFailureState",
     "RtspSourceAdapter",
+    "SessionStatus",
     "SourceInterruptedError",
     "build_source_adapter",
     "run_inference",
