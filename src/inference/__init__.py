@@ -6,7 +6,9 @@ from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import (
     RuntimeFailureState,
     SourceInterruptedError,
+    run_source,
     run_source_with_reconnect,
+    run_video,
 )
 from src.inference.service import (
     InferenceServiceRequest,
@@ -37,5 +39,7 @@ __all__ = [
     "build_source_adapter",
     "run_inference",
     "run_offline_mp4_inference",
+    "run_source",
     "run_source_with_reconnect",
+    "run_video",
 ]
