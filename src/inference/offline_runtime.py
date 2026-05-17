@@ -244,10 +244,11 @@ def produce_frames_with_reconnect(
                 attempts += 1
                 continue
 
-            # Successfully opened – reset retry counter for this connection.
+            # Successfully opened - reset retry counter for this connection.
             attempts = 0
             current_delay = retry_delay
-            interrupted = False
+            stop_requested = False
+            connection_dropped = False
 
             try:
                 while True:
@@ -256,13 +257,13 @@ def produce_frames_with_reconnect(
                             "Reconnect producer: stop_event set (read %d frames).",
                             frames_read,
                         )
-                        interrupted = True
+                        stop_requested = True
                         break
 
                     ret, frame = cap.read()
                     if not ret:
-                        # Connection lost – will attempt reconnect below.
-                        interrupted = True
+                        # Real read failure - reconnect logic will handle it.
+                        connection_dropped = True
                         logger.warning(
                             "Reconnect producer: read() returned False for %s "
                             "(frames read so far: %d). Will retry.",
@@ -276,14 +277,15 @@ def produce_frames_with_reconnect(
             finally:
                 cap.release()
 
-            if stop_event is not None and stop_event.is_set():
+            if stop_requested:
+                # Clean shutdown requested - do not reconnect.
                 break
 
-            if not interrupted:
+            if not connection_dropped:
                 # Source ended cleanly (stream finished).
                 break
 
-            # Stream was interrupted – attempt reconnect.
+            # Real connection drop - attempt reconnect.
             if attempts >= max_retries:
                 err = SourceInterruptedError(
                     source_ref=source_adapter.source_ref,
