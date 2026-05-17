@@ -497,8 +497,11 @@ class TestRunSourceStopEvent:
         adapter = RtspSourceAdapter(rtsp_uri="rtsp://host/stream")
         engine = InferenceEngine(model=_DummyModel())
 
-        with pytest.raises(RuntimeError, match="Could not open"):
+        with pytest.raises(RuntimeFailureState, match="Could not open") as exc_info:
             run_source(source_adapter=adapter, engine=engine, emit_runtime_summary=False)
+            
+        assert exc_info.value.phase == "producer"
+        assert isinstance(exc_info.value.error, RuntimeError)
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +554,7 @@ class TestRunSourceWithReconnect:
         adapter = RtspSourceAdapter(rtsp_uri="rtsp://host/stream")
         engine = InferenceEngine(model=_DummyModel())
 
-        with pytest.raises(SourceInterruptedError):
+        with pytest.raises(RuntimeFailureState) as exc_info:
             run_source_with_reconnect(
                 source_adapter=adapter,
                 engine=engine,
@@ -559,6 +562,9 @@ class TestRunSourceWithReconnect:
                 retry_delay=0.001,
                 max_retries=1,
             )
+            
+        assert exc_info.value.phase == "producer"
+        assert isinstance(exc_info.value.error, SourceInterruptedError)
 
     def test_stop_event_terminates_reconnect_runner(self, monkeypatch):
         stop = Event()

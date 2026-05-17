@@ -39,7 +39,7 @@ class SourceInterruptedError(RuntimeError):
         self.frames_read = frames_read
 
 
-class RuntimeFailureState:
+class RuntimeFailureState(Exception):
     """Carries structured failure information from a failed runtime session.
 
     This is the controlled form in which lower-level errors are surfaced to
@@ -62,6 +62,7 @@ class RuntimeFailureState:
         """Initialise with error, phase, and frame count."""
         if phase not in {"producer", "consumer", "unknown"}:
             raise ValueError("phase must be 'producer', 'consumer', or 'unknown'")
+        super().__init__(f"Runtime failure in {phase} phase: {error}")
         self.error = error
         self.phase = phase
         self.frames_before_failure = frames_before_failure
@@ -371,7 +372,12 @@ def consume_frame_queue(
             break
 
         frame_count += 1
-        result = engine.process_frame(frame)
+        
+        try:
+            result = engine.process_frame(frame)
+        except Exception as exc:
+            stats["consumer_error"] = exc
+            break
 
         if result is not None:
             inference_results.append(result)
@@ -426,6 +432,7 @@ def run_source(
         "inference_count": 0,
         "inference_results": [],
         "producer_error": None,
+        "consumer_error": None,
     }
 
     producer = Thread(
@@ -446,7 +453,18 @@ def run_source(
     consumer.join()
 
     if stats["producer_error"] is not None:
-        raise stats["producer_error"]
+        raise RuntimeFailureState(
+            error=stats["producer_error"],
+            phase="producer",
+            frames_before_failure=stats["frame_count"],
+        ) from stats["producer_error"]
+        
+    if stats["consumer_error"] is not None:
+        raise RuntimeFailureState(
+            error=stats["consumer_error"],
+            phase="consumer",
+            frames_before_failure=stats["frame_count"],
+        ) from stats["consumer_error"]
 
     frame_count = stats["frame_count"]
     inference_count = stats["inference_count"]
@@ -516,6 +534,7 @@ def run_source_with_reconnect(
         "inference_count": 0,
         "inference_results": [],
         "producer_error": None,
+        "consumer_error": None,
     }
 
     producer = Thread(
@@ -541,7 +560,18 @@ def run_source_with_reconnect(
     consumer.join()
 
     if stats["producer_error"] is not None:
-        raise stats["producer_error"]
+        raise RuntimeFailureState(
+            error=stats["producer_error"],
+            phase="producer",
+            frames_before_failure=stats["frame_count"],
+        ) from stats["producer_error"]
+        
+    if stats["consumer_error"] is not None:
+        raise RuntimeFailureState(
+            error=stats["consumer_error"],
+            phase="consumer",
+            frames_before_failure=stats["frame_count"],
+        ) from stats["consumer_error"]
 
     frame_count = stats["frame_count"]
     inference_count = stats["inference_count"]
