@@ -1,3 +1,5 @@
+from threading import Event
+
 import numpy as np
 import pytest
 import torch
@@ -83,16 +85,21 @@ def test_run_inference_processes_rtsp_frames_with_runtime(monkeypatch, tmp_path)
 
         def read(self):
             if not self._frames:
+                import time
+                time.sleep(0.1)
+                stop.set()
                 return False, None
             return True, self._frames.pop(0)
 
         def release(self):
             self.released = True
 
+    stop = Event()
     def _fake_video_capture(source_ref):
         capture = _FakeCapture(source_ref)
         capture_state["source_ref"] = source_ref
         capture_state["capture"] = capture
+        
         return capture
 
     monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake_video_capture)
@@ -104,7 +111,7 @@ def test_run_inference_processes_rtsp_frames_with_runtime(monkeypatch, tmp_path)
         source_type="rtsp",
         source_uri="rtsp://camera.local/stream",
     )
-    result = run_inference(request)
+    result = run_inference(request, stop_event=stop)
 
     assert capture_state["source_ref"] == "rtsp://camera.local/stream"
     assert capture_state["capture"].released is True
