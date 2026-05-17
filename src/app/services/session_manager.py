@@ -48,6 +48,12 @@ class InferenceSessionManager:
 
     def create_session(self, request: SessionStartRequest) -> SessionResponse:
         """Create and start a new inference session."""
+        # Check for duplicates
+        for existing_session in self._sessions.values():
+            if existing_session.status in (SessionStatus.PENDING, SessionStatus.RUNNING):
+                if existing_session.request.video_path == request.video_path:
+                    raise ValueError(f"Video {request.video_path} is already being processed in session {existing_session.id}")
+
         session = SessionData(request)
         self._sessions[session.id] = session
 

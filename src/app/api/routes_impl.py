@@ -1,10 +1,8 @@
 """Implementation of API routes."""
-from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
-from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
-from src.app.services.session_manager import manager
+from src.app.endpoints.sessions import router as sessions_router
 
 router = APIRouter()
 
@@ -13,58 +11,4 @@ async def api_root() -> dict[str, object]:
     """Placeholder for the API root endpoint."""
     return {"message": "API root"}
 
-
-@router.post(
-    "/sessions",
-    response_model=SessionResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Start Inference Session",
-)
-async def start_session(request: SessionStartRequest) -> SessionResponse:
-    """Start a new asynchronous offline inference session."""
-    return manager.create_session(request)
-
-
-@router.get(
-    "/sessions/{session_id}",
-    response_model=SessionResponse,
-    summary="Get Session Status",
-)
-async def get_session(session_id: UUID) -> SessionResponse:
-    """Retrieve the current status and metadata of an inference session."""
-    session = manager.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    return session
-
-
-@router.post(
-    "/sessions/{session_id}/stop",
-    response_model=SessionResponse,
-    summary="Stop Inference Session",
-)
-async def stop_session(session_id: UUID) -> SessionResponse:
-    """Stop an ongoing inference session."""
-    session = manager.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-
-    if session.status not in (SessionStatus.PENDING, SessionStatus.RUNNING):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot stop a session that is not running"
-        )
-
-    # Calling stop_session on the manager will gracefully set the stop_event
-    stopped_session = manager.stop_session(session_id)
-    # The manager could return None theoretically if it vanished, but we know it exists
-    if not stopped_session:
-         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    
-    return stopped_session
+router.include_router(sessions_router, tags=["sessions"])
