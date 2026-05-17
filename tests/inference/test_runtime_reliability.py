@@ -11,19 +11,18 @@ import pytest
 
 from src.inference.engine import InferenceEngine
 from src.inference.offline_runtime import (
+    EOF_SENTINEL,
+    RuntimeFailureState,
+    SourceInterruptedError,
     _interruptible_sleep,
     consume_frame_queue,
-    EOF_SENTINEL,
     produce_frames_from_source,
     produce_frames_safe,
     produce_frames_with_reconnect,
     run_source,
     run_source_with_reconnect,
-    RuntimeFailureState,
-    SourceInterruptedError,
 )
 from src.inference.source_adapters import RtspSourceAdapter
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

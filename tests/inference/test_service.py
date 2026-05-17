@@ -6,8 +6,8 @@ import torch
 import yaml
 
 from src.inference.service import (
-    _build_request_source_adapter,
     InferenceServiceRequest,
+    _build_request_source_adapter,
     run_inference,
     run_offline_mp4_inference,
 )
