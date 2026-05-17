@@ -11,4 +11,4 @@ async def api_root() -> dict[str, object]:
     """Placeholder for the API root endpoint."""
     return {"message": "API root"}
 
-router.include_router(sessions_router, tags=["sessions"])
+router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])

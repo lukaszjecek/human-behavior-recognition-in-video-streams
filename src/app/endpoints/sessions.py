@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/sessions",
+    "/",
     response_model=SessionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Start Inference Session",
@@ -28,7 +28,7 @@ async def start_session(request: SessionStartRequest) -> SessionResponse:
 
 
 @router.get(
-    "/sessions/{session_id}",
+    "/{session_id}",
     response_model=SessionResponse,
     summary="Get Session Status",
 )
@@ -44,7 +44,7 @@ async def get_session(session_id: UUID) -> SessionResponse:
 
 
 @router.post(
-    "/sessions/{session_id}/stop",
+    "/{session_id}/stop",
     response_model=SessionResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Stop Inference Session",
