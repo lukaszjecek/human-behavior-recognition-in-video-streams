@@ -3,6 +3,13 @@
 from src.inference.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.offline_runtime import (
+    RuntimeFailureState,
+    SourceInterruptedError,
+    run_source,
+    run_source_with_reconnect,
+    run_video,
+)
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
@@ -28,9 +35,14 @@ __all__ = [
     "InferenceSourceAdapter",
     "FileSourceAdapter",
     "InferenceSession",
+    "RuntimeFailureState",
     "RtspSourceAdapter",
     "SessionStatus",
+    "SourceInterruptedError",
     "build_source_adapter",
     "run_inference",
     "run_offline_mp4_inference",
+    "run_source",
+    "run_source_with_reconnect",
+    "run_video",
 ]
