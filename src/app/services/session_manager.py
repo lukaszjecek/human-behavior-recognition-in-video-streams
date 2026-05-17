@@ -12,7 +12,8 @@ from src.inference.service import InferenceServiceRequest, run_offline_mp4_infer
 class SessionData:
     """Internal model for tracking a session."""
 
-    def __init__(self, request: SessionStartRequest):
+    def __init__(self, request: SessionStartRequest) -> None:
+        """Initialize session data with the original request."""
         self.id = uuid4()
         self.status = SessionStatus.PENDING
         self.created_at = datetime.now(timezone.utc)
@@ -44,6 +45,7 @@ class InferenceSessionManager:
     """Manages lifecycle of inference sessions."""
 
     def __init__(self) -> None:
+        """Initialize the inference session manager."""
         self._sessions: dict[UUID, SessionData] = {}
 
     def create_session(self, request: SessionStartRequest) -> SessionResponse:
@@ -52,7 +54,10 @@ class InferenceSessionManager:
         for existing_session in self._sessions.values():
             if existing_session.status in (SessionStatus.PENDING, SessionStatus.RUNNING):
                 if existing_session.request.video_path == request.video_path:
-                    raise ValueError(f"Video {request.video_path} is already being processed in session {existing_session.id}")
+                    raise ValueError(
+                        f"Video {request.video_path} is already being "
+                        f"processed in session {existing_session.id}"
+                    )
 
         session = SessionData(request)
         self._sessions[session.id] = session
