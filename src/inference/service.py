@@ -8,7 +8,8 @@ import torch
 from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import run_source
+from src.inference.offline_runtime import run_source_with_reconnect
+from threading import Event
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -55,7 +56,10 @@ class InferenceServiceResult:
         return len(self.action_events)
 
 
-def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
+def run_inference(
+    request: InferenceServiceRequest,
+    stop_event: Event | None = None,
+) -> InferenceServiceResult:
     """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
@@ -82,10 +86,11 @@ def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
         model=model_adapter,
     )
 
-    frame_count, inference_count, inference_results, _ = run_source(
+    frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
         source_adapter=source_adapter,
         engine=engine,
         emit_runtime_summary=False,
+        stop_event=stop_event,
     )
     expanded_results = expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(expanded_results, settings.default_track_id)
