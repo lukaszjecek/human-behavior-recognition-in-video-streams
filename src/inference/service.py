@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
+from typing import Optional
 
 import torch
 
@@ -58,7 +59,7 @@ class InferenceServiceResult:
 
 def run_inference(
     request: InferenceServiceRequest,
-    stop_event: Event | None = None,
+    stop_event: Optional[Event] = None,
 ) -> InferenceServiceResult:
     """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):

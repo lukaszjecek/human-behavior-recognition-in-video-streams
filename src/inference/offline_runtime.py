@@ -22,6 +22,7 @@ def produce_frames_from_source(
     Args:
         source_adapter (InferenceSourceAdapter): Source adapter to open and read.
         frame_queue (Queue): Queue used to pass frames to the consumer.
+        stop_event (Optional[Event]): Event to signal early termination.
 
     Raises:
         RuntimeError: If the source cannot be opened.
@@ -39,6 +40,7 @@ def produce_frames_from_source(
             while True:
                 if stop_event is not None and stop_event.is_set():
                     break
+
                 ret, frame = cap.read()
 
                 if not ret:
@@ -73,18 +75,27 @@ def produce_frames_safe(
         stats["producer_error"] = exc
 
 
-def consume_frame_queue(frame_queue: Queue, engine: InferenceEngine, stats: dict) -> None:
+def consume_frame_queue(
+    frame_queue: Queue,
+    engine: InferenceEngine,
+    stats: dict,
+    stop_event: Optional[Event] = None,
+) -> None:
     """Consumes frames from a queue with an inference engine and updates runtime stats.
 
     Args:
         frame_queue (Queue): Queue providing video frames.
         engine (InferenceEngine): Engine used to process frames.
         stats (dict): Mutable stats dictionary with frame and inference counts.
+        stop_event (Optional[Event]): Event to signal early termination.
     """
     frame_count = 0
     inference_results = []
 
     while True:
+        if stop_event is not None and stop_event.is_set():
+            break
+
         frame = frame_queue.get()
 
         if frame is EOF_SENTINEL:
@@ -116,6 +127,7 @@ def run_source(
             InferenceEngine is created.
         tracker: Optional tracker used to assign track IDs to inference results.
         emit_runtime_summary: Whether to print processed frame/window/event stats.
+        stop_event: Optional event to signal early termination.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -123,7 +135,8 @@ def run_source(
         action events.
     """
     if not isinstance(source_adapter, InferenceSourceAdapter):
-        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
+        raise TypeError(
+            "source_adapter must be an InferenceSourceAdapter instance")
 
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
@@ -142,7 +155,7 @@ def run_source(
     producer = Thread(target=produce_frames_safe,
                       args=(source_adapter, frame_queue, stats, stop_event))
     consumer = Thread(target=consume_frame_queue,
-                      args=(frame_queue, runtime_engine, stats))
+                      args=(frame_queue, runtime_engine, stats, stop_event))
 
     producer.start()
     consumer.start()
