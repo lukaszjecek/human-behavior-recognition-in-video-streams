@@ -4,24 +4,23 @@ from __future__ import annotations
 import threading
 from queue import Queue
 from threading import Event
-from typing import List, Optional
-from unittest.mock import MagicMock
+from typing import List
 
 import numpy as np
 import pytest
 
 from src.inference.engine import InferenceEngine
 from src.inference.offline_runtime import (
-    EOF_SENTINEL,
-    RuntimeFailureState,
-    SourceInterruptedError,
     _interruptible_sleep,
     consume_frame_queue,
+    EOF_SENTINEL,
     produce_frames_from_source,
     produce_frames_safe,
     produce_frames_with_reconnect,
     run_source,
     run_source_with_reconnect,
+    RuntimeFailureState,
+    SourceInterruptedError,
 )
 from src.inference.source_adapters import RtspSourceAdapter
 

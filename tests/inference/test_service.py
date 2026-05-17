@@ -1,12 +1,13 @@
+from threading import Event
+
 import numpy as np
 import pytest
 import torch
 import yaml
-from threading import Event
 
 from src.inference.service import (
-    InferenceServiceRequest,
     _build_request_source_adapter,
+    InferenceServiceRequest,
     run_inference,
     run_offline_mp4_inference,
 )
