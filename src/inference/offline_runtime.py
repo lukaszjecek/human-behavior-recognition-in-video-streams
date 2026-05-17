@@ -349,14 +349,17 @@ def consume_frame_queue(
 
     while True:
         if stop_event is not None and stop_event.is_set():
-            # Drain the queue without processing to unblock the producer.
-            try:
-                while True:
-                    item = frame_queue.get_nowait()
-                    if item is EOF_SENTINEL:
-                        break
-            except Empty:
-                pass
+            # Drain the queue until the sentinel arrives.
+            while True:
+                try:
+                    # get_nowait() would exit early on a momentary Empty
+                    # and leave the sentinel unconsumed, blocking 
+                    # the producer on a bounded Queue.
+                    item = frame_queue.get(timeout=0.05) 
+                except Empty:
+                    continue
+                if item is EOF_SENTINEL:
+                    break
             break
 
         try:
