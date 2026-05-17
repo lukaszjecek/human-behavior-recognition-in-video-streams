@@ -3,6 +3,7 @@ from typing import Optional
 import pytest
 
 from src.inference.action_event import ActionEvent
+from src.inference.alert_state_machine import AlertState, AlertStateMachine
 from src.inference.smoother import MajorityVoteSmoother
 
 # ---------------------------------------------------------------------------
@@ -261,3 +262,53 @@ def test_stable_then_noisy_sequence():
         result = smoother.update(_evt(label))
     assert result is not None
     assert result.label == "fight"
+
+
+# ---------------------------------------------------------------------------
+# Mini test flow
+# ---------------------------------------------------------------------------
+
+
+def test_smoother_output_feeds_alert_state_machine_alert_raised():
+    """Noisy sequence that majority-vote stabilises to danger → alert raised."""
+    smoother = MajorityVoteSmoother(window_size=3)
+    sm = AlertStateMachine(persistence_threshold=2, danger_labels=["fight"])
+
+    # window 1: ["fight", "walk", "fight"] → majority "fight" → CANDIDATE (hits=1)
+    smoother.update(_evt("fight", track_id=1))
+    smoother.update(_evt("walk", track_id=1))
+    smoothed = smoother.update(_evt("fight", track_id=1))
+    assert smoothed is not None and smoothed.label == "fight"
+    sm.process_event(smoothed)
+    assert sm.get_state(track_id=1) == AlertState.CANDIDATE
+
+    # window 2: ["walk", "fight", "fight"] → majority "fight" → ACTIVE (hits=2)
+    smoother.update(_evt("walk", track_id=1))
+    smoother.update(_evt("fight", track_id=1))
+    smoothed = smoother.update(_evt("fight", track_id=1))
+    assert smoothed is not None and smoothed.label == "fight"
+    alert = sm.process_event(smoothed)
+    assert alert is not None
+    assert sm.get_state(track_id=1) == AlertState.ACTIVE
+
+
+def test_smoother_suppresses_noise_and_alert_not_raised():
+    """Noisy sequence that majority-vote stabilises to safe → no alert raised."""
+    smoother = MajorityVoteSmoother(window_size=3)
+    sm = AlertStateMachine(persistence_threshold=2, danger_labels=["fight"])
+
+    # window 1: ["fight", "walk", "walk"] → majority "walk" → sm stays INACTIVE
+    smoother.update(_evt("fight", track_id=1))
+    smoother.update(_evt("walk", track_id=1))
+    smoothed = smoother.update(_evt("walk", track_id=1))
+    assert smoothed is not None and smoothed.label == "walk"
+    sm.process_event(smoothed)
+    assert sm.get_state(track_id=1) == AlertState.INACTIVE
+
+    # window 2: ["walk", "walk", "fight"] → majority "walk" → sm stays INACTIVE
+    smoother.update(_evt("walk", track_id=1))
+    smoother.update(_evt("walk", track_id=1))
+    smoothed = smoother.update(_evt("fight", track_id=1))
+    assert smoothed is not None and smoothed.label == "walk"
+    sm.process_event(smoothed)
+    assert sm.get_state(track_id=1) == AlertState.INACTIVE
