@@ -6,6 +6,55 @@
   overflow: hidden;
 }
 
+/* ===== Settings modal ===== */
+.settings-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  animation: overlay-in 0.2s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.settings-modal {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  max-height: 85dvh;
+  animation: modal-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes modal-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Przycisk ustawień – domyślnie ukryty (desktop) */
+.settings-toggle-btn {
+  display: none;
+}
+
 /* ===== Dashboard Grid ===== */
 .dashboard {
   display: grid;
@@ -32,6 +81,7 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 .panel-header {
@@ -68,9 +118,21 @@
 
   .dashboard {
     grid-template-columns: 1fr;
+    grid-template-rows: 50dvh auto;
   }
 
+  /* Sidebar: tylko AlertLog, bez ContextSettings */
   .sidebar {
-    grid-template-rows: 300px 280px;
+    grid-template-rows: 300px;
+  }
+
+  /* Ukryj panel ContextSettings w sidebarze */
+  #context-settings {
+    display: none;
+  }
+
+  /* Pokaż przycisk ustawień w headerze */
+  .settings-toggle-btn {
+    display: flex;
   }
 }
