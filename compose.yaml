@@ -59,23 +59,60 @@ services:
     stdin_open: true
     tty: true
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+    container_name: hbr_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - hbr-network
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+    stdin_open: true
+    tty: true
+
   inference:
     build:
       context: .
-      dockerfile: docker/app/Dockerfile
+      dockerfile: docker/inference/Dockerfile
     container_name: hbr_inference
     environment:
+      PYTHONUNBUFFERED: "1"
       DATA_DIR: /app/data/raw
       LOG_DIR: /app/data/logs
-      PYTHONUNBUFFERED: "1"
+      # Path to the model checkpoint inside the container.
+      # Set INFERENCE_CHECKPOINT in .env or as an environment variable before
+      # running docker compose up. Without it the container stays alive but
+      # cannot execute model inference until the value is provided via
+      # docker compose run --rm inference ...
+      INFERENCE_CHECKPOINT: ${INFERENCE_CHECKPOINT:-}
+      # Path to the runtime YAML config (relative to /app).
+      INFERENCE_CONFIG: ${INFERENCE_CONFIG:-configs/data_pipeline.yml}
+      # Device override passed to the reusable service (auto|cpu|cuda|mps).
+      INFERENCE_DEVICE: ${INFERENCE_DEVICE:-auto}
+      # DNS name of the API container on hbr-network.
+      # Used when backend code calls run_inference in-process and needs to
+      # know the sibling service address (e.g. for health checks or future
+      # result push-back). Resolves automatically inside hbr-network.
+      API_HOST: api
+      API_PORT: ${PORT:-8000}
     working_dir: /app
     volumes:
       - ./:/app
       - ./data/subset:/app/data/subset:ro
       - ./data/logs:/app/data/logs
+      - ./configs:/app/configs:ro
     networks:
       - hbr-network
-    command: [ "sh", "-lc", "python -m src.main && tail -f /dev/null" ]
+    depends_on:
+      db:
+        condition: service_healthy
     stdin_open: true
     tty: true
 

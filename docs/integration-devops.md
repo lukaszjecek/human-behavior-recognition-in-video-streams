@@ -77,13 +77,36 @@ PYTHONUNBUFFERED=1
 
 #### Inference Service
 
-- **Image**: Built from `docker/app/Dockerfile`
+- **Image**: Built from `docker/inference/Dockerfile`
 - **Container Name**: `hbr_inference`
 - **Network**: `hbr-network`
-- **Volumes**: Raw data, subset data (read-only), logs
-- **Command**: `python -m src.main && tail -f /dev/null`
+- **Volumes**: Raw data, subset data (read-only), logs, configs (read-only)
+- **Entrypoint**: `docker/inference/entrypoint.sh`
+- **Depends On**: `db` service (with health check condition)
 
-The inference service runs independently and can process video files using the trained model.
+The inference container uses a dedicated Dockerfile (`docker/inference/Dockerfile`) and a shell
+entrypoint instead of a raw `CMD`. On boot the entrypoint:
+1. Logs all wired environment variables for traceability.
+2. Warns if `INFERENCE_CHECKPOINT` is not set.
+3. Runs `python -m src.main` in startup-summary mode (non-fatal — container stays alive even on error).
+4. Keeps the container alive with `exec tail -f /dev/null` so ad-hoc jobs can be dispatched with
+   `docker compose run --rm inference ...`.
+
+The inference service shares the same Docker image base and source volume as the API service.
+The backend calls `run_inference(InferenceServiceRequest(...))` **in-process** — no HTTP hop is
+required. `API_HOST` and `API_PORT` are wired as env vars for completeness and future result
+push-back use cases.
+
+**Environment Variables**:
+```
+DATA_DIR=/app/data/raw
+LOG_DIR=/app/data/logs
+INFERENCE_CHECKPOINT=   # path to .pth checkpoint inside container (required for model inference)
+INFERENCE_CONFIG=configs/data_pipeline.yml  # runtime YAML config path (relative to /app)
+INFERENCE_DEVICE=auto   # device override: auto | cpu | cuda | mps
+API_HOST=api             # DNS name of the API container on hbr-network
+API_PORT=8000            # API port (matches PORT env var)
+```
 
 ### Environment Wiring
 
@@ -106,11 +129,14 @@ When using compose, service names (like `db`, `api`) resolve to their container 
 
 Docker Compose ensures correct startup order through the `depends_on` directive with health checks:
 
-1. **Database starts first** and performs health checks
-2. **API service waits** for database health check to pass before starting
-3. **Inference service** starts independently (no dependencies)
+1. **Database starts first** and performs health checks.
+2. **API service waits** for the database health check to pass before starting.
+3. **Inference service waits** for the database health check to pass before starting.
 
-This ensures the database is ready to accept connections before the API tries to connect.
+Both the API and inference services share the same `depends_on: db: condition: service_healthy`
+configuration. The inference container does **not** wait for the API to be healthy; if in-process
+calls to `run_inference` are made from the API, the caller must ensure the API has fully started
+before dispatching inference work.
 
 ### Running the Stack
 
@@ -159,9 +185,40 @@ docker compose up --build
 
 Services can communicate by container name on the `hbr-network`:
 
-- **From API to Database**: Use host `db` (resolves to `hbr_db` container)
-- **From Inference to API**: Use host `api` (resolves to `hbr_api` container)
-- **From external client**: Use `localhost:8000` for API
+| Direction | Host | Port | Notes |
+|-----------|------|------|-------|
+| API → Database | `db` | 5432 | Resolves to `hbr_db` container |
+| Inference → API | `api` | `API_PORT` (default 8000) | Resolves to `hbr_api` container; `API_HOST=api` is wired in compose |
+| External client → API | `localhost` | `PORT` (default 8000) | Published port on the host |
+
+Within the compose stack the inference container reaches the API at `http://api:8000`. This
+resolution is guaranteed by the shared `hbr-network` bridge and the `API_HOST` / `API_PORT`
+environment variables wired in `compose.yaml`.
+
+### Running One-Off Inference Jobs
+
+The inference container stays alive after boot. Use `docker compose run --rm` to dispatch a
+one-off MP4 inference job without restarting the stack:
+
+```bash
+docker compose run --rm \
+  -e INFERENCE_CHECKPOINT=/app/data/logs/checkpoints/baseline_epoch_50.pth \
+  inference \
+  python -m src.main \
+    --input /app/data/raw/walking/sample.mp4 \
+    --checkpoint /app/data/logs/checkpoints/baseline_epoch_50.pth \
+    --config /app/configs/data_pipeline.yml \
+    --output /app/data/logs/actions.json \
+    --device auto
+```
+
+If `INFERENCE_CHECKPOINT` is set in `.env`, the `-e` override above can be omitted.
+
+To confirm the inference container can reach the API over `hbr-network`:
+
+```bash
+docker compose exec inference curl -sf http://api:8000/health
+```
 
 ### Volumes
 
