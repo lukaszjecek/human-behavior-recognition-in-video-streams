@@ -196,8 +196,12 @@ class TestProduceFramesFromSourceStopEvent:
         assert captured_cap["cap"].released is True
 
     def test_eof_sentinel_always_enqueued_on_open_failure(self, monkeypatch):
+        captured_cap = {}
+
         def _fake(_):
-            return _FakeCapture([], opened=False)
+            cap = _FakeCapture([], opened=False)
+            captured_cap["cap"] = cap
+            return cap
 
         monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake)
         adapter = RtspSourceAdapter(rtsp_uri="rtsp://host/stream")
@@ -208,6 +212,7 @@ class TestProduceFramesFromSourceStopEvent:
 
         # Sentinel must still be present.
         assert queue.get_nowait() is EOF_SENTINEL
+        assert captured_cap["cap"].released is True
 
 
 # ---------------------------------------------------------------------------

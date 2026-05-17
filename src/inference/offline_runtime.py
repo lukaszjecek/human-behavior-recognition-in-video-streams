@@ -103,14 +103,14 @@ def produce_frames_from_source(
     try:
         cap = source_adapter.open_capture()
 
-        if not cap.isOpened():
-            raise RuntimeError(
-                "Could not open "
-                f"{source_adapter.source_type} source: {source_adapter.source_ref}",
-            )
-
-        frames_read = 0
         try:
+            if not cap.isOpened():
+                raise RuntimeError(
+                    "Could not open "
+                    f"{source_adapter.source_type} source: {source_adapter.source_ref}",
+                )
+
+            frames_read = 0
             while True:
                 if stop_event is not None and stop_event.is_set():
                     logger.debug(
