@@ -245,9 +245,6 @@ def produce_frames_with_reconnect(
                 attempts += 1
                 continue
 
-            # Successfully opened - reset retry counter for this connection.
-            attempts = 0
-            current_delay = retry_delay
             stop_requested = False
             connection_dropped = False
 
@@ -272,6 +269,10 @@ def produce_frames_with_reconnect(
                             frames_read,
                         )
                         break
+
+                    # Successfully read a frame - reset retry counter.
+                    attempts = 0
+                    current_delay = retry_delay
 
                     frames_read += 1
                     frame_queue.put(frame)

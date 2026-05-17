@@ -401,6 +401,36 @@ class TestProduceFramesWithReconnect:
         assert sentinel is EOF_SENTINEL
         assert isinstance(stats["producer_error"], SourceInterruptedError)
 
+    def test_reconnect_fails_if_read_repeatedly_fails_after_open(self, monkeypatch):
+        """Producer gives up if open succeeds but read immediately fails max_retries times."""
+        adapter = self._make_rtsp_adapter()
+        
+        open_calls: list = []
+
+        def _fake(_source_ref):
+            open_calls.append(1)
+            # isOpened() is True, but read() returns False immediately
+            return _FakeCapture([], opened=True)
+
+        monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake)
+
+        queue: Queue = Queue()
+        stats: dict = {"producer_error": None}
+
+        produce_frames_with_reconnect(
+            adapter,
+            queue,
+            stats,
+            retry_delay=0.001,
+            backoff_factor=1.0,
+            max_retries=3,
+        )
+
+        assert len(open_calls) == 4 # Initial + 3 retries
+        assert isinstance(stats["producer_error"], SourceInterruptedError)
+        sentinel = queue.get_nowait()
+        assert sentinel is EOF_SENTINEL
+
     def test_stop_event_aborts_reconnect_sleep(self, monkeypatch):
         """Setting stop_event during the retry sleep causes early exit."""
         adapter = self._make_rtsp_adapter()
