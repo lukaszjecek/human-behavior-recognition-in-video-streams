@@ -312,8 +312,6 @@ def produce_frames_with_reconnect(
     finally:
         frame_queue.put(EOF_SENTINEL)
 
-    stats["frames_read_by_producer"] = frames_read
-
 
 def _interruptible_sleep(duration: float, stop_event: Optional[Event]) -> None:
     """Sleep for *duration* seconds, waking early if *stop_event* is set."""
