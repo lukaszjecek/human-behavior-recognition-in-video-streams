@@ -1,7 +1,7 @@
 """Offline producer-consumer runtime for adapter-based inference inputs."""
 from pathlib import Path
 from queue import Queue
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, Optional
 
 from src.inference.engine import InferenceEngine
@@ -15,6 +15,7 @@ EOF_SENTINEL = object()
 def produce_frames_from_source(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
+    stop_event: Optional[Event] = None,
 ) -> None:
     """Reads frames from a source adapter in source order and pushes them to a queue.
 
@@ -36,6 +37,8 @@ def produce_frames_from_source(
 
         try:
             while True:
+                if stop_event is not None and stop_event.is_set():
+                    break
                 ret, frame = cap.read()
 
                 if not ret:
@@ -48,23 +51,24 @@ def produce_frames_from_source(
         frame_queue.put(EOF_SENTINEL)
 
 
-def produce_frames(video_path: str, frame_queue: Queue) -> None:
+def produce_frames(video_path: str, frame_queue: Queue, stop_event: Optional[Event] = None) -> None:
     """Backward-compatible file-source producer."""
     if not isinstance(video_path, str):
         raise TypeError("video_path must be a string")
 
     source_adapter = FileSourceAdapter(video_path=Path(video_path))
-    produce_frames_from_source(source_adapter, frame_queue)
+    produce_frames_from_source(source_adapter, frame_queue, stop_event)
 
 
 def produce_frames_safe(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
     stats: dict,
+    stop_event: Optional[Event] = None,
 ) -> None:
     """Runs the frame producer and stores any raised exception in stats."""
     try:
-        produce_frames_from_source(source_adapter, frame_queue)
+        produce_frames_from_source(source_adapter, frame_queue, stop_event)
     except Exception as exc:
         stats["producer_error"] = exc
 
@@ -102,6 +106,7 @@ def run_source(
     engine: Optional[InferenceEngine] = None,
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
+    stop_event: Optional[Event] = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Runs offline inference on a generic source adapter.
 
@@ -135,7 +140,7 @@ def run_source(
     }
 
     producer = Thread(target=produce_frames_safe,
-                      args=(source_adapter, frame_queue, stats))
+                      args=(source_adapter, frame_queue, stats, stop_event))
     consumer = Thread(target=consume_frame_queue,
                       args=(frame_queue, runtime_engine, stats))
 
@@ -172,6 +177,7 @@ def run_video(
     engine: Optional[InferenceEngine] = None,
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
+    stop_event: Optional[Event] = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Runs offline inference on a single local video file."""
     if not isinstance(video_path, str):
@@ -183,4 +189,5 @@ def run_video(
         engine=engine,
         tracker=tracker,
         emit_runtime_summary=emit_runtime_summary,
+        stop_event=stop_event,
     )
