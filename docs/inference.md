@@ -7,14 +7,28 @@
 
 ## Sprint 2 CLI: MP4 to JSON
 
-To run in inference mode:
-```
+To run in inference mode from the compose stack:
+```bash
 docker compose run --rm inference python -m src.main \
   --input /app/data/raw/car_drops_off_person/0BD540FB-26D7-4814-8229-5572B9132328-306-00000008A9AAB259_1.mp4 \
   --checkpoint /app/data/logs/checkpoints/baseline_epoch_50.pth \
   --config /app/configs/data_pipeline.yml \
   --output /app/data/logs/actions.json \
   --device auto
+```
+
+If `INFERENCE_CHECKPOINT` and `INFERENCE_CONFIG` are already set in `.env`, you can also override
+them inline without repeating the flags:
+```bash
+docker compose run --rm \
+  -e INFERENCE_CHECKPOINT=/app/data/logs/checkpoints/baseline_epoch_50.pth \
+  inference \
+  python -m src.main \
+    --input /app/data/raw/car_drops_off_person/sample.mp4 \
+    --checkpoint "${INFERENCE_CHECKPOINT}" \
+    --config "${INFERENCE_CONFIG:-configs/data_pipeline.yml}" \
+    --output /app/data/logs/actions.json \
+    --device auto
 ```
 
 ### Arguments
@@ -97,6 +111,36 @@ Input-source adapters are implemented in `src/inference/source_adapters.py`:
 
 The reusable service selects adapters via `InferenceServiceRequest.source_type`
 (`file` by default) and `video_path`/`source_uri`.
+
+### Container Networking and Compose Wiring
+
+Within the Sprint 3 compose stack the inference container uses an **in-process** integration
+model - no HTTP hop between containers:
+
+- The backend (`api`) and inference container share the **same Docker image base** and source
+  tree (mounted at `/app` via volume).
+- `run_inference(InferenceServiceRequest(...))` is called **directly** inside the Python process;
+  there is no remote RPC or network request to the `hbr_inference` container from the API.
+- The `hbr_inference` container exists as a **companion service** that stays alive for on-demand
+  `docker compose run --rm inference ...` dispatch and for future in-process extension.
+
+**Environment variables wired by compose**:
+
+| Variable | Default | Purpose |
+|----------|---------|----------|
+| `INFERENCE_CHECKPOINT` | _(empty)_ | Path to `.pth` checkpoint inside the container |
+| `INFERENCE_CONFIG` | `configs/data_pipeline.yml` | Path to runtime YAML config (relative to `/app`) |
+| `INFERENCE_DEVICE` | `auto` | Device override: `auto` / `cpu` / `cuda` / `mps` |
+| `API_HOST` | `api` | DNS name of the API container on `hbr-network` |
+| `API_PORT` | `8000` | Port of the API container |
+
+The inference container resolves `api` by DNS on `hbr-network`. To verify connectivity:
+```bash
+docker compose exec inference curl -sf http://api:8000/health
+```
+
+Set `INFERENCE_CHECKPOINT` in `.env` (or pass `-e INFERENCE_CHECKPOINT=...` to
+`docker compose run`) before dispatching model inference jobs.
 
 ### Offline runtime details
 
