@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
+from typing import Optional
 
 import torch
 
@@ -55,7 +57,10 @@ class InferenceServiceResult:
         return len(self.action_events)
 
 
-def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
+def run_inference(
+    request: InferenceServiceRequest,
+    stop_event: Optional[Event] = None,
+) -> InferenceServiceResult:
     """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
@@ -86,6 +91,7 @@ def run_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
         source_adapter=source_adapter,
         engine=engine,
         emit_runtime_summary=False,
+        stop_event=stop_event,
     )
     expanded_results = expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(expanded_results, settings.default_track_id)
