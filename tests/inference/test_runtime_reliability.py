@@ -336,6 +336,7 @@ class TestProduceFramesWithReconnect:
         open_calls: list = []
         frames_batch1 = _make_frames(5)
         frames_batch2 = _make_frames(5)
+        stop = Event()
 
         def _fake(_source_ref):
             call_no = len(open_calls)
@@ -343,8 +344,13 @@ class TestProduceFramesWithReconnect:
             if call_no == 0:
                 # First connection: returns 5 frames then drops.
                 return _FakeCapture(list(frames_batch1))
-            # Second connection: returns 5 clean frames.
-            return _FakeCapture(list(frames_batch2))
+            if call_no == 1:
+                # Second connection: returns 5 frames then drops.
+                return _FakeCapture(list(frames_batch2))
+            
+            # Stop the loop after second connection drops
+            stop.set()
+            return _FakeCapture([], opened=False)
 
         monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake)
 
@@ -355,6 +361,7 @@ class TestProduceFramesWithReconnect:
             adapter,
             queue,
             stats,
+            stop_event=stop,
             retry_delay=0.001,
             backoff_factor=1.0,
             max_retries=3,
@@ -367,7 +374,7 @@ class TestProduceFramesWithReconnect:
         frame_items = [i for i in items if i is not EOF_SENTINEL]
         assert len(frame_items) == 10  # 5 from batch1 + 5 from batch2
         assert items[-1] is EOF_SENTINEL
-        assert len(open_calls) == 2
+        assert len(open_calls) == 3
         assert stats["producer_error"] is None
 
     def test_raises_source_interrupted_after_max_retries(self, monkeypatch):
@@ -504,13 +511,18 @@ class TestRunSourceWithReconnect:
         open_calls: list = []
         frames_a = _make_frames(4)
         frames_b = _make_frames(4)
+        stop = Event()
 
         def _fake(_source_ref):
             n = len(open_calls)
             open_calls.append(n)
             if n == 0:
                 return _FakeCapture(list(frames_a))
-            return _FakeCapture(list(frames_b))
+            if n == 1:
+                return _FakeCapture(list(frames_b))
+            
+            stop.set()
+            return _FakeCapture([], opened=False)
 
         monkeypatch.setattr("src.inference.source_adapters.cv2.VideoCapture", _fake)
 
@@ -521,6 +533,7 @@ class TestRunSourceWithReconnect:
             source_adapter=adapter,
             engine=engine,
             emit_runtime_summary=False,
+            stop_event=stop,
             retry_delay=0.001,
             backoff_factor=1.0,
             max_retries=3,
