@@ -3,14 +3,13 @@
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
-from typing import Optional
 
 import torch
 
 from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import run_source
+from src.inference.offline_runtime import run_source_with_reconnect
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -59,7 +58,7 @@ class InferenceServiceResult:
 
 def run_inference(
     request: InferenceServiceRequest,
-    stop_event: Optional[Event] = None,
+    stop_event: Event | None = None,
 ) -> InferenceServiceResult:
     """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):
@@ -87,7 +86,7 @@ def run_inference(
         model=model_adapter,
     )
 
-    frame_count, inference_count, inference_results, _ = run_source(
+    frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
         source_adapter=source_adapter,
         engine=engine,
         emit_runtime_summary=False,
