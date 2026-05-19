@@ -108,12 +108,15 @@ def run_inference(
     )
 
 
-def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
+def run_offline_mp4_inference(
+    request: InferenceServiceRequest,
+    stop_event: Event | None = None,
+) -> InferenceServiceResult:
     """Run offline inference for local MP4 files only."""
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request)
+    return run_inference(request, stop_event=stop_event)
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:

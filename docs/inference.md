@@ -55,8 +55,8 @@ If neither is provided, `src.main` runs startup summary mode.
 
 ## Reusable service entrypoint
 
-For programmatic integrations (for example upcoming backend routes), use the
-service API instead of the CLI wrapper:
+For programmatic integrations (for example the session management endpoints in `src/app/endpoints/sessions.py`), use the
+service API instead of the CLI wrapper. The service accepts an optional `stop_event` (`threading.Event`) to allow graceful interruptions:
 
 ```python
 from pathlib import Path
