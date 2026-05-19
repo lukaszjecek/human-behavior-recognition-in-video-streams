@@ -113,3 +113,29 @@ python scripts/validate_modules.py
 ```
 
 This script validates all inference modules and updates the sample file at the canonical location: `tests/inference/data/logs/sample_actions.json`
+
+# Inference Session API
+
+The backend provides asynchronous REST endpoints to manage offline video inference sessions without blocking the main event loop.
+
+## Endpoints
+
+- `POST /api/sessions/`
+  - Starts a new inference session in the background.
+  - Requires a JSON body with `video_path`, `checkpoint_path`, and `config_path`.
+  - Returns HTTP 201 Created with the session ID. Returns HTTP 409 Conflict if the same video is already being processed.
+  
+- `GET /api/sessions/{session_id}`
+  - Retrieves the current status of the session.
+  - Returns the session metadata including status (`pending`, `running`, `completed`, `failed`, `stopped`).
+
+- `POST /api/sessions/{session_id}/stop`
+  - Safely interrupts an ongoing inference session using a native `threading.Event`.
+  - Returns HTTP 202 Accepted if the session is stopped successfully.
+  - Returns HTTP 400 Bad Request if the session is already finished.
+
+## Architecture
+
+- **Session Manager:** (`src/app/services/session_manager.py`) Manages state and `asyncio.Task` references in-memory.
+- **Background Execution:** Inference is pushed to a background thread using `asyncio.to_thread()` so the FastAPI server remains fully responsive.
+- **Graceful Shutdown:** Stopping a session injects a `threading.Event` signal deep into the offline frame producer loop (`src/inference/offline_runtime.py`), causing the video reading loop to break cleanly on the next frame.

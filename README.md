@@ -87,6 +87,15 @@ open http://localhost:8000/docs
 open http://localhost:8000/redoc
 ```
 
+### Inference Session REST Endpoints
+
+The API now exposes endpoints for managing offline inference sessions asynchronously:
+- `POST /api/sessions/` - Starts a new inference session in a background thread.
+- `GET /api/sessions/{session_id}` - Retrieves the current status (`pending`, `running`, `completed`, `failed`, `stopped`).
+- `POST /api/sessions/{session_id}/stop` - Gracefully interrupts and stops an ongoing running session.
+
+These endpoints use `asyncio.to_thread` for non-blocking execution and native `threading.Event` triggers down to the underlying inference loops to allow safe and clean interruptions without blocking the FastAPI event loop.
+
 ### Configuration
 
 Backend configuration is managed through environment variables in `src/app/core/settings.py`:
