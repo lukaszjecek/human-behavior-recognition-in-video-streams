@@ -161,13 +161,13 @@ def produce_frames_from_source(
         frame_queue.put(EOF_SENTINEL)
 
 
-def produce_frames(video_path: str, frame_queue: Queue) -> None:
+def produce_frames(video_path: str, frame_queue: Queue, stop_event: Optional[Event] = None) -> None:
     """Backward-compatible file-source producer."""
     if not isinstance(video_path, str):
         raise TypeError("video_path must be a string")
 
     source_adapter = FileSourceAdapter(video_path=Path(video_path))
-    produce_frames_from_source(source_adapter, frame_queue)
+    produce_frames_from_source(source_adapter, frame_queue, stop_event)
 
 
 def produce_frames_safe(

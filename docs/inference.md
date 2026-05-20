@@ -55,8 +55,8 @@ If neither is provided, `src.main` runs startup summary mode.
 
 ## Reusable service entrypoint
 
-For programmatic integrations (for example upcoming backend routes), use the
-service API instead of the CLI wrapper:
+For programmatic integrations (for example the session management endpoints in `src/app/endpoints/sessions.py`), use the
+service API instead of the CLI wrapper. The service accepts an optional `stop_event` (`threading.Event`) to allow graceful interruptions:
 
 ```python
 from pathlib import Path
@@ -245,7 +245,9 @@ To support context-aware alerting in Sprint 3, a lightweight **Context Module** 
 - **Performance:** Deterministic output confirmed via local verification tests (`tests/inference/test_context.py`).
 
 ### Output Contract
-The `ContextModule` extends the `ActionEvent` schema. Every event produced in `actions.json` now includes a `context` object:
+The `ContextModule` enriches inference with scene-level context metadata, but the current `actions.json` writer still emits the legacy flat `ActionEventLog` structure (`event_count` plus `events`). Consumers should not assume the file is already wrapped in the unified `EventPayload` structure defined in `src/app/schemas/action_event.py`.
+
+Context values such as the following may be used internally or by future output-schema revisions, but they are not yet guaranteed to appear as a nested `context` object in every serialized event in `actions.json`:
 
 ```json
 "context": {

@@ -105,7 +105,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return response
 
     app.include_router(health_router)
-    app.include_router(api_router, prefix="/api", tags=["rest"])
+    app.include_router(api_router, prefix="/api")
     app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 
     # Globalna obsługa błędów

@@ -11,7 +11,7 @@ from typing import Callable
 
 import torch
 
-from src.inference.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
@@ -201,7 +201,9 @@ def run_inference(
 
 
 def run_offline_mp4_inference(
+
     request: InferenceServiceRequest,
+    stop_event: Event | None = None,
     session_id: str | None = None,
 ) -> InferenceServiceResult:
     """Run offline inference for local MP4 files only.
@@ -213,7 +215,7 @@ def run_offline_mp4_inference(
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request, session_id=session_id)
+    return run_inference(request, stop_event=stop_event, session_id=session_id)
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
@@ -241,11 +243,13 @@ def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
 def _validate_request(request: InferenceServiceRequest) -> None:
     """Validate request shape and path requirements."""
     if not isinstance(request.checkpoint_path, Path):
-        raise TypeError("request.checkpoint_path must be a pathlib.Path instance")
+        raise TypeError(
+            "request.checkpoint_path must be a pathlib.Path instance")
     if not isinstance(request.config_path, Path):
         raise TypeError("request.config_path must be a pathlib.Path instance")
     if request.video_path is not None and not isinstance(request.video_path, Path):
-        raise TypeError("request.video_path must be a pathlib.Path instance or None")
+        raise TypeError(
+            "request.video_path must be a pathlib.Path instance or None")
     if request.source_uri is not None and not isinstance(request.source_uri, str):
         raise TypeError("request.source_uri must be a string or None")
     normalize_source_type(request.source_type)
@@ -253,11 +257,13 @@ def _validate_request(request: InferenceServiceRequest) -> None:
         raise TypeError("request.device must be a string or None")
 
     if request.video_path is not None and request.source_uri is not None:
-        raise ValueError("Provide either request.video_path or request.source_uri, not both")
+        raise ValueError(
+            "Provide either request.video_path or request.source_uri, not both")
 
     source_type = normalize_source_type(request.source_type)
     if source_type == "file" and request.video_path is None and request.source_uri is None:
-        raise ValueError("File source requires request.video_path or request.source_uri")
+        raise ValueError(
+            "File source requires request.video_path or request.source_uri")
     if source_type == "rtsp" and request.source_uri is None:
         raise ValueError("RTSP source requires request.source_uri")
 
@@ -269,7 +275,8 @@ def _build_request_source_adapter(request: InferenceServiceRequest) -> Inference
         if request.video_path is not None:
             return build_source_adapter(source_type="file", source_ref=request.video_path)
         if request.source_uri is None:
-            raise ValueError("File source requires request.video_path or request.source_uri")
+            raise ValueError(
+                "File source requires request.video_path or request.source_uri")
         return build_source_adapter(source_type="file", source_ref=Path(request.source_uri))
 
     if request.source_uri is None:
