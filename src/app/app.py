@@ -13,7 +13,8 @@ from starlette.requests import Request
 
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
-from src.app.core.settings import Settings, settings as default_settings
+from src.app.core.settings import Settings
+from src.app.core.settings import settings as default_settings
 from src.app.endpoints.health import router as health_router
 from src.inference.runtime_logging import (
     RuntimeLogContext,
@@ -21,7 +22,6 @@ from src.inference.runtime_logging import (
     get_build_metadata,
     log_event,
 )
-
 
 logger = logging.getLogger(__name__)
 
