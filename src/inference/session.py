@@ -9,6 +9,7 @@ from typing import Optional
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
+    supports_session_id,
     run_inference,
 )
 from src.inference.runtime_logging import (
@@ -111,11 +112,14 @@ class InferenceSession:
     def _run_worker(self) -> None:
         """Internal thread worker to run inference."""
         try:
-            result = run_inference(
-                self._request,
-                stop_event=self._stop_event,
-                session_id=self._session_id,
-            )
+            if supports_session_id(run_inference):
+                result = run_inference(
+                    self._request,
+                    stop_event=self._stop_event,
+                    session_id=self._session_id,
+                )
+            else:
+                result = run_inference(self._request, stop_event=self._stop_event)
             with self._lock:
                 if self._stop_event.is_set():
                     self._status = SessionStatus.STOPPED

@@ -1,11 +1,13 @@
 """Reusable service entrypoint for adapter-based inference sources."""
 
+import inspect
 import logging
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
+from typing import Callable
 
 import torch
 
@@ -273,3 +275,20 @@ def _build_request_source_adapter(request: InferenceServiceRequest) -> Inference
     if request.source_uri is None:
         raise ValueError("RTSP source requires request.source_uri")
     return build_source_adapter(source_type="rtsp", source_ref=request.source_uri)
+
+
+def supports_session_id(func: Callable[..., object]) -> bool:
+    """Return True when the callable accepts a session_id keyword argument."""
+    target = getattr(func, "side_effect", None)
+    if callable(target):
+        func = target
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+    for param in signature.parameters.values():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+        if param.name == "session_id":
+            return True
+    return False

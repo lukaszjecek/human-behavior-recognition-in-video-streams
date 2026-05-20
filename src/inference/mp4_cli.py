@@ -8,7 +8,11 @@ from pathlib import Path
 from src.inference import runtime as runtime_primitives
 from src.inference.context_adapter import ContextModule
 from src.inference.json_writer import ActionEventWriter
-from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+from src.inference.service import (
+    InferenceServiceRequest,
+    supports_session_id,
+    run_offline_mp4_inference,
+)
 from src.inference.runtime_logging import (
     RuntimeLogContext,
     configure_runtime_logging,
@@ -54,15 +58,19 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         output_path=request.output_path,
     )
 
-    service_result = run_offline_mp4_inference(
-        InferenceServiceRequest(
-            video_path=request.input_path,
-            checkpoint_path=request.checkpoint_path,
-            config_path=request.config_path,
-            device=request.device,
-        ),
-        session_id=session_id,
+    service_request = InferenceServiceRequest(
+        video_path=request.input_path,
+        checkpoint_path=request.checkpoint_path,
+        config_path=request.config_path,
+        device=request.device,
     )
+    if supports_session_id(run_offline_mp4_inference):
+        service_result = run_offline_mp4_inference(
+            service_request,
+            session_id=session_id,
+        )
+    else:
+        service_result = run_offline_mp4_inference(service_request)
 
     context_data = {"scene_tag": "unknown", "confidence": 0.0}
     context_module = _try_create_context_module()
