@@ -1,5 +1,8 @@
 """Reusable service entrypoint for adapter-based inference sources."""
 
+import logging
+import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
@@ -9,7 +12,13 @@ import torch
 from src.inference.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import run_source_with_reconnect
+from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    configure_runtime_logging,
+    get_build_metadata,
+    log_event,
+)
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -25,6 +34,8 @@ from src.inference.source_adapters import (
     normalize_source_type,
 )
 from src.inference.tensorize import FrameTensorizer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,14 +70,42 @@ class InferenceServiceResult:
 def run_inference(
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
+    session_id: str | None = None,
 ) -> InferenceServiceResult:
-    """Run inference and return typed in-memory results."""
+    """Run inference and return typed in-memory results.
+
+    Args:
+        request: Input request describing source and model settings.
+        stop_event: Optional stop flag for graceful shutdown.
+        session_id: Optional correlation ID for runtime logs.
+    """
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
 
+    configure_runtime_logging()
     _validate_request(request)
     source_adapter = _build_request_source_adapter(request)
 
+    resolved_session_id = session_id or uuid.uuid4().hex
+    log_context = RuntimeLogContext(
+        session_id=resolved_session_id,
+        source_type=source_adapter.source_type,
+        source_ref=source_adapter.source_ref,
+    )
+    build_metadata = get_build_metadata()
+    log_event(
+        logger,
+        logging.INFO,
+        "inference_session_started",
+        "Inference session started.",
+        log_context,
+        checkpoint_path=request.checkpoint_path,
+        config_path=request.config_path,
+        device_request=request.device,
+        **build_metadata,
+    )
+
+    start_time = time.monotonic()
     settings = load_runtime_settings(request.config_path)
     device = resolve_inference_device(
         cli_device=request.device,
@@ -86,17 +125,68 @@ def run_inference(
         model=model_adapter,
     )
 
-    frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
-        source_adapter=source_adapter,
-        engine=engine,
-        emit_runtime_summary=False,
-        stop_event=stop_event,
+    log_event(
+        logger,
+        logging.INFO,
+        "inference_runtime_configured",
+        "Inference runtime configured.",
+        log_context,
+        window_size=settings.window_size,
+        stride=settings.stride,
+        target_resolution=settings.target_resolution,
+        device=str(device),
+        class_label_count=len(settings.class_labels),
     )
+
+    try:
+        frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
+            source_adapter=source_adapter,
+            engine=engine,
+            emit_runtime_summary=False,
+            stop_event=stop_event,
+            log_context=log_context,
+        )
+    except RuntimeFailureState as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "inference_session_failed",
+            "Inference session failed during runtime execution.",
+            log_context,
+            exc_info=True,
+            phase=exc.phase,
+            frames_before_failure=exc.frames_before_failure,
+            error_type=type(exc.error).__name__,
+        )
+        raise
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "inference_session_failed",
+            "Inference session failed with an unexpected error.",
+            log_context,
+            exc_info=True,
+            error_type=type(exc).__name__,
+        )
+        raise
     expanded_results = expand_batched_inference_results(inference_results)
     track_ids = build_track_ids(expanded_results, settings.default_track_id)
 
     writer = ActionEventWriter(class_labels=settings.class_labels)
     writer.add_results(expanded_results, track_ids=track_ids)
+
+    log_event(
+        logger,
+        logging.INFO,
+        "inference_session_completed",
+        "Inference session completed.",
+        log_context,
+        frame_count=frame_count,
+        inference_count=inference_count,
+        event_count=len(writer.get_log().events),
+        duration_s=round(time.monotonic() - start_time, 3),
+    )
 
     return InferenceServiceResult(
         frame_count=frame_count,
@@ -108,12 +198,20 @@ def run_inference(
     )
 
 
-def run_offline_mp4_inference(request: InferenceServiceRequest) -> InferenceServiceResult:
-    """Run offline inference for local MP4 files only."""
+def run_offline_mp4_inference(
+    request: InferenceServiceRequest,
+    session_id: str | None = None,
+) -> InferenceServiceResult:
+    """Run offline inference for local MP4 files only.
+
+    Args:
+        request: Input request describing source and model settings.
+        session_id: Optional correlation ID for runtime logs.
+    """
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request)
+    return run_inference(request, session_id=session_id)
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:

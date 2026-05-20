@@ -1,6 +1,7 @@
 """MP4-to-JSON action inference CLI helpers."""
 
 import logging
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +9,11 @@ from src.inference import runtime as runtime_primitives
 from src.inference.context_adapter import ContextModule
 from src.inference.json_writer import ActionEventWriter
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    configure_runtime_logging,
+    log_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +33,26 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     """Run end-to-end MP4 inference and save ActionEvent log as JSON."""
     if not isinstance(request, InferenceCliRequest):
         raise TypeError("request must be an InferenceCliRequest instance")
+    configure_runtime_logging()
     _validate_request_paths(request)
     if request.input_path.suffix.lower() != ".mp4":
         raise ValueError("input_path must point to an .mp4 file")
+
+    session_id = uuid.uuid4().hex
+    log_context = RuntimeLogContext(
+        session_id=session_id,
+        source_type="file",
+        source_ref=str(request.input_path),
+    )
+    log_event(
+        logger,
+        logging.INFO,
+        "mp4_inference_started",
+        "MP4 inference requested.",
+        log_context,
+        input_path=request.input_path,
+        output_path=request.output_path,
+    )
 
     service_result = run_offline_mp4_inference(
         InferenceServiceRequest(
@@ -37,7 +60,8 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
             checkpoint_path=request.checkpoint_path,
             config_path=request.config_path,
             device=request.device,
-        )
+        ),
+        session_id=session_id,
     )
 
     context_data = {"scene_tag": "unknown", "confidence": 0.0}
@@ -62,6 +86,15 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         "[OK] Wrote %d action events to: %s",
         service_result.event_count,
         request.output_path,
+    )
+    log_event(
+        logger,
+        logging.INFO,
+        "mp4_inference_completed",
+        "MP4 inference completed and output written.",
+        log_context,
+        event_count=service_result.event_count,
+        output_path=request.output_path,
     )
 
     return 0
