@@ -6,16 +6,16 @@ import uuid
 from enum import Enum
 from typing import Optional
 
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    configure_runtime_logging,
+    log_event,
+)
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
     supports_session_id,
     run_inference,
-)
-from src.inference.runtime_logging import (
-    RuntimeLogContext,
-    configure_runtime_logging,
-    log_event,
 )
 
 logger = logging.getLogger(__name__)

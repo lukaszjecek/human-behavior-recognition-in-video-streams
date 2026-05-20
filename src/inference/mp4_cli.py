@@ -8,15 +8,15 @@ from pathlib import Path
 from src.inference import runtime as runtime_primitives
 from src.inference.context_adapter import ContextModule
 from src.inference.json_writer import ActionEventWriter
-from src.inference.service import (
-    InferenceServiceRequest,
-    supports_session_id,
-    run_offline_mp4_inference,
-)
 from src.inference.runtime_logging import (
     RuntimeLogContext,
     configure_runtime_logging,
     log_event,
+)
+from src.inference.service import (
+    InferenceServiceRequest,
+    supports_session_id,
+    run_offline_mp4_inference,
 )
 
 logger = logging.getLogger(__name__)

@@ -13,6 +13,9 @@ from starlette.requests import Request
 
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
+from src.app.core.settings import Settings
+from src.app.core.settings import settings as default_settings
+from src.app.endpoints.health import router as health_router
 from src.inference.runtime_logging import (
     RuntimeLogContext,
     configure_runtime_logging,
@@ -20,10 +23,6 @@ from src.inference.runtime_logging import (
     log_event,
 )
 
-# Application imports (settings and routers)
-from src.app.core.settings import Settings
-from src.app.core.settings import settings as default_settings
-from src.app.endpoints.health import router as health_router
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
 
     @app.middleware("http")
-    async def request_logging_middleware(request: Request, call_next) -> JSONResponse:
+    async def request_logging_middleware(request: Request, call_next: callable) -> JSONResponse:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.state.request_id = request_id
         log_context = RuntimeLogContext(session_id=request_id)

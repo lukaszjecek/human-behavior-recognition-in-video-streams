@@ -99,6 +99,7 @@ def produce_frames_from_source(
         frame_queue (Queue): Queue used to pass frames to the consumer.
         stop_event (Optional[Event]): When set, the producer stops reading
             new frames and exits.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Raises:
         RuntimeError: If the source cannot be opened.
@@ -235,6 +236,7 @@ def produce_frames_with_reconnect(
         retry_delay (float): Initial seconds to wait before the first retry.
         backoff_factor (float): Multiplier applied to *retry_delay* on each
             successive attempt.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     if source_adapter.source_type not in _RTSP_SOURCE_TYPES:
         # Non-stream sources do not need reconnect logic.
@@ -420,6 +422,7 @@ def consume_frame_queue(
         stop_event (Optional[Event]): When set the consumer discards remaining
             queued frames and terminates as soon as the current item is
             drained.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     frame_count = 0
     inference_results = []
@@ -521,6 +524,7 @@ def run_source(
             stats.
         stop_event: Optional threading.Event; when set the producer and
             consumer will stop early and the session will end gracefully.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -673,6 +677,7 @@ def run_source_with_reconnect(
             :exc:`SourceInterruptedError`.
         retry_delay: Initial back-off delay in seconds.
         backoff_factor: Multiplier applied to *retry_delay* on each attempt.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Processed frames, inference

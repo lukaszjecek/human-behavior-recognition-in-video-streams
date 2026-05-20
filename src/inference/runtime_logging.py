@@ -76,10 +76,12 @@ class JsonLogFormatter(logging.Formatter):
     """Format log records as JSON for structured ingestion."""
 
     def __init__(self, detail: str) -> None:
+        """Initialize the JSON log formatter with a detail level."""
         super().__init__()
         self._detail = detail
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as a JSON string for structured logging."""
         logger_name = getattr(record, "logger_name", None) or record.name
         payload: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
@@ -140,10 +142,10 @@ def log_event(
     context: RuntimeLogContext | None = None,
     *,
     exc_info: BaseException | bool | None = None,
-    **fields: Any,
+    **fields: object,
 ) -> None:
     """Log a structured runtime event with optional correlation context."""
-    extra: dict[str, Any] = {"event": event}
+    extra: dict[str, object] = {"event": event}
     extra["logger_name"] = logger.name
     if context is not None:
         extra.update(

@@ -14,13 +14,6 @@ import torch
 from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
-from src.inference.runtime_logging import (
-    RuntimeLogContext,
-    configure_runtime_logging,
-    get_build_metadata,
-    log_event,
-)
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -36,6 +29,13 @@ from src.inference.source_adapters import (
     normalize_source_type,
 )
 from src.inference.tensorize import FrameTensorizer
+from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    configure_runtime_logging,
+    get_build_metadata,
+    log_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +210,7 @@ def run_offline_mp4_inference(
 
     Args:
         request: Input request describing source and model settings.
+        stop_event: Optional stop flag for graceful shutdown.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
