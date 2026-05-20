@@ -1,10 +1,10 @@
 """Runtime session lifecycle hooks for inference service."""
 
+from enum import Enum
 import logging
 import threading
-import uuid
-from enum import Enum
 from typing import Optional
+import uuid
 
 from src.inference.runtime_logging import (
     RuntimeLogContext,
@@ -14,11 +14,12 @@ from src.inference.runtime_logging import (
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
-    supports_session_id,
     run_inference,
+    supports_session_id,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class SessionStatus(Enum):
     """Lifecycle states of an inference session."""
@@ -44,7 +45,8 @@ class InferenceSession:
         self._log_context = RuntimeLogContext(
             session_id=self._session_id,
             source_type=(
-                request.source_type if isinstance(request.source_type, str) else None
+                request.source_type if isinstance(
+                    request.source_type, str) else None
             ),
             source_ref=_resolve_source_ref(request),
         )
@@ -119,7 +121,8 @@ class InferenceSession:
                     session_id=self._session_id,
                 )
             else:
-                result = run_inference(self._request, stop_event=self._stop_event)
+                result = run_inference(
+                    self._request, stop_event=self._stop_event)
             with self._lock:
                 if self._stop_event.is_set():
                     self._status = SessionStatus.STOPPED

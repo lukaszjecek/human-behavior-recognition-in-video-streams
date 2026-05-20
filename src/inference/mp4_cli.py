@@ -1,9 +1,9 @@
 """MP4-to-JSON action inference CLI helpers."""
 
-import logging
-import uuid
 from dataclasses import dataclass
+import logging
 from pathlib import Path
+import uuid
 
 from src.inference import runtime as runtime_primitives
 from src.inference.context_adapter import ContextModule
@@ -15,8 +15,8 @@ from src.inference.runtime_logging import (
 )
 from src.inference.service import (
     InferenceServiceRequest,
-    supports_session_id,
     run_offline_mp4_inference,
+    supports_session_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,8 @@ def _validate_request_paths(request: InferenceCliRequest) -> None:
     if not isinstance(request.input_path, Path):
         raise TypeError("request.input_path must be a pathlib.Path instance")
     if not isinstance(request.checkpoint_path, Path):
-        raise TypeError("request.checkpoint_path must be a pathlib.Path instance")
+        raise TypeError(
+            "request.checkpoint_path must be a pathlib.Path instance")
     if not isinstance(request.config_path, Path):
         raise TypeError("request.config_path must be a pathlib.Path instance")
     if not isinstance(request.output_path, Path):

@@ -1,19 +1,20 @@
 """Reusable service entrypoint for adapter-based inference sources."""
 
+from dataclasses import dataclass
 import inspect
 import logging
-import time
-import uuid
-from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
+import time
 from typing import Callable
+import uuid
 
 import torch
 
 from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -23,19 +24,18 @@ from src.inference.runtime import (
     load_runtime_settings,
     resolve_inference_device,
 )
-from src.inference.source_adapters import (
-    InferenceSourceAdapter,
-    build_source_adapter,
-    normalize_source_type,
-)
-from src.inference.tensorize import FrameTensorizer
-from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
 from src.inference.runtime_logging import (
     RuntimeLogContext,
     configure_runtime_logging,
     get_build_metadata,
     log_event,
 )
+from src.inference.source_adapters import (
+    InferenceSourceAdapter,
+    build_source_adapter,
+    normalize_source_type,
+)
+from src.inference.tensorize import FrameTensorizer
 
 logger = logging.getLogger(__name__)
 

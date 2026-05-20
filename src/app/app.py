@@ -4,8 +4,8 @@ Provides create_app() that wires configuration, routers and basic error handling
 """
 import logging
 import time
-import uuid
 from typing import Optional
+import uuid
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -13,8 +13,7 @@ from starlette.requests import Request
 
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
-from src.app.core.settings import Settings
-from src.app.core.settings import settings as default_settings
+from src.app.core.settings import Settings, settings as default_settings
 from src.app.endpoints.health import router as health_router
 from src.inference.runtime_logging import (
     RuntimeLogContext,
@@ -26,9 +25,10 @@ from src.inference.runtime_logging import (
 
 logger = logging.getLogger(__name__)
 
+
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     """Create and configure FastAPI application.
-    
+
     Args:
         settings: Optional pre-built Settings instance (useful for tests).
 
@@ -112,7 +112,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Handle uncaught exceptions and return a generic 500 response."""
         request_id = getattr(request.state, "request_id", None)
-        log_context = RuntimeLogContext(session_id=request_id or uuid.uuid4().hex)
+        log_context = RuntimeLogContext(
+            session_id=request_id or uuid.uuid4().hex)
         log_event(
             logger,
             logging.ERROR,
