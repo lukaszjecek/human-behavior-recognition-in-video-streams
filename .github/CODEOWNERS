@@ -50,10 +50,10 @@
 /tests/inference/test_tensorize.py       @blanqtoja
 
 # CV / event logic
-/src/inference/action_event.py           @bartoszir
+/src/app/schemas/action_event.py         @Szymon110903
 /src/inference/json_writer.py            @bartoszir
 /src/inference/tracker.py                @bartoszir
-/tests/inference/test_action_event.py    @bartoszir
+/tests/inference/test_action_event.py    @Szymon110903
 /tests/inference/test_tracker.py         @bartoszir
 /tests/inference/data/                   @bartoszir
 /scripts/validate_modules.py             @bartoszir
@@ -69,6 +69,9 @@
 
 # backend
 /docs/backend.md                         @Szymon110903
+/app/api/*                               @Szymon110903
+/endpoints/*                             @Szymon110903
+/core/settings.py                        @Szymon110903
 
 # frontend
 /docs/frontend.md                        @Filipwasiel

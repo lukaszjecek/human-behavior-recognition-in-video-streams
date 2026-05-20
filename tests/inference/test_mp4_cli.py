@@ -7,7 +7,7 @@ import pytest
 import torch
 import yaml
 
-from src.inference.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent
 from src.inference.engine import InferenceResult
 from src.inference.mp4_cli import (
     InferenceCliRequest,

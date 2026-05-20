@@ -2,7 +2,7 @@ from typing import Optional
 
 import pytest
 
-from src.inference.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent
 from src.inference.alert_state_machine import (
     AlertRaisedEvent,
     AlertState,

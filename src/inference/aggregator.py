@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from src.inference.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent
 
 logger = logging.getLogger(__name__)
 
