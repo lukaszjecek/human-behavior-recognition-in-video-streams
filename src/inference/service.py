@@ -1,13 +1,13 @@
 """Reusable service entrypoint for adapter-based inference sources."""
 
-from dataclasses import dataclass
 import inspect
 import logging
+import time
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
-import time
 from typing import Callable
-import uuid
 
 import torch
 

@@ -1,9 +1,9 @@
 """MP4-to-JSON action inference CLI helpers."""
 
-from dataclasses import dataclass
 import logging
-from pathlib import Path
 import uuid
+from dataclasses import dataclass
+from pathlib import Path
 
 from src.inference import runtime as runtime_primitives
 from src.inference.context_adapter import ContextModule

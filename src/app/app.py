@@ -4,8 +4,8 @@ Provides create_app() that wires configuration, routers and basic error handling
 """
 import logging
 import time
-from typing import Optional
 import uuid
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse

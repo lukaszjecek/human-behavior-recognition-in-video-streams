@@ -1,10 +1,10 @@
 """Runtime session lifecycle hooks for inference service."""
 
-from enum import Enum
 import logging
 import threading
-from typing import Optional
 import uuid
+from enum import Enum
+from typing import Optional
 
 from src.inference.runtime_logging import (
     RuntimeLogContext,
