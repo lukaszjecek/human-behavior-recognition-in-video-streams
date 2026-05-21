@@ -101,7 +101,8 @@ def produce_frames_from_source(
         window_size (int): Number of frames in temporal window (used for image fallback).
 
     Raises:
-        RuntimeError: If the source cannot be opened.
+        RuntimeError: If an RTSP source cannot be opened. Other source types
+            may stop without raising on open failure.
     """
     try:
         is_webp = (
