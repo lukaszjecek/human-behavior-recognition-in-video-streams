@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
-from src.inference.engine import InferenceEngine
+from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.source_adapters import FileSourceAdapter, InferenceSourceAdapter
 from src.inference.tracker import BaseTracker, SingleTrackTracker
@@ -335,6 +335,7 @@ def consume_frame_queue(
     engine: InferenceEngine,
     stats: dict,
     stop_event: Optional[Event] = None,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
 ) -> None:
     """Consume frames from a queue with an inference engine and update stats.
 
@@ -345,6 +346,8 @@ def consume_frame_queue(
         stop_event (Optional[Event]): When set the consumer discards remaining
             queued frames and terminates as soon as the current item is
             drained.
+        on_result (Optional[Callable[[InferenceResult], None]]): Callback invoked
+            when a valid InferenceResult is produced.
     """
     frame_count = 0
     inference_results = []
@@ -382,6 +385,8 @@ def consume_frame_queue(
 
         if result is not None:
             inference_results.append(result)
+            if on_result is not None:
+                on_result(result)
 
     stats["frame_count"] = frame_count
     stats["inference_count"] = len(inference_results)
@@ -399,6 +404,7 @@ def run_source(
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
     stop_event: Optional[Event] = None,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run offline inference on a generic source adapter.
 
@@ -445,7 +451,7 @@ def run_source(
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
-        kwargs={"stop_event": stop_event},
+        kwargs={"stop_event": stop_event, "on_result": on_result},
     )
 
     producer.start()
@@ -496,6 +502,7 @@ def run_source_with_reconnect(
     max_retries: int = _DEFAULT_MAX_RETRIES,
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run inference with automatic reconnect for stream (RTSP) sources.
 
@@ -552,7 +559,7 @@ def run_source_with_reconnect(
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
-        kwargs={"stop_event": stop_event},
+        kwargs={"stop_event": stop_event, "on_result": on_result},
     )
 
     producer.start()

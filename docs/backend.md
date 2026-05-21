@@ -122,3 +122,82 @@ The backend provides asynchronous REST endpoints to manage offline video inferen
 - **Session Manager:** (`src/app/services/session_manager.py`) Manages state and `asyncio.Task` references in-memory.
 - **Background Execution:** Inference is pushed to a background thread using `asyncio.to_thread()` so the FastAPI server remains fully responsive.
 - **Graceful Shutdown:** Stopping a session injects a `threading.Event` signal deep into the offline frame producer loop (`src/inference/offline_runtime.py`), causing the video reading loop to break cleanly on the next frame.
+
+
+# Live WebSocket & Alerting Pipeline
+
+The backend supports near real-time streaming of live behavior detections and system alerts to downstream web clients using WebSockets.
+
+## Endpoints
+
+- `WS /ws/live`
+  - Accepts incoming client WebSocket connections.
+  - Automatically registers the connection with the `WebSocketManager`.
+  - Streams `EventPayload` structures (both `DETECTION` and `ALERT` types) in JSON format in real-time.
+  - Automatically handles connection cleanup on client disconnect.
+
+- `WS /ws/echo`
+  - A simple testing endpoint that echoes client messages back.
+
+## Key Components
+
+### 1. WebSocketManager (`src/app/services/websocket_manager.py`)
+Provides a thread-safe singleton wrapper to register, manage, and broadcast events to all active WebSocket connections.
+- **Connection Registry:** Holds active FastAPI `WebSocket` connection objects.
+- **Thread Safety:** Uses `asyncio.run_coroutine_threadsafe` along with the captured ASGI event loop reference. This allows background inference threads (run via `asyncio.to_thread`) to safely submit broadcast requests back to the main asynchronous event loop.
+- **Auto-Cleanup:** If broadcasting to a specific client fails (e.g., due to network dropping), that client is silently disconnected and removed from the active connections pool.
+
+### 2. Runtime Callback Pipeline (`src/inference/offline_runtime.py`)
+- Employs an optional callback parameter `on_result: Optional[Callable[[InferenceResult], None]]` on `consume_frame_queue()`, `run_source()`, and `run_source_with_reconnect()`.
+- Whenever a valid `InferenceResult` window is computed by the `InferenceEngine`, it is immediately forwarded to the callback rather than waiting for the entire video to finish processing.
+
+### 3. Integrated Alerting Pipeline (`src/inference/service.py`)
+- During runtime, the `on_result` callback is mapped to the internal `handle_result` function.
+- This function:
+  1. Parses the raw model `InferenceResult`.
+  2. Builds the canonical `ActionEvent` via `ActionEventWriter`.
+  3. Sends a `DETECTION` `EventPayload` message to the `WebSocketManager`.
+  4. Feeds the event into the `AlertStateMachine`.
+  5. If the state machine triggers a state transition (entering/resolving alert state based on settings like `persistence_threshold`, `resolve_threshold`, and `danger_labels`), it constructs an `AlertData` structure and sends an `ALERT` `EventPayload` to the `WebSocketManager`.
+
+### 4. Configuration & Settings (`src/inference/runtime.py`)
+Alert behavior is governed by the `alert` section of the YAML configuration loaded into `InferenceRuntimeSettings`:
+- `persistence_threshold`: Number of consecutive frames/windows showing a danger label required to trigger an alert.
+- `resolve_threshold`: Number of consecutive frames/windows without danger labels required to resolve an alert.
+- `danger_labels`: A list of action labels categorized as dangerous (e.g., `"fall"`, `"violence"`).
+
+---
+
+## Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Source as Video/RTSP Source
+    participant Engine as Inference Engine
+    participant Runner as Inference Service Thread
+    participant StateMachine as Alert State Machine
+    participant WSManager as WebSocketManager
+    participant Client as WS Client (/ws/live)
+
+    Client->>WSManager: Connect /ws/live (FastAPI event loop)
+    WSManager-->>Client: Connection Accepted
+    Note over Runner, Source: background inference loop
+    Source->>Engine: Process Video Frames
+    Engine->>Runner: InferenceResult Computed
+    Runner->>WSManager: broadcast_sync(DETECTION Payload)
+    WSManager->>Client: Send JSON (DETECTION)
+    Runner->>StateMachine: process_event(ActionEvent)
+    alt Danger label threshold exceeded
+        StateMachine->>Runner: Alert Triggered
+        Runner->>WSManager: broadcast_sync(ALERT Payload)
+        WSManager->>Client: Send JSON (ALERT)
+    end
+```
+
+---
+
+## Verification and Testing
+
+Automated tests are written in [test_websocket.py](../tests/app/test_websocket.py). They cover:
+- **WebSocket Echo:** Validates standard WebSocket message echo loop.
+- **Live Event Broadcasting:** Spawns a mock WebSocket connection client using `TestClient.websocket_connect("/ws/live")`, pushes detection/alert payloads to the singleton `WebSocketManager`, and asserts that the client receives the serialized JSON structures conforming to the Sprint 3 payload contract.

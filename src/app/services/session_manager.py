@@ -6,6 +6,7 @@ from threading import Event
 from uuid import UUID, uuid4
 
 from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
+from src.app.services.websocket_manager import websocket_manager
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
 
@@ -102,6 +103,7 @@ class InferenceSessionManager:
                 run_offline_mp4_inference,
                 inference_request,
                 session.stop_event,
+                websocket_manager.broadcast_sync,
             )
 
             # Only update to COMPLETED if not stopped manually

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import yaml
@@ -23,6 +23,9 @@ class InferenceRuntimeSettings:
     class_labels: list[str]
     default_track_id: int | None
     device: str | None
+    persistence_threshold: int = 3
+    resolve_threshold: int = 1
+    danger_labels: Optional[list[str]] = None
 
 
 class WindowModelAdapter:
@@ -95,6 +98,7 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     pipeline_cfg = _ensure_mapping(raw_config.get("pipeline", {}), "pipeline")
     inference_cfg = _ensure_mapping(raw_config.get("inference", {}), "inference")
     tracking_cfg = _ensure_mapping(raw_config.get("tracking", {}), "tracking")
+    alert_cfg = _ensure_mapping(raw_config.get("alert", {}), "alert")
 
     target_resolution = _parse_target_resolution(
         pipeline_cfg.get("target_resolution", (224, 224)),
@@ -111,6 +115,22 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     default_track_id = _parse_optional_track_id(tracking_cfg.get("default_track_id"))
     device = _parse_optional_device(inference_cfg.get("device"), "inference.device")
 
+    persistence_threshold = _parse_positive_int(
+        alert_cfg.get("persistence_threshold", 3),
+        "alert.persistence_threshold",
+    )
+    resolve_threshold = _parse_positive_int(
+        alert_cfg.get("resolve_threshold", 1),
+        "alert.resolve_threshold",
+    )
+    danger_labels = alert_cfg.get("danger_labels", None)
+    if danger_labels is not None:
+        if not isinstance(danger_labels, list):
+            raise TypeError("alert.danger_labels must be a list of strings")
+        for label in danger_labels:
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError("alert.danger_labels must contain only non-empty strings")
+
     return InferenceRuntimeSettings(
         target_resolution=target_resolution,
         window_size=window_size,
@@ -118,6 +138,9 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
         class_labels=class_labels,
         default_track_id=default_track_id,
         device=device,
+        persistence_threshold=persistence_threshold,
+        resolve_threshold=resolve_threshold,
+        danger_labels=danger_labels,
     )
 
 

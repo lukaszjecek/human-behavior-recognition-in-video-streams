@@ -3,10 +3,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
+from typing import Callable, Optional
 
 import torch
 
-from src.app.schemas.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
+from src.inference.alert_state_machine import AlertStateMachine
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import run_source_with_reconnect
@@ -59,6 +61,7 @@ class InferenceServiceResult:
 def run_inference(
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
+    on_event: Optional[Callable[[EventPayload], None]] = None,
 ) -> InferenceServiceResult:
     """Run inference and return typed in-memory results."""
     if not isinstance(request, InferenceServiceRequest):
@@ -86,17 +89,51 @@ def run_inference(
         model=model_adapter,
     )
 
+    alert_sm = AlertStateMachine(
+        persistence_threshold=settings.persistence_threshold,
+        resolve_threshold=settings.resolve_threshold,
+        danger_labels=settings.danger_labels,
+    )
+    writer = ActionEventWriter(class_labels=settings.class_labels)
+
+    def handle_result(res: InferenceResult) -> None:
+        expanded = expand_batched_inference_results([res])
+        for r in expanded:
+            tid = settings.default_track_id
+            added = writer.add_result(r, track_id=tid)
+            if added:
+                evt = writer.get_log().events[-1]
+                if on_event is not None:
+                    detection_payload = EventPayload(
+                        event_type=EventType.DETECTION,
+                        data=evt,
+                        camera_id=str(request.video_path.name) if request.video_path else None
+                    )
+                    on_event(detection_payload)
+
+                alert_evt = alert_sm.process_event(evt)
+                if alert_evt is not None:
+                    alert_data = AlertData(
+                        severity="HIGH",
+                        message=f"Alert triggered for label: {alert_evt.label}",
+                        action_event=alert_evt.triggering_event
+                    )
+                    if on_event is not None:
+                        alert_payload = EventPayload(
+                            event_type=EventType.ALERT,
+                            data=alert_data,
+                            camera_id=str(request.video_path.name) if request.video_path else None
+                        )
+                        on_event(alert_payload)
+
     frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
         source_adapter=source_adapter,
         engine=engine,
         emit_runtime_summary=False,
         stop_event=stop_event,
+        on_result=handle_result,
     )
     expanded_results = expand_batched_inference_results(inference_results)
-    track_ids = build_track_ids(expanded_results, settings.default_track_id)
-
-    writer = ActionEventWriter(class_labels=settings.class_labels)
-    writer.add_results(expanded_results, track_ids=track_ids)
 
     return InferenceServiceResult(
         frame_count=frame_count,
@@ -111,12 +148,13 @@ def run_inference(
 def run_offline_mp4_inference(
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
+    on_event: Optional[Callable[[EventPayload], None]] = None,
 ) -> InferenceServiceResult:
     """Run offline inference for local MP4 files only."""
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request, stop_event=stop_event)
+    return run_inference(request, stop_event=stop_event, on_event=on_event)
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
