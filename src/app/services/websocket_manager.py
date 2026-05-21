@@ -1,6 +1,12 @@
+"""WebSocket connection manager for real-time client communication.
+
+Provides thread-safe event broadcasting to all connected WebSocket clients.
+"""
+
 import asyncio
 import logging
 from typing import List, Optional
+
 from fastapi import WebSocket
 
 from src.app.schemas.action_event import EventPayload
@@ -12,6 +18,7 @@ class WebSocketManager:
     """Manages WebSocket connections and provides a thread-safe broadcast mechanism."""
 
     def __init__(self) -> None:
+        """Initialize the WebSocket manager with empty connections and loop reference."""
         self.active_connections: List[WebSocket] = []
         self.loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -25,13 +32,19 @@ class WebSocketManager:
                 self.loop = asyncio.get_running_loop()
             except RuntimeError:
                 pass
-        logger.info(f"WebSocket client connected. Active connections: {len(self.active_connections)}")
+        logger.info(
+            f"WebSocket client connected. "
+            f"Active connections: {len(self.active_connections)}"
+        )
 
     def disconnect(self, websocket: WebSocket) -> None:
         """Unregister a disconnected WebSocket connection."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        logger.info(f"WebSocket client disconnected. Active connections: {len(self.active_connections)}")
+        logger.info(
+            f"WebSocket client disconnected. "
+            f"Active connections: {len(self.active_connections)}"
+        )
 
     async def broadcast(self, message: dict) -> None:
         """Broadcast a message (as JSON) to all connected clients."""

@@ -418,6 +418,8 @@ def run_source(
             stats.
         stop_event: Optional threading.Event; when set the producer and
             consumer will stop early and the session will end gracefully.
+        on_result: Optional callback function triggered when a new
+            inference result is available.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -523,6 +525,8 @@ def run_source_with_reconnect(
             :exc:`SourceInterruptedError`.
         retry_delay: Initial back-off delay in seconds.
         backoff_factor: Multiplier applied to *retry_delay* on each attempt.
+        on_result: Optional callback function triggered when a new
+            inference result is available.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Processed frames, inference
