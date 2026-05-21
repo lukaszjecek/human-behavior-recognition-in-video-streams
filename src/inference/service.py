@@ -15,7 +15,6 @@ from src.inference.offline_runtime import run_source_with_reconnect
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
-    build_track_ids,
     expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
@@ -166,16 +165,18 @@ def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
         )
     if request.video_path is None:
         raise ValueError(
-            "run_offline_mp4_inference requires request.video_path pointing to an .mp4 file"
+            "run_offline_mp4_inference requires request.video_path pointing to a video file"
         )
     if request.source_uri is not None:
         raise ValueError(
             "run_offline_mp4_inference does not accept request.source_uri; "
             "provide request.video_path"
         )
-    if request.video_path.suffix.lower() != ".mp4":
+    allowed_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".webp"}
+    if request.video_path.suffix.lower() not in allowed_extensions:
         raise ValueError(
-            "run_offline_mp4_inference requires request.video_path with .mp4 extension"
+            "run_offline_mp4_inference requires request.video_path "
+            f"with a supported video extension ({', '.join(sorted(allowed_extensions))})"
         )
 
 

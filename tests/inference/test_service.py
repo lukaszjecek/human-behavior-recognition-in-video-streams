@@ -178,14 +178,14 @@ def test_run_offline_mp4_inference_rejects_rtsp_request(tmp_path):
         run_offline_mp4_inference(request)
 
 
-def test_run_offline_mp4_inference_rejects_non_mp4_input(tmp_path):
+def test_run_offline_mp4_inference_rejects_non_video_input(tmp_path):
     request = InferenceServiceRequest(
-        video_path=tmp_path / "sample.avi",
+        video_path=tmp_path / "sample.txt",
         checkpoint_path=tmp_path / "dummy_checkpoint.pth",
         config_path=tmp_path / "inference.yml",
     )
 
-    with pytest.raises(ValueError, match=r"\.mp4 extension"):
+    with pytest.raises(ValueError, match="supported video extension"):
         run_offline_mp4_inference(request)
 
 

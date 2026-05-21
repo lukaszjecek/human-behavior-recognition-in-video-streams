@@ -64,3 +64,41 @@ def test_websocket_live_stream() -> None:
         assert data["camera_id"] == "test_cam.mp4"
         assert data["data"]["severity"] == "HIGH"
         assert data["data"]["message"] == "Alert triggered for label: jump"
+
+
+def test_websocket_api_echo() -> None:
+    """Test that the api prefix echo websocket works correctly."""
+    app = create_app()
+    client = TestClient(app)
+    with client.websocket_connect("/api/websocket/echo") as websocket:
+        websocket.send_text("hello")
+        data = websocket.receive_text()
+        assert data == "echo: hello"
+
+
+def test_websocket_api_live_stream() -> None:
+    """Test that live notifications are correctly pushed to /api/websocket/live clients."""
+    app = create_app()
+    client = TestClient(app)
+    with client.websocket_connect("/api/websocket/live") as websocket:
+        action_evt = ActionEvent(
+            start_frame_index=1,
+            end_frame_index=16,
+            start_timestamp=0.0,
+            end_timestamp=1.0,
+            label="jump",
+            confidence=0.85,
+        )
+        payload = EventPayload(
+            event_type=EventType.DETECTION,
+            camera_id="test_cam.mp4",
+            data=action_evt,
+        )
+
+        websocket_manager.broadcast_sync(payload)
+
+        data = websocket.receive_json()
+        assert data["event_type"] == "DETECTION"
+        assert data["camera_id"] == "test_cam.mp4"
+        assert data["data"]["label"] == "jump"
+
