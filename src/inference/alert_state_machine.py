@@ -207,6 +207,42 @@ class AlertStateMachine:
         self._tracks.clear()
         logger.debug("AlertStateMachine: all tracks reset to INACTIVE")
 
+    def set_thresholds(
+        self,
+        persistence_threshold: int,
+        resolve_threshold: int,
+    ) -> None:
+        """Update persistence and resolve thresholds without resetting track states.
+
+        Allows dynamic threshold adjustment (e.g. driven by context policy)
+        while preserving accumulated hit/miss counts for all tracks.
+
+        Args:
+            persistence_threshold: New number of consecutive danger events
+                required to transition to ACTIVE. Must be >= 1.
+            resolve_threshold: New number of consecutive miss events required
+                to transition to RESOLVED. Must be >= 1.
+
+        Raises:
+            TypeError: If arguments are not integers.
+            ValueError: If arguments are less than 1.
+        """
+        if not isinstance(persistence_threshold, int) or isinstance(persistence_threshold, bool):
+            raise TypeError("persistence_threshold must be an integer")
+        if persistence_threshold < 1:
+            raise ValueError("persistence_threshold must be >= 1")
+        if not isinstance(resolve_threshold, int) or isinstance(resolve_threshold, bool):
+            raise TypeError("resolve_threshold must be an integer")
+        if resolve_threshold < 1:
+            raise ValueError("resolve_threshold must be >= 1")
+        self._persistence_threshold = persistence_threshold
+        self._resolve_threshold = resolve_threshold
+        logger.debug(
+            "AlertStateMachine: thresholds updated (persistence=%d, resolve=%d)",
+            persistence_threshold,
+            resolve_threshold,
+        )
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

@@ -299,3 +299,51 @@ def test_invalid_danger_labels_raises():
         AlertStateMachine(danger_labels="fight")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         AlertStateMachine(danger_labels=[1, 2])  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# set_thresholds
+# ---------------------------------------------------------------------------
+
+
+def test_set_thresholds_updates_persistence():
+    # Start with persistence=3; lower to 1 mid-sequence — next hit should activate.
+    sm = AlertStateMachine(persistence_threshold=3, danger_labels=["fight"])
+    sm.process_event(_evt("fight"))  # hit 1 → CANDIDATE
+    assert sm.get_state() == AlertState.CANDIDATE
+
+    sm.set_thresholds(persistence_threshold=1, resolve_threshold=1)
+    # Threshold is now 1; one more danger event triggers ACTIVE.
+    alert = sm.process_event(_evt("fight"))  # hit 2, threshold=1 already met → ACTIVE
+    assert alert is not None
+    assert sm.get_state() == AlertState.ACTIVE
+
+
+def test_set_thresholds_preserves_track_state():
+    sm = AlertStateMachine(persistence_threshold=3, danger_labels=["fight"])
+    sm.process_event(_evt("fight", track_id=1))  # hit 1
+    sm.process_event(_evt("fight", track_id=1))  # hit 2
+
+    record_before = sm.get_record(track_id=1)
+    assert record_before is not None
+    hits_before = record_before.consecutive_hits
+    state_before = record_before.state
+
+    sm.set_thresholds(persistence_threshold=5, resolve_threshold=2)
+
+    record_after = sm.get_record(track_id=1)
+    assert record_after is not None
+    assert record_after.consecutive_hits == hits_before
+    assert record_after.state == state_before
+
+
+def test_set_thresholds_invalid_raises():
+    sm = AlertStateMachine()
+    with pytest.raises(ValueError):
+        sm.set_thresholds(persistence_threshold=0, resolve_threshold=1)
+    with pytest.raises(ValueError):
+        sm.set_thresholds(persistence_threshold=1, resolve_threshold=0)
+    with pytest.raises(TypeError):
+        sm.set_thresholds(persistence_threshold="2", resolve_threshold=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        sm.set_thresholds(persistence_threshold=1, resolve_threshold=1.5)  # type: ignore[arg-type]
