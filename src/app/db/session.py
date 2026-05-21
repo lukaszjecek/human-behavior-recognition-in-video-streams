@@ -21,7 +21,16 @@ _engine: Engine | None = None
 class LazySessionmaker(sessionmaker[Session]):
     """A sessionmaker subclass that ensures get_engine() is called before instantiating sessions."""
 
-    def __call__(self, *args, **kwargs) -> Session:
+    def __call__(self, *args: Any, **kwargs: Any) -> Session:  # noqa: ANN401
+        """Create a new session, ensuring the database engine is initialized first.
+
+        Args:
+            *args: Variable length argument list passed to the superclass constructor.
+            **kwargs: Arbitrary keyword arguments passed to the superclass constructor.
+
+        Returns:
+            Session: The constructed SQLAlchemy Session instance.
+        """
         # Ensure engine is initialized and SessionLocal is configured
         get_engine()
         return super().__call__(*args, **kwargs)
