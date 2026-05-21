@@ -515,7 +515,11 @@ def consume_frame_queue(
         if result is not None:
             inference_results.append(result)
             if on_result is not None:
-                on_result(result)
+                try:
+                    on_result(result)
+                except Exception as exc:
+                    stats["consumer_error"] = exc
+                    break
 
     stats["frame_count"] = frame_count
     stats["inference_count"] = len(inference_results)
