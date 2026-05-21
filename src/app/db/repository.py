@@ -53,7 +53,7 @@ def save_event(db: Session, payload: EventPayload) -> DBEvent:
             db_event.event_type,
         )
         return db_event
-    except Exception as e:
+    except Exception:
         db.rollback()
         logger.exception("Failed to write event %s to database.", payload.event_id)
         raise

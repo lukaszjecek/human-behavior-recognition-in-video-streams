@@ -55,7 +55,7 @@ def read_events(
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error parsing stored event payload: {e}",
+                detail="Error parsing stored event payload",
             )
     return payloads
 
@@ -87,5 +87,5 @@ def read_event(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error parsing stored event payload: {e}",
+            detail="Error parsing stored event payload",
         )

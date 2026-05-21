@@ -48,7 +48,13 @@ def get_engine() -> Engine:
     global _engine
     if _engine is None:
         db_url = settings.database_url or ""
-        logger.info("Initializing database engine with URL: %s", db_url)
+        if db_url:
+            from sqlalchemy.engine import make_url
+            url_obj = make_url(db_url)
+            redacted_url = url_obj.render_as_string(hide_password=True)
+            logger.info("Initializing database engine with URL: %s", redacted_url)
+        else:
+            logger.info("Initializing database engine with empty URL")
         if db_url.startswith("sqlite"):
             from sqlalchemy.pool import StaticPool
             _engine = create_engine(

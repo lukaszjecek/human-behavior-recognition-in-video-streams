@@ -144,7 +144,13 @@ def produce_frames_from_source(
                         frames_read += 1
                 else:
                     raise ValueError("Not an animated image")
-            except Exception:
+            except (OSError, ValueError) as e:
+                logger.info(
+                    "Pillow failed to read animated image %s (%s). "
+                    "Falling back to static image.",
+                    source_adapter.source_ref,
+                    e,
+                )
                 # Fallback for static image - read single frame and duplicate it
                 img = cv2.imread(source_adapter.source_ref)
                 if img is not None:
@@ -224,7 +230,13 @@ def produce_frames_from_source(
                                 frames_read += 1
                         else:
                             raise ValueError("Not an animated image")
-                    except Exception:
+                    except (OSError, ValueError) as e:
+                        logger.info(
+                            "Pillow failed to read animated image %s (%s). "
+                            "Falling back to static image.",
+                            source_adapter.source_ref,
+                            e,
+                        )
                         # Fallback for static image - read single frame and duplicate it
                         img = cv2.imread(source_adapter.source_ref)
                         if img is not None:
