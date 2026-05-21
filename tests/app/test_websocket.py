@@ -1,5 +1,5 @@
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from src.app.app import create_app
 from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
