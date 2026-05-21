@@ -132,16 +132,7 @@ class InferenceSessionManager:
                 session.update_status(SessionStatus.COMPLETED)
 
         except Exception as exc:
-            import sys
-            import traceback
-            print(
-                f"ERROR: Session {session.id} execution failed: {exc}",
-                file=sys.stderr,
-                flush=True,
-            )
-            traceback.print_exc(file=sys.stderr)
-            sys.stderr.flush()
-            logger.exception(f"Session {session.id} execution failed")
+            logger.exception("Session %s execution failed", session.id)
             # If the session wasn't explicitly stopped, mark as FAILED
             if session.status != SessionStatus.STOPPED:
                 session.update_status(SessionStatus.FAILED, str(exc))
