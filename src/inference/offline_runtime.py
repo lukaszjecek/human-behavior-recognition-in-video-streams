@@ -104,38 +104,49 @@ def produce_frames_from_source(
         RuntimeError: If the source cannot be opened.
     """
     try:
-        cap = source_adapter.open_capture()
-
-        try:
-            if not cap.isOpened():
-                raise RuntimeError(
-                    "Could not open "
-                    f"{source_adapter.source_type} source: {source_adapter.source_ref}",
-                )
-
+        is_webp = (
+            source_adapter.source_type == "file"
+            and source_adapter.source_ref.lower().endswith(".webp")
+        )
+        if is_webp:
             frames_read = 0
-            while True:
-                if stop_event is not None and stop_event.is_set():
-                    logger.debug(
-                        "Producer stopping early on stop_event (read %d frames).",
-                        frames_read,
+            import sys
+
+            import cv2
+            import numpy as np
+            from PIL import Image, ImageSequence
+
+            try:
+                pil_img = Image.open(source_adapter.source_ref)
+                is_animated = getattr(pil_img, "is_animated", False)
+                n_frames = getattr(pil_img, "n_frames", 1)
+
+                if is_animated and n_frames > 1:
+                    print(
+                        f"INFO: Source {source_adapter.source_ref} "
+                        f"is an animated image with {n_frames} frames. "
+                        "Extracting frames using Pillow.",
+                        file=sys.stdout,
+                        flush=True,
                     )
-                    break
-
-                ret, frame = cap.read()
-
-                if not ret:
-                    break
-
-                frames_read += 1
-                frame_queue.put(frame)
-
-            # Fallback for static images (like webp) if no frames were read
-            if frames_read == 0 and source_adapter.source_type == "file":
-                import cv2
+                    logger.info(
+                        "Source is an animated image with %d frames. "
+                        "Extracting using Pillow.",
+                        n_frames,
+                    )
+                    for frame in ImageSequence.Iterator(pil_img):
+                        if stop_event is not None and stop_event.is_set():
+                            break
+                        frame_rgb = frame.convert("RGB")
+                        frame_bgr = cv2.cvtColor(np.array(frame_rgb), cv2.COLOR_RGB2BGR)
+                        frame_queue.put(frame_bgr)
+                        frames_read += 1
+                else:
+                    raise ValueError("Not an animated image")
+            except Exception:
+                # Fallback for static image - read single frame and duplicate it
                 img = cv2.imread(source_adapter.source_ref)
                 if img is not None:
-                    import sys
                     print(
                         f"INFO: Source {source_adapter.source_ref} is a static image. "
                         f"Duplicating frame {window_size} times.",
@@ -151,8 +162,88 @@ def produce_frames_from_source(
                             break
                         frame_queue.put(img)
                         frames_read += 1
-        finally:
-            cap.release()
+        else:
+            cap = source_adapter.open_capture()
+            try:
+                if not cap.isOpened():
+                    raise RuntimeError(
+                        "Could not open "
+                        f"{source_adapter.source_type} source: {source_adapter.source_ref}",
+                    )
+
+                frames_read = 0
+                while True:
+                    if stop_event is not None and stop_event.is_set():
+                        logger.debug(
+                            "Producer stopping early on stop_event (read %d frames).",
+                            frames_read,
+                        )
+                        break
+
+                    ret, frame = cap.read()
+
+                    if not ret:
+                        break
+
+                    frames_read += 1
+                    frame_queue.put(frame)
+
+                # Fallback for images (like webp) if no frames were read by VideoCapture
+                if frames_read == 0 and source_adapter.source_type == "file":
+                    import sys
+
+                    import cv2
+                    import numpy as np
+                    from PIL import Image, ImageSequence
+
+                    try:
+                        pil_img = Image.open(source_adapter.source_ref)
+                        is_animated = getattr(pil_img, "is_animated", False)
+                        n_frames = getattr(pil_img, "n_frames", 1)
+
+                        if is_animated and n_frames > 1:
+                            print(
+                                f"INFO: Source {source_adapter.source_ref} "
+                                f"is an animated image with {n_frames} frames. "
+                                "Extracting frames using Pillow.",
+                                file=sys.stdout,
+                                flush=True,
+                            )
+                            logger.info(
+                                "Source is an animated image with %d frames. "
+                                "Extracting using Pillow.",
+                                n_frames,
+                            )
+                            for frame in ImageSequence.Iterator(pil_img):
+                                if stop_event is not None and stop_event.is_set():
+                                    break
+                                frame_rgb = frame.convert("RGB")
+                                frame_bgr = cv2.cvtColor(np.array(frame_rgb), cv2.COLOR_RGB2BGR)
+                                frame_queue.put(frame_bgr)
+                                frames_read += 1
+                        else:
+                            raise ValueError("Not an animated image")
+                    except Exception:
+                        # Fallback for static image - read single frame and duplicate it
+                        img = cv2.imread(source_adapter.source_ref)
+                        if img is not None:
+                            print(
+                                f"INFO: Source {source_adapter.source_ref} is a static image. "
+                                f"Duplicating frame {window_size} times.",
+                                file=sys.stdout,
+                                flush=True,
+                            )
+                            logger.info(
+                                "Source is a static image. "
+                                f"Duplicating frame {window_size} times."
+                            )
+                            for _ in range(window_size):
+                                if stop_event is not None and stop_event.is_set():
+                                    break
+                                frame_queue.put(img)
+                                frames_read += 1
+            finally:
+                cap.release()
     finally:
         frame_queue.put(EOF_SENTINEL)
 

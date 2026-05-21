@@ -227,3 +227,45 @@ def test_run_offline_mp4_inference_image_fallback(monkeypatch, tmp_path):
     assert result.frame_count == 4
     assert result.inference_count == 1
 
+
+def test_run_offline_mp4_inference_animated_webp(monkeypatch, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
+    # Create dummy webp path
+    video_path = tmp_path / "animated.webp"
+    video_path.write_bytes(b"mock bytes")
+
+    # Mock PIL Image.open to return a fake animated image
+    class FakeFrame:
+        def convert(self, mode):
+            return self
+        def __array__(self, dtype=None):
+            return np.zeros((64, 64, 3), dtype=np.uint8)
+
+    class FakePILImage:
+        is_animated = True
+        n_frames = 5
+        def __init__(self):
+            self._idx = 0
+        def __iter__(self):
+            return self
+
+    monkeypatch.setattr("PIL.Image.open", lambda path: FakePILImage())
+    monkeypatch.setattr("PIL.ImageSequence.Iterator", lambda img: [FakeFrame() for _ in range(5)])
+
+    request = InferenceServiceRequest(
+        video_path=video_path,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+
+    result = run_offline_mp4_inference(request)
+
+    # Since the animated image has 5 frames, all 5 frames should be processed.
+    assert result.frame_count == 5
+    assert result.inference_count == 1
+
+
