@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.app.schemas.action_event import ActionEvent
+from src.inference.alert_state_machine import AlertRaisedEvent, AlertState, AlertStateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,16 @@ class ContextPolicy:
         self._default_resolve_threshold = default_resolve_threshold
         self._rules: dict[tuple[str, str], ContextRule] = dict(rules) if rules else {}
 
+    @property
+    def default_persistence_threshold(self) -> int: 
+        """Default persistence threshold used when no rule matches."""
+        return self._default_persistence_threshold
+
+    @property
+    def default_resolve_threshold(self) -> int:
+        """Default resolve threshold used when no rule matches."""
+        return self._default_resolve_threshold
+
     def evaluate(
         self,
         event: ActionEvent,
@@ -159,4 +170,83 @@ class ContextPolicy:
         return (rule.persistence_threshold, rule.resolve_threshold)
 
 
-__all__ = ["ContextPolicy", "ContextRule"]
+class ContextAwareAlertProcessor:
+    """Production component combining ContextPolicy and AlertStateMachine.
+
+    Evaluates ContextPolicy for each ActionEvent, skips blocked events,
+    dynamically updates AlertStateMachine thresholds based on scene context,
+    and preserves alert state across consecutive windows.
+
+    Example:
+        >>> policy = ContextPolicy(
+        ...     rules={
+        ...         ("fight", "outdoor"): ContextRule(persistence_threshold=2, resolve_threshold=1),
+        ...         ("fight", "indoor"): ContextRule(persistence_threshold=5, resolve_threshold=1),
+        ...     }
+        ... )
+        >>> processor = ContextAwareAlertProcessor(policy=policy, danger_labels=["fight"])
+        >>> alert = processor.process(event)  # None or AlertRaisedEvent
+    """
+
+    def __init__(
+        self,
+        policy: ContextPolicy,
+        danger_labels: Optional[list[str]] = None,
+    ) -> None:
+        """Initialize the processor.
+
+        Args:
+            policy: ContextPolicy instance used to evaluate thresholds.
+            danger_labels: Labels considered dangerous by AlertStateMachine.
+        """
+        self._policy = policy
+        self._sm = AlertStateMachine(
+            persistence_threshold=policy.default_persistence_threshold,
+            resolve_threshold=policy.default_resolve_threshold,
+            danger_labels=danger_labels,
+        )
+
+    def process(self, event: ActionEvent) -> Optional[AlertRaisedEvent]:
+        """Process one ActionEvent through policy and alert state machine.
+
+        Steps:
+            1. Evaluate ContextPolicy for this event.
+            2. If policy returns None (blocked) — return None immediately.
+            3. Call set_thresholds() on the internal AlertStateMachine with
+               the policy result.
+            4. Forward event to AlertStateMachine.process_event().
+            5. Return AlertRaisedEvent or None.
+
+        Args:
+            event: ActionEvent to process.
+
+        Returns:
+            AlertRaisedEvent if alert was raised, None otherwise.
+        """
+        result = self._policy.evaluate(event)
+        if result is None:
+            logger.debug(
+                "ContextAwareAlertProcessor: event label=%r blocked by policy", event.label
+            )
+            return None
+        persistence_threshold, resolve_threshold = result
+        self._sm.set_thresholds(persistence_threshold, resolve_threshold)
+        return self._sm.process_event(event)
+
+    def get_state(self, track_id: Optional[int] = None) -> AlertState:
+        """Return current alert state for a track.
+
+        Args:
+            track_id: Track identifier to query.
+
+        Returns:
+            Current AlertState for the track.
+        """
+        return self._sm.get_state(track_id)
+
+    def reset_all(self) -> None:
+        """Reset all track states in the internal AlertStateMachine."""
+        self._sm.reset_all()
+
+
+__all__ = ["ContextAwareAlertProcessor", "ContextPolicy", "ContextRule"]
