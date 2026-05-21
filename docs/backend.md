@@ -130,13 +130,13 @@ The backend supports near real-time streaming of live behavior detections and sy
 
 ## Endpoints
 
-- `WS /ws/live`
+- `WS /ws/live` (also available as `WS /api/websocket/live`)
   - Accepts incoming client WebSocket connections.
   - Automatically registers the connection with the `WebSocketManager`.
   - Streams `EventPayload` structures (both `DETECTION` and `ALERT` types) in JSON format in real-time.
   - Automatically handles connection cleanup on client disconnect.
 
-- `WS /ws/echo`
+- `WS /ws/echo` (also available as `WS /api/websocket/echo`)
   - A simple testing endpoint that echoes client messages back.
 
 ## Key Components
