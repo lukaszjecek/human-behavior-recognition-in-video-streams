@@ -1,8 +1,18 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from src.app.app import create_app
 from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
 from src.app.services.websocket_manager import websocket_manager
+
+
+@pytest.fixture(autouse=True)
+def reset_websocket_manager_state() -> None:
+    websocket_manager.active_connections = []
+    websocket_manager.loop = None
+    yield
+    websocket_manager.active_connections = []
+    websocket_manager.loop = None
 
 
 def test_websocket_echo() -> None:
