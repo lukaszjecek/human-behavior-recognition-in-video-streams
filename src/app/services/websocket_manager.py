@@ -27,11 +27,12 @@ class WebSocketManager:
         await websocket.accept()
         self.active_connections.append(websocket)
         # Store the current running loop to allow thread-safe scheduling of broadcasts
-        if self.loop is None:
-            try:
-                self.loop = asyncio.get_running_loop()
-            except RuntimeError:
-                pass
+        try:
+            current_loop = asyncio.get_running_loop()
+            if self.loop is None or self.loop.is_closed() or self.loop is not current_loop:
+                self.loop = current_loop
+        except RuntimeError:
+            pass
         logger.info(
             f"WebSocket client connected. "
             f"Active connections: {len(self.active_connections)}"
@@ -41,6 +42,8 @@ class WebSocketManager:
         """Unregister a disconnected WebSocket connection."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        if not self.active_connections:
+            self.loop = None
         logger.info(
             f"WebSocket client disconnected. "
             f"Active connections: {len(self.active_connections)}"

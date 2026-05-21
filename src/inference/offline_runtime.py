@@ -85,6 +85,7 @@ def produce_frames_from_source(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
     stop_event: Optional[Event] = None,
+    window_size: int = 16,
 ) -> None:
     """Read frames from a source adapter and push them to a queue.
 
@@ -97,6 +98,7 @@ def produce_frames_from_source(
         frame_queue (Queue): Queue used to pass frames to the consumer.
         stop_event (Optional[Event]): When set, the producer stops reading
             new frames and exits.
+        window_size (int): Number of frames in temporal window (used for image fallback).
 
     Raises:
         RuntimeError: If the source cannot be opened.
@@ -127,6 +129,28 @@ def produce_frames_from_source(
 
                 frames_read += 1
                 frame_queue.put(frame)
+
+            # Fallback for static images (like webp) if no frames were read
+            if frames_read == 0 and source_adapter.source_type == "file":
+                import cv2
+                img = cv2.imread(source_adapter.source_ref)
+                if img is not None:
+                    import sys
+                    print(
+                        f"INFO: Source {source_adapter.source_ref} is a static image. "
+                        f"Duplicating frame {window_size} times.",
+                        file=sys.stdout,
+                        flush=True,
+                    )
+                    logger.info(
+                        "Source is a static image. "
+                        f"Duplicating frame {window_size} times."
+                    )
+                    for _ in range(window_size):
+                        if stop_event is not None and stop_event.is_set():
+                            break
+                        frame_queue.put(img)
+                        frames_read += 1
         finally:
             cap.release()
     finally:
@@ -147,10 +171,16 @@ def produce_frames_safe(
     frame_queue: Queue,
     stats: dict,
     stop_event: Optional[Event] = None,
+    window_size: int = 16,
 ) -> None:
     """Run the frame producer and store any raised exception in stats."""
     try:
-        produce_frames_from_source(source_adapter, frame_queue, stop_event=stop_event)
+        produce_frames_from_source(
+            source_adapter,
+            frame_queue,
+            stop_event=stop_event,
+            window_size=window_size,
+        )
     except Exception as exc:
         stats["producer_error"] = exc
 
@@ -172,6 +202,7 @@ def produce_frames_with_reconnect(
     max_retries: int = _DEFAULT_MAX_RETRIES,
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
+    window_size: int = 16,
 ) -> None:
     """Frame producer with exponential back-off reconnect for stream sources.
 
@@ -191,10 +222,17 @@ def produce_frames_with_reconnect(
         retry_delay (float): Initial seconds to wait before the first retry.
         backoff_factor (float): Multiplier applied to *retry_delay* on each
             successive attempt.
+        window_size (int): Number of frames in temporal window (used for image fallback).
     """
     if source_adapter.source_type not in _RTSP_SOURCE_TYPES:
         # Non-stream sources do not need reconnect logic.
-        produce_frames_safe(source_adapter, frame_queue, stats, stop_event=stop_event)
+        produce_frames_safe(
+            source_adapter,
+            frame_queue,
+            stats,
+            stop_event=stop_event,
+            window_size=window_size,
+        )
         return
 
     frames_read = 0
@@ -448,7 +486,7 @@ def run_source(
     producer = Thread(
         target=produce_frames_safe,
         args=(source_adapter, frame_queue, stats),
-        kwargs={"stop_event": stop_event},
+        kwargs={"stop_event": stop_event, "window_size": runtime_engine.window_size},
     )
     consumer = Thread(
         target=consume_frame_queue,
@@ -558,6 +596,7 @@ def run_source_with_reconnect(
             "max_retries": max_retries,
             "retry_delay": retry_delay,
             "backoff_factor": backoff_factor,
+            "window_size": runtime_engine.window_size,
         },
     )
     consumer = Thread(

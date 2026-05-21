@@ -199,3 +199,31 @@ def test_run_offline_mp4_inference_rejects_source_uri(tmp_path):
 
     with pytest.raises(ValueError, match="does not accept request.source_uri"):
         run_offline_mp4_inference(request)
+
+
+def test_run_offline_mp4_inference_image_fallback(monkeypatch, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
+    # Create dummy webp
+    video_path = tmp_path / "sample.webp"
+    video_path.write_bytes(b"mock bytes")
+
+    # Mock cv2.imread to return a mock frame
+    mock_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    monkeypatch.setattr("cv2.imread", lambda path: mock_frame)
+
+    request = InferenceServiceRequest(
+        video_path=video_path,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+
+    result = run_offline_mp4_inference(request)
+
+    # Since the config has temporal_window=4, the frame is duplicated 4 times.
+    assert result.frame_count == 4
+    assert result.inference_count == 1
+
