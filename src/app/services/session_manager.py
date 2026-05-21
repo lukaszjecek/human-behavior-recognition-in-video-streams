@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from threading import Event
 from uuid import UUID, uuid4
 
+from src.app.db.repository import save_event
+from src.app.db.session import SessionLocal
+from src.app.schemas.action_event import EventPayload
 from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
 from src.app.services.websocket_manager import websocket_manager
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
@@ -101,12 +104,27 @@ class InferenceSessionManager:
                 device=session.request.device,
             )
 
+            def on_event(payload: EventPayload) -> None:
+                # 1. Broadcast to websocket clients
+                websocket_manager.broadcast_sync(payload)
+                # 2. Persist to database
+                try:
+                    with SessionLocal() as db:
+                        save_event(db, payload)
+                except Exception as db_err:
+                    logger.error(
+                        "Database write-path failure for event %s in background session %s: %s",
+                        payload.event_id,
+                        session.id,
+                        db_err,
+                    )
+
             # Run blocking call in a background thread
             await asyncio.to_thread(
                 run_offline_mp4_inference,
                 inference_request,
                 session.stop_event,
-                websocket_manager.broadcast_sync,
+                on_event,
             )
 
             # Only update to COMPLETED if not stopped manually

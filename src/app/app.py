@@ -34,6 +34,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         debug=app_settings.debug
     )
 
+    @app.on_event("startup")
+    def on_startup() -> None:
+        from src.app.db.session import init_db
+        init_db()
+
     app.include_router(health_router)
     app.include_router(api_router, prefix="/api")
     app.include_router(ws_router, prefix="/ws", tags=["websocket"])
