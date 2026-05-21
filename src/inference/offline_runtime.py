@@ -165,7 +165,7 @@ def produce_frames_from_source(
         else:
             cap = source_adapter.open_capture()
             try:
-                if not cap.isOpened():
+                if not cap.isOpened() and source_adapter.source_type in _RTSP_SOURCE_TYPES:
                     raise RuntimeError(
                         "Could not open "
                         f"{source_adapter.source_type} source: {source_adapter.source_ref}",
