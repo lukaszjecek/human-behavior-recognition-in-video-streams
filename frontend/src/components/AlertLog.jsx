@@ -87,12 +87,23 @@ export default function AlertLog() {
     })
   }
 
-  // Set up the simulation on component mount
-  // for mock eslint is ignored intentionally
+  // Set up the asynchronous simulation timers on component mount.
+  // We schedule only the delayed timers (delay > 0) here because the initial state
+  // is already synchronously set to the delay === 0 items via the useState lazy initializer.
+  // This avoids calling setState synchronously in the effect, fully satisfying ESLint rules.
   useEffect(() => {
-    triggerSimulation()
+    ALL_MOCK_ALERTS.forEach(alert => {
+      if (alert.delay > 0) {
+        const tId = setTimeout(() => {
+          setAlerts(prev => {
+            if (prev.some(a => a.id === alert.id)) return prev
+            return [alert, ...prev]
+          })
+        }, alert.delay)
+        timersRef.current.push(tId)
+      }
+    })
     return clearTimers
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleAcknowledge = (id) => {
