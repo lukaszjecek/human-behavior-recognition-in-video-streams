@@ -40,7 +40,17 @@ Represents a single detected action or behavior. Time is relative to the video s
   "context": {
     "scene_tag": "string",
     "confidence": float
-  } (optional)
+  } (optional),
+  "bboxes": [
+    {
+      "x_min": float (optional),
+      "y_min": float (optional),
+      "x_max": float (optional),
+      "y_max": float (optional),
+      "label": "string" (optional),
+      "confidence": float (optional)
+    }
+  ] (optional)
 }
 ```
 
@@ -56,6 +66,33 @@ Represents a single detected action or behavior. Time is relative to the video s
 | `end_timestamp` | float | No | Ending timestamp in seconds (relative to video start) |
 | `track_id` | integer | No | Tracking ID for multi-object tracking |
 | `context` | object | No | Contextual scene information (Sprint 3) |
+| `bboxes` | array | No | List of bounding boxes for objects involved in the event |
+
+### BoundingBox Record (elements of the bboxes array)
+
+Represents spatial information for a single detected object.
+
+```json
+{
+  "x_min": float (optional),
+  "y_min": float (optional),
+  "x_max": float (optional),
+  "y_max": float (optional),
+  "label": "string" (optional),
+  "confidence": float (optional)
+}
+```
+
+#### Field Descriptions for BoundingBox
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `x_min` | float | No | Minimum horizontal boundary coordinate (0.0 to 1.0, or pixel value) |
+| `y_min` | float | No | Minimum vertical boundary coordinate (0.0 to 1.0, or pixel value) |
+| `x_max` | float | No | Maximum horizontal boundary coordinate (0.0 to 1.0, or pixel value) |
+| `y_max` | float | No | Maximum vertical boundary coordinate (0.0 to 1.0, or pixel value) |
+| `label` | string | No | Classification label of the object (e.g., "car", "person") |
+| `confidence` | float | No | Confidence score of the object detection (0.0 to 1.0) |
 
 ### AlertData Record (data for event_type: ALERT)
 
@@ -84,7 +121,9 @@ The Pydantic schema enforces:
 3. `0.0 <= confidence <= 1.0`
 4. `label` is non-empty string
 5. `start_timestamp <= end_timestamp` (if both provided)
-6. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
+6. `x_max >= x_min` and `y_max >= y_min` in `BoundingBox` (if both coordinates in a pair are provided)
+7. `0.0 <= confidence <= 1.0` in `BoundingBox` (if provided)
+8. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
 
 ## Semantics of Time
 - **`timestamp`** inside `EventPayload` is an absolute ISO-8601 UTC timestamp representing the real-world time the event was produced.

@@ -2,7 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
-from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
+from src.app.schemas.action_event import (
+    ActionEvent,
+    AlertData,
+    BoundingBox,
+    EventPayload,
+    EventType,
+)
 from src.app.services.websocket_manager import websocket_manager
 
 
@@ -74,6 +80,51 @@ def test_websocket_live_stream() -> None:
         assert data["camera_id"] == "test_cam.mp4"
         assert data["data"]["severity"] == "HIGH"
         assert data["data"]["message"] == "Alert triggered for label: jump"
+
+
+def test_websocket_live_stream_with_bboxes() -> None:
+    """Test that live notifications with bounding boxes are pushed correctly."""
+    app = create_app()
+    client = TestClient(app)
+    with client.websocket_connect("/ws/live") as websocket:
+        # Create a test event payload with bboxes
+        bbox = BoundingBox(
+            x_min=10.0,
+            y_min=20.0,
+            x_max=100.0,
+            y_max=200.0,
+            label="car",
+            confidence=0.9,
+        )
+        action_evt = ActionEvent(
+            start_frame_index=1,
+            end_frame_index=16,
+            start_timestamp=0.0,
+            end_timestamp=1.0,
+            label="jump",
+            confidence=0.85,
+            bboxes=[bbox],
+        )
+        payload = EventPayload(
+            event_type=EventType.DETECTION,
+            camera_id="test_cam.mp4",
+            data=action_evt,
+        )
+
+        # Broadcast the payload synchronously using the manager
+        websocket_manager.broadcast_sync(payload)
+
+        # Retrieve and verify the broadcasted message on the socket client
+        data = websocket.receive_json()
+        assert data["event_type"] == "DETECTION"
+        assert data["camera_id"] == "test_cam.mp4"
+        assert data["data"]["label"] == "jump"
+        assert data["data"]["confidence"] == 0.85
+        assert "bboxes" in data["data"]
+        assert len(data["data"]["bboxes"]) == 1
+        assert data["data"]["bboxes"][0]["label"] == "car"
+        assert data["data"]["bboxes"][0]["x_min"] == 10.0
+        assert data["data"]["bboxes"][0]["confidence"] == 0.9
 
 
 def test_websocket_api_echo() -> None:

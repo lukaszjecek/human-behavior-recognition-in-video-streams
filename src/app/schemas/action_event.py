@@ -33,6 +33,33 @@ class ContextData(BaseModel):
     confidence: StrictFloat = Field(ge=0.0, le=1.0)
 
 
+class BoundingBox(BaseModel):
+    """Spatial bounding box configuration with optional coordinates and labels."""
+    model_config = ConfigDict(validate_assignment=True)
+
+    x_min: Optional[float] = Field(default=None)
+    y_min: Optional[float] = Field(default=None)
+    x_max: Optional[float] = Field(default=None)
+    y_max: Optional[float] = Field(default=None)
+    label: Optional[StrictStr] = Field(default=None)
+    confidence: Optional[StrictFloat] = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_coordinates(self) -> "BoundingBox":
+        """Validate coordinates if present.
+
+        Raises:
+            ValueError: If coordinate limits are invalid.
+        """
+        if self.x_min is not None and self.x_max is not None:
+            if self.x_max < self.x_min:
+                raise ValueError("x_max must be >= x_min")
+        if self.y_min is not None and self.y_max is not None:
+            if self.y_max < self.y_min:
+                raise ValueError("y_max must be >= y_min")
+        return self
+
+
 class ActionEvent(BaseModel):
     """Represents a single detected action/behavior event with temporal and confidence metadata."""
     model_config = ConfigDict(validate_assignment=True)
@@ -45,6 +72,7 @@ class ActionEvent(BaseModel):
     end_timestamp: Optional[StrictFloat] = Field(default=None, ge=0.0)
     track_id: Optional[StrictInt] = None
     context: Optional[ContextData] = None
+    bboxes: Optional[List[BoundingBox]] = Field(default=None)
 
     @model_validator(mode='after')
     def validate_interdependent_fields(self) -> "ActionEvent":

@@ -11,7 +11,7 @@ import pydantic
 import pytest
 import torch
 
-from src.app.schemas.action_event import ActionEvent, ActionEventLog
+from src.app.schemas.action_event import ActionEvent, ActionEventLog, BoundingBox
 from src.inference.engine import InferenceResult
 from src.inference.json_writer import ActionEventWriter
 
@@ -893,3 +893,103 @@ class TestJsonWriterTrackIdsType:
         assert count == 2
         assert writer.log.events[0].track_id is None
         assert writer.log.events[1].track_id is None
+
+
+class TestBoundingBoxSchema:
+    """Test BoundingBox model validation, serialization, and ActionEvent integration."""
+
+    def test_bounding_box_all_none(self) -> None:
+        """Test BoundingBox can be created with all None fields."""
+        bbox = BoundingBox()
+        assert bbox.x_min is None
+        assert bbox.y_min is None
+        assert bbox.x_max is None
+        assert bbox.y_max is None
+        assert bbox.label is None
+        assert bbox.confidence is None
+
+    def test_bounding_box_valid_partial(self) -> None:
+        """Test BoundingBox with partially populated fields."""
+        bbox = BoundingBox(
+            x_min=10.0,
+            y_min=20.0,
+            label="car",
+        )
+        assert bbox.x_min == 10.0
+        assert bbox.y_min == 20.0
+        assert bbox.x_max is None
+        assert bbox.y_max is None
+        assert bbox.label == "car"
+        assert bbox.confidence is None
+
+    def test_bounding_box_valid_all_fields(self) -> None:
+        """Test BoundingBox with all fields populated."""
+        bbox = BoundingBox(
+            x_min=0.1,
+            y_min=0.2,
+            x_max=0.5,
+            y_max=0.6,
+            label="person",
+            confidence=0.85,
+        )
+        assert bbox.x_min == 0.1
+        assert bbox.y_min == 0.2
+        assert bbox.x_max == 0.5
+        assert bbox.y_max == 0.6
+        assert bbox.label == "person"
+        assert bbox.confidence == 0.85
+
+    def test_bounding_box_invalid_x_coordinates(self) -> None:
+        """Test BoundingBox validation fails when x_max < x_min."""
+        with pytest.raises(pydantic.ValidationError, match="x_max must be >= x_min"):
+            BoundingBox(x_min=0.5, x_max=0.3)
+
+    def test_bounding_box_invalid_y_coordinates(self) -> None:
+        """Test BoundingBox validation fails when y_max < y_min."""
+        with pytest.raises(pydantic.ValidationError, match="y_max must be >= y_min"):
+            BoundingBox(y_min=0.8, y_max=0.4)
+
+    def test_bounding_box_invalid_confidence(self) -> None:
+        """Test BoundingBox validation fails with invalid confidence range."""
+        with pytest.raises(pydantic.ValidationError):
+            BoundingBox(confidence=1.5)
+
+        with pytest.raises(pydantic.ValidationError):
+            BoundingBox(confidence=-0.1)
+
+    def test_bounding_box_strict_confidence_type(self) -> None:
+        """Test BoundingBox validation fails if confidence is not a float/int."""
+        with pytest.raises((TypeError, pydantic.ValidationError)):
+            BoundingBox(confidence="0.85")
+
+    def test_action_event_with_bboxes(self) -> None:
+        """Test ActionEvent successfully integrates bounding boxes."""
+        bbox1 = BoundingBox(x_min=0.1, y_min=0.1, x_max=0.4, y_max=0.4, label="car")
+        bbox2 = BoundingBox(x_min=0.5, y_min=0.5, x_max=0.9, y_max=0.9, label="person")
+        event = ActionEvent(
+            start_frame_index=0,
+            end_frame_index=15,
+            label="car_drops_off_person",
+            confidence=0.95,
+            bboxes=[bbox1, bbox2],
+        )
+        assert event.bboxes is not None
+        assert len(event.bboxes) == 2
+        assert event.bboxes[0].label == "car"
+        assert event.bboxes[1].label == "person"
+
+        # Test to_dict and exclusion of None values
+        data = event.to_dict()
+        assert "bboxes" in data
+        assert len(data["bboxes"]) == 2
+        assert data["bboxes"][0]["label"] == "car"
+        assert "x_min" in data["bboxes"][0]
+        assert "confidence" not in data["bboxes"][0]  # Excluded since it is None
+
+        # Test round-trip serialization/deserialization
+        json_str = event.to_json()
+        deserialized_event = ActionEvent.from_dict(json.loads(json_str))
+        assert deserialized_event.bboxes is not None
+        assert len(deserialized_event.bboxes) == 2
+        assert deserialized_event.bboxes[0].x_min == 0.1
+        assert deserialized_event.bboxes[1].label == "person"
