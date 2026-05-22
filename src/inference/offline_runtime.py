@@ -240,7 +240,13 @@ def produce_frames_with_reconnect(
     """
     if source_adapter.source_type not in _RTSP_SOURCE_TYPES:
         # Non-stream sources do not need reconnect logic.
-        produce_frames_safe(source_adapter, frame_queue, stats, stop_event=stop_event)
+        produce_frames_safe(
+            source_adapter,
+            frame_queue,
+            stats,
+            stop_event=stop_event,
+            log_context=log_context,
+        )
         return
 
     frames_read = 0
