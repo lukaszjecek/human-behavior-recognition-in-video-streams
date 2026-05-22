@@ -1,12 +1,16 @@
 """Service layer for managing inference sessions."""
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from threading import Event
 from uuid import UUID, uuid4
 
 from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
+from src.app.services.websocket_manager import websocket_manager
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
+
+logger = logging.getLogger(__name__)
 
 
 class SessionData:
@@ -102,6 +106,7 @@ class InferenceSessionManager:
                 run_offline_mp4_inference,
                 inference_request,
                 session.stop_event,
+                websocket_manager.broadcast_sync,
             )
 
             # Only update to COMPLETED if not stopped manually
@@ -109,6 +114,16 @@ class InferenceSessionManager:
                 session.update_status(SessionStatus.COMPLETED)
 
         except Exception as exc:
+            import sys
+            import traceback
+            print(
+                f"ERROR: Session {session.id} execution failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+            logger.exception(f"Session {session.id} execution failed")
             # If the session wasn't explicitly stopped, mark as FAILED
             if session.status != SessionStatus.STOPPED:
                 session.update_status(SessionStatus.FAILED, str(exc))

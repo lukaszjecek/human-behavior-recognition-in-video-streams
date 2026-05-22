@@ -7,18 +7,18 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
-from src.app.schemas.action_event import ActionEvent
+from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
+from src.inference.alert_state_machine import AlertStateMachine
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
-    build_track_ids,
     expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
@@ -72,6 +72,7 @@ class InferenceServiceResult:
 def run_inference(
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
+    on_event: Optional[Callable[[EventPayload], None]] = None,
     session_id: str | None = None,
 ) -> InferenceServiceResult:
     """Run inference and return typed in-memory results.
@@ -79,6 +80,7 @@ def run_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+        on_event: Optional callback for generated events/alerts.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
@@ -127,6 +129,43 @@ def run_inference(
         model=model_adapter,
     )
 
+    alert_sm = AlertStateMachine(
+        persistence_threshold=settings.persistence_threshold,
+        resolve_threshold=settings.resolve_threshold,
+        danger_labels=settings.danger_labels,
+    )
+    writer = ActionEventWriter(class_labels=settings.class_labels)
+
+    def handle_result(res: InferenceResult) -> None:
+        expanded = expand_batched_inference_results([res])
+        for r in expanded:
+            tid = settings.default_track_id
+            added = writer.add_result(r, track_id=tid)
+            if added:
+                evt = writer.get_log().events[-1]
+                if on_event is not None:
+                    detection_payload = EventPayload(
+                        event_type=EventType.DETECTION,
+                        data=evt,
+                        camera_id=str(request.video_path.name) if request.video_path else None
+                    )
+                    on_event(detection_payload)
+
+                alert_evt = alert_sm.process_event(evt)
+                if alert_evt is not None:
+                    alert_data = AlertData(
+                        severity="HIGH",
+                        message=f"Alert triggered for label: {alert_evt.label}",
+                        action_event=alert_evt.triggering_event
+                    )
+                    if on_event is not None:
+                        alert_payload = EventPayload(
+                            event_type=EventType.ALERT,
+                            data=alert_data,
+                            camera_id=str(request.video_path.name) if request.video_path else None
+                        )
+                        on_event(alert_payload)
+
     log_event(
         logger,
         logging.INFO,
@@ -146,6 +185,7 @@ def run_inference(
             engine=engine,
             emit_runtime_summary=False,
             stop_event=stop_event,
+            on_result=handle_result,
             log_context=log_context,
         )
     except RuntimeFailureState as exc:
@@ -173,10 +213,6 @@ def run_inference(
         )
         raise
     expanded_results = expand_batched_inference_results(inference_results)
-    track_ids = build_track_ids(expanded_results, settings.default_track_id)
-
-    writer = ActionEventWriter(class_labels=settings.class_labels)
-    writer.add_results(expanded_results, track_ids=track_ids)
 
     log_event(
         logger,
@@ -201,9 +237,9 @@ def run_inference(
 
 
 def run_offline_mp4_inference(
-
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
+    on_event: Optional[Callable[[EventPayload], None]] = None,
     session_id: str | None = None,
 ) -> InferenceServiceResult:
     """Run offline inference for local MP4 files only.
@@ -211,12 +247,18 @@ def run_offline_mp4_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+        on_event: Optional callback for generated events/alerts.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request, stop_event=stop_event, session_id=session_id)
+    return run_inference(
+        request,
+        stop_event=stop_event,
+        on_event=on_event,
+        session_id=session_id,
+    )
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
@@ -228,16 +270,18 @@ def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
         )
     if request.video_path is None:
         raise ValueError(
-            "run_offline_mp4_inference requires request.video_path pointing to an .mp4 file"
+            "run_offline_mp4_inference requires request.video_path pointing to a video file"
         )
     if request.source_uri is not None:
         raise ValueError(
             "run_offline_mp4_inference does not accept request.source_uri; "
             "provide request.video_path"
         )
-    if request.video_path.suffix.lower() != ".mp4":
+    allowed_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".webp"}
+    if request.video_path.suffix.lower() not in allowed_extensions:
         raise ValueError(
-            "run_offline_mp4_inference requires request.video_path with .mp4 extension"
+            "run_offline_mp4_inference requires request.video_path "
+            f"with a supported video extension ({', '.join(sorted(allowed_extensions))})"
         )
 
 
