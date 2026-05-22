@@ -199,23 +199,10 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
     # 2. Create a configuration YAML
     config_path = tmp_path / "config.yml"
     config_data = {
-        "pipeline": {
-            "target_resolution": [64, 64],
-            "temporal_window": 4
-        },
-        "inference": {
-            "stride": 2,
-            "class_labels": ["walk", "run", "fight"],
-            "device": "cpu"
-        },
-        "tracking": {
-            "default_track_id": 1
-        },
-        "alert": {
-            "persistence_threshold": 2,
-            "resolve_threshold": 1,
-            "danger_labels": ["fight"]
-        }
+        "pipeline": {"target_resolution": [64, 64], "temporal_window": 4},
+        "inference": {"stride": 2, "class_labels": ["walk", "run", "fight"], "device": "cpu"},
+        "tracking": {"default_track_id": 1},
+        "alert": {"persistence_threshold": 2, "resolve_threshold": 1, "danger_labels": ["fight"]},
     }
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config_data, f)
@@ -257,14 +244,14 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
         # Now, wait for websocket messages. We expect:
         # - DETECTION messages as windows are processed.
         # - An ALERT message once the persistence threshold is met.
-        
+
         received_detections = []
         received_alerts = []
-        
+
         start_time = time.time()
-        while (
-            len(received_detections) < 3 or len(received_alerts) < 1
-        ) and (time.time() - start_time < 15):
+        while (len(received_detections) < 3 or len(received_alerts) < 1) and (
+            time.time() - start_time < 15
+        ):
             try:
                 msg = websocket.receive_json()
                 if msg["event_type"] == "DETECTION":
@@ -292,5 +279,3 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
 
         # Clean up the session by stopping it
         client.post(f"/api/sessions/{session_id}/stop")
-
-

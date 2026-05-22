@@ -1,4 +1,5 @@
 """Offline producer-consumer runtime for adapter-based inference inputs."""
+
 import logging
 import time
 from pathlib import Path
@@ -33,9 +34,7 @@ class SourceInterruptedError(RuntimeError):
 
     def __init__(self, source_ref: str, frames_read: int = 0) -> None:
         """Initialise with source reference and frames-read count."""
-        super().__init__(
-            f"Source interrupted after {frames_read} frame(s): {source_ref}"
-        )
+        super().__init__(f"Source interrupted after {frames_read} frame(s): {source_ref}")
         self.source_ref = source_ref
         self.frames_read = frames_read
 
@@ -104,7 +103,8 @@ def produce_frames_from_source(
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Raises:
-        RuntimeError: If the source cannot be opened.
+        RuntimeError: If an RTSP source cannot be opened. Other source types
+            may stop without raising on open failure.
     """
     log_event(
         logger,
@@ -140,8 +140,7 @@ def produce_frames_from_source(
                         flush=True,
                     )
                     logger.info(
-                        "Source is an animated image with %d frames. "
-                        "Extracting using Pillow.",
+                        "Source is an animated image with %d frames. Extracting using Pillow.",
                         n_frames,
                     )
                     for frame in ImageSequence.Iterator(pil_img):
@@ -153,7 +152,12 @@ def produce_frames_from_source(
                         frames_read += 1
                 else:
                     raise ValueError("Not an animated image")
-            except Exception:
+            except Exception as e:
+                logger.info(
+                    "Pillow failed to read animated image %s (%s). Falling back to static image.",
+                    source_adapter.source_ref,
+                    e,
+                )
                 # Fallback for static image - read single frame and duplicate it
                 img = cv2.imread(source_adapter.source_ref)
                 if img is not None:
@@ -163,10 +167,7 @@ def produce_frames_from_source(
                         file=sys.stdout,
                         flush=True,
                     )
-                    logger.info(
-                        "Source is a static image. "
-                        f"Duplicating frame {window_size} times."
-                    )
+                    logger.info(f"Source is a static image. Duplicating frame {window_size} times.")
                     for _ in range(window_size):
                         if stop_event is not None and stop_event.is_set():
                             break
@@ -252,7 +253,13 @@ def produce_frames_from_source(
                                 frames_read += 1
                         else:
                             raise ValueError("Not an animated image")
-                    except Exception:
+                    except Exception as e:
+                        logger.info(
+                            "Pillow failed to read animated image %s (%s). "
+                            "Falling back to static image.",
+                            source_adapter.source_ref,
+                            e,
+                        )
                         # Fallback for static image - read single frame and duplicate it
                         img = cv2.imread(source_adapter.source_ref)
                         if img is not None:
@@ -263,8 +270,7 @@ def produce_frames_from_source(
                                 flush=True,
                             )
                             logger.info(
-                                "Source is a static image. "
-                                f"Duplicating frame {window_size} times."
+                                f"Source is a static image. Duplicating frame {window_size} times."
                             )
                             for _ in range(window_size):
                                 if stop_event is not None and stop_event.is_set():
@@ -581,9 +587,9 @@ def consume_frame_queue(
             while True:
                 try:
                     # get_nowait() would exit early on a momentary Empty
-                    # and leave the sentinel unconsumed, blocking 
+                    # and leave the sentinel unconsumed, blocking
                     # the producer on a bounded Queue.
-                    item = frame_queue.get(timeout=0.05) 
+                    item = frame_queue.get(timeout=0.05)
                 except Empty:
                     continue
                 if item is EOF_SENTINEL:
@@ -599,7 +605,7 @@ def consume_frame_queue(
             break
 
         frame_count += 1
-        
+
         try:
             result = engine.process_frame(frame)
         except Exception as exc:
@@ -675,8 +681,7 @@ def run_source(
         action events.
     """
     if not isinstance(source_adapter, InferenceSourceAdapter):
-        raise TypeError(
-            "source_adapter must be an InferenceSourceAdapter instance")
+        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
 
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:

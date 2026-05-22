@@ -80,7 +80,7 @@ def run_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
-        on_event: Optional callback for generated events/alerts.
+        on_event: Optional callback triggered when action events or alerts occur.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
@@ -147,7 +147,7 @@ def run_inference(
                     detection_payload = EventPayload(
                         event_type=EventType.DETECTION,
                         data=evt,
-                        camera_id=str(request.video_path.name) if request.video_path else None
+                        camera_id=str(request.video_path.name) if request.video_path else None,
                     )
                     on_event(detection_payload)
 
@@ -156,13 +156,13 @@ def run_inference(
                     alert_data = AlertData(
                         severity="HIGH",
                         message=f"Alert triggered for label: {alert_evt.label}",
-                        action_event=alert_evt.triggering_event
+                        action_event=alert_evt.triggering_event,
                     )
                     if on_event is not None:
                         alert_payload = EventPayload(
                             event_type=EventType.ALERT,
                             data=alert_data,
-                            camera_id=str(request.video_path.name) if request.video_path else None
+                            camera_id=str(request.video_path.name) if request.video_path else None,
                         )
                         on_event(alert_payload)
 
@@ -247,7 +247,7 @@ def run_offline_mp4_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
-        on_event: Optional callback for generated events/alerts.
+        on_event: Optional callback triggered when action events or alerts occur.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
@@ -288,13 +288,11 @@ def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:
 def _validate_request(request: InferenceServiceRequest) -> None:
     """Validate request shape and path requirements."""
     if not isinstance(request.checkpoint_path, Path):
-        raise TypeError(
-            "request.checkpoint_path must be a pathlib.Path instance")
+        raise TypeError("request.checkpoint_path must be a pathlib.Path instance")
     if not isinstance(request.config_path, Path):
         raise TypeError("request.config_path must be a pathlib.Path instance")
     if request.video_path is not None and not isinstance(request.video_path, Path):
-        raise TypeError(
-            "request.video_path must be a pathlib.Path instance or None")
+        raise TypeError("request.video_path must be a pathlib.Path instance or None")
     if request.source_uri is not None and not isinstance(request.source_uri, str):
         raise TypeError("request.source_uri must be a string or None")
     normalize_source_type(request.source_type)
@@ -302,13 +300,11 @@ def _validate_request(request: InferenceServiceRequest) -> None:
         raise TypeError("request.device must be a string or None")
 
     if request.video_path is not None and request.source_uri is not None:
-        raise ValueError(
-            "Provide either request.video_path or request.source_uri, not both")
+        raise ValueError("Provide either request.video_path or request.source_uri, not both")
 
     source_type = normalize_source_type(request.source_type)
     if source_type == "file" and request.video_path is None and request.source_uri is None:
-        raise ValueError(
-            "File source requires request.video_path or request.source_uri")
+        raise ValueError("File source requires request.video_path or request.source_uri")
     if source_type == "rtsp" and request.source_uri is None:
         raise ValueError("RTSP source requires request.source_uri")
 
@@ -320,8 +316,7 @@ def _build_request_source_adapter(request: InferenceServiceRequest) -> Inference
         if request.video_path is not None:
             return build_source_adapter(source_type="file", source_ref=request.video_path)
         if request.source_uri is None:
-            raise ValueError(
-                "File source requires request.video_path or request.source_uri")
+            raise ValueError("File source requires request.video_path or request.source_uri")
         return build_source_adapter(source_type="file", source_ref=Path(request.source_uri))
 
     if request.source_uri is None:

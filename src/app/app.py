@@ -3,7 +3,6 @@
 Provides create_app() that wires configuration, routers and basic error handling.
 """
 import logging
-import time
 import uuid
 from typing import Optional
 
@@ -57,51 +56,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         **build_metadata,
     )
 
-    @app.middleware("http")
-    async def request_logging_middleware(request: Request, call_next: callable) -> JSONResponse:
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
-        request.state.request_id = request_id
-        log_context = RuntimeLogContext(session_id=request_id)
-        log_event(
-            logger,
-            logging.INFO,
-            "http_request_started",
-            "HTTP request started.",
-            log_context,
-            http_method=request.method,
-            http_path=request.url.path,
-        )
-        start_time = time.monotonic()
-        try:
-            response = await call_next(request)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "http_request_failed",
-                "HTTP request failed.",
-                log_context,
-                exc_info=True,
-                http_method=request.method,
-                http_path=request.url.path,
-                status_code=500,
-                duration_s=round(time.monotonic() - start_time, 3),
-                error_type=type(exc).__name__,
-            )
-            raise
-        response.headers["X-Request-ID"] = request_id
-        log_event(
-            logger,
-            logging.INFO,
-            "http_request_completed",
-            "HTTP request completed.",
-            log_context,
-            http_method=request.method,
-            http_path=request.url.path,
-            status_code=response.status_code,
-            duration_s=round(time.monotonic() - start_time, 3),
-        )
-        return response
+    @app.on_event("startup")
+    def on_startup() -> None:
+        from src.app.db.session import init_db
+        init_db()
 
     app.include_router(health_router)
     app.include_router(api_router, prefix="/api")
