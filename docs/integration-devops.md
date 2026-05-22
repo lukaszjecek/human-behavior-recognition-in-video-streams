@@ -104,9 +104,57 @@ LOG_DIR=/app/data/logs
 INFERENCE_CHECKPOINT=   # path to .pth checkpoint inside container (required for model inference)
 INFERENCE_CONFIG=configs/data_pipeline.yml  # runtime YAML config path (relative to /app)
 INFERENCE_DEVICE=auto   # device override: auto | cpu | cuda | mps
+INFERENCE_LOG_LEVEL=INFO # structured logging level (INFO, DEBUG, WARNING, ERROR)
+INFERENCE_LOG_DETAIL=standard # logging detail: minimal | standard | verbose
 API_HOST=api             # DNS name of the API container on hbr-network
 API_PORT=8000            # API port (matches PORT env var)
 ```
+
+### Inference Runtime Logging
+
+The inference runtime emits **structured JSON logs** to stdout for lifecycle visibility and
+integration troubleshooting. Each log line includes correlation fields:
+
+- `event`: short event identifier (e.g., `inference_session_started`)
+- `session_id`: per-run identifier used across all runtime logs
+- `source_type` / `source_ref`: file or RTSP source metadata
+  
+Optional build metadata (`BUILD_SHA`, `IMAGE_TAG`, `APP_VERSION`) is included when set.
+
+You can control verbosity via `INFERENCE_LOG_LEVEL` (or `LOG_LEVEL` as a fallback). Example:
+
+```json
+{"timestamp":"2026-05-20T12:07:16.120000+00:00","level":"INFO","logger":"src.inference.service","message":"Inference session started.","event":"inference_session_started","session_id":"8f1d7c1f7c8b4e2c9d6c0a2f44d3b6c2","source_type":"file","source_ref":"/app/data/raw/sample.mp4","checkpoint_path":"/app/data/logs/checkpoints/baseline.pth","config_path":"/app/configs/data_pipeline.yml","device_request":"auto"}
+```
+
+#### Log Detail Levels
+
+Use `INFERENCE_LOG_DETAIL` (or `LOG_DETAIL` for API logs) to control how much metadata is emitted:
+
+- `minimal` — only core correlation fields and error phase/type.
+- `standard` — includes counts, timings, config paths, and request metadata.
+- `verbose` — includes all fields plus full exception stack traces.
+
+This allows reducing log volume when storage is tight while keeping the option to
+increase detail for investigations.
+
+To centralize logs, ship container stdout to your preferred log backend (e.g. Docker
+logging driver, Fluent Bit, or a hosted log platform) — the JSON format is compatible
+with most collectors.
+
+### API Request Correlation
+
+The API generates a per-request `X-Request-ID` (or honors the incoming header) and
+returns it in the response headers. This ID is also logged as `session_id` in
+structured logs, so one request can be traced end-to-end.
+
+### Investigation Quick Steps
+
+1. Find the `session_id` (or `X-Request-ID`) from the failing request.
+2. Filter logs for that ID and look for `runtime_failed`, `inference_session_failed`,
+   or `http_request_failed` to locate the failing phase.
+3. If details are insufficient, temporarily switch `INFERENCE_LOG_DETAIL=verbose`
+   to capture full stack traces and detailed runtime metrics.
 
 ### Environment Wiring
 
