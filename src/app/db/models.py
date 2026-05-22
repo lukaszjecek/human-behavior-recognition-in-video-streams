@@ -47,6 +47,12 @@ class DBEvent(Base):
         index=True,
         doc="Category of the event (e.g. DETECTION, ALERT).",
     )
+    session_id = Column(
+        SQLUUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        doc="Optional session ID from which the event was generated.",
+    )
     payload = Column(
         JSON,
         nullable=False,

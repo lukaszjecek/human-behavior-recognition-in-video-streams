@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from src.app.app import create_app
 from src.app.core.settings import settings
 from src.app.db.models import Base
-from src.app.db.repository import get_event_by_id, get_events, save_event
+from src.app.db.repository import get_distinct_session_ids, get_event_by_id, get_events, save_event
 from src.app.db.session import get_db
 from src.app.schemas.action_event import (
     ActionEvent,
@@ -257,3 +257,158 @@ def test_pipeline_integration_saves_events(
     assert len(data) == 1
     assert data[0]["event_id"] == str(sample_detection_payload.event_id)
     assert data[0]["camera_id"] == "cam_01"
+
+
+def test_repository_query_filtering_by_session_id(
+    test_db, sample_detection_payload, sample_alert_payload
+):
+    """Verify filtering by session_id in get_events repository helper."""
+    import uuid
+
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    sample_detection_payload.session_id = session_a
+    sample_alert_payload.session_id = session_b
+
+    save_event(test_db, sample_detection_payload)
+    save_event(test_db, sample_alert_payload)
+
+    # Query with session_a
+    events_a = get_events(test_db, session_id=session_a)
+    assert len(events_a) == 1
+    assert events_a[0].event_id == sample_detection_payload.event_id
+
+    # Query with session_b
+    events_b = get_events(test_db, session_id=session_b)
+    assert len(events_b) == 1
+    assert events_b[0].event_id == sample_alert_payload.event_id
+
+    # Query with non-existent session
+    events_none = get_events(test_db, session_id=uuid.uuid4())
+    assert len(events_none) == 0
+
+
+def test_api_read_history_filtering_by_session_id(
+    client, test_db, sample_detection_payload, sample_alert_payload
+):
+    """Test the history endpoints GET /api/events/?session_id=...."""
+    import uuid
+
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    sample_detection_payload.session_id = session_a
+    sample_alert_payload.session_id = session_b
+
+    save_event(test_db, sample_detection_payload)
+    save_event(test_db, sample_alert_payload)
+
+    # 1. Get history filtering by session_a
+    resp = client.get(f"/api/events/?session_id={session_a}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["event_id"] == str(sample_detection_payload.event_id)
+    assert data[0]["session_id"] == str(session_a)
+
+    # 2. Get history filtering by session_b
+    resp = client.get(f"/api/events/?session_id={session_b}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["event_id"] == str(sample_alert_payload.event_id)
+    assert data[0]["session_id"] == str(session_b)
+
+    # 3. Get history with unknown session
+    resp = client.get(f"/api/events/?session_id={uuid.uuid4()}")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_repository_distinct_session_ids(test_db, sample_detection_payload, sample_alert_payload):
+    """Verify get_distinct_session_ids returns unique session UUIDs."""
+    import uuid
+
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    # Two events with sessions, one with None session_id
+    sample_detection_payload.session_id = session_a
+    sample_alert_payload.session_id = session_b
+    save_event(test_db, sample_detection_payload)
+    save_event(test_db, sample_alert_payload)
+
+    # Let's save a third event without a session_id
+    from copy import deepcopy
+
+    evt_no_session = deepcopy(sample_detection_payload)
+    evt_no_session.event_id = uuid.uuid4()
+    evt_no_session.session_id = None
+    save_event(test_db, evt_no_session)
+
+    session_ids = get_distinct_session_ids(test_db)
+    assert len(session_ids) == 2
+    assert session_a in session_ids
+    assert session_b in session_ids
+
+
+def test_api_get_distinct_session_ids(
+    client, test_db, sample_detection_payload, sample_alert_payload
+):
+    """Test the GET /api/events/sessions endpoint."""
+    import uuid
+
+    # Verify initially empty
+    resp = client.get("/api/events/sessions")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    sample_detection_payload.session_id = session_a
+    sample_alert_payload.session_id = session_b
+
+    save_event(test_db, sample_detection_payload)
+    save_event(test_db, sample_alert_payload)
+
+    resp = client.get("/api/events/sessions")
+    assert resp.status_code == 200
+    sessions = resp.json()
+    assert len(sessions) == 2
+    assert str(session_a) in sessions
+    assert str(session_b) in sessions
+
+
+def test_api_get_events_by_session_id_path(
+    client, test_db, sample_detection_payload, sample_alert_payload
+):
+    """Test the GET /api/events/sessions/{session_id} endpoint."""
+    import uuid
+
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    sample_detection_payload.session_id = session_a
+    sample_alert_payload.session_id = session_a
+    save_event(test_db, sample_detection_payload)
+    save_event(test_db, sample_alert_payload)
+
+    # Fetch for session_a
+    resp = client.get(f"/api/events/sessions/{session_a}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 2
+
+    # Fetch for session_b (empty)
+    resp = client.get(f"/api/events/sessions/{session_b}")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    # Fetch for session_a filtering by DETECTION type
+    resp = client.get(f"/api/events/sessions/{session_a}?event_type=DETECTION")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["event_id"] == str(sample_detection_payload.event_id)

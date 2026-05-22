@@ -23,18 +23,21 @@ from pydantic import (
 
 class EventType(str, Enum):
     """Supported event categories for serialized event payloads."""
+
     DETECTION = "DETECTION"
     ALERT = "ALERT"
 
 
 class ContextData(BaseModel):
     """Contextual metadata for the detection."""
+
     scene_tag: StrictStr = Field(min_length=1)
     confidence: StrictFloat = Field(ge=0.0, le=1.0)
 
 
 class BoundingBox(BaseModel):
     """Spatial bounding box configuration with optional coordinates and labels."""
+
     model_config = ConfigDict(validate_assignment=True)
 
     box_format: Optional[StrictStr] = Field(default="xyxy")
@@ -67,6 +70,7 @@ class BoundingBox(BaseModel):
 
 class ActionEvent(BaseModel):
     """Represents a single detected action/behavior event with temporal and confidence metadata."""
+
     model_config = ConfigDict(validate_assignment=True)
 
     start_frame_index: StrictInt = Field(ge=0)
@@ -79,7 +83,7 @@ class ActionEvent(BaseModel):
     context: Optional[ContextData] = None
     bboxes: Optional[List[BoundingBox]] = Field(default=None)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_interdependent_fields(self) -> "ActionEvent":
         """Validate interdependent fields."""
         if not self.label.strip():
@@ -109,6 +113,7 @@ class ActionEvent(BaseModel):
 
 class AlertData(BaseModel):
     """Data specific to alerts."""
+
     severity: StrictStr
     message: StrictStr
     action_event: ActionEvent
@@ -116,12 +121,14 @@ class AlertData(BaseModel):
 
 class EventPayload(BaseModel):
     """Wrapper for all events in the system."""
+
     event_id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     camera_id: Optional[StrictStr] = None
     version: StrictStr = "1.0"
     event_type: EventType
     data: Union[AlertData, ActionEvent]
+    session_id: Optional[UUID] = None
 
     @model_validator(mode="after")
     def validate_event_type_matches_data(self) -> "EventPayload":
@@ -135,6 +142,7 @@ class EventPayload(BaseModel):
 
 class ActionEventLog(BaseModel):
     """Container for a log of action events with serialization support."""
+
     events: List[ActionEvent] = Field(default_factory=list)
 
     @property
@@ -144,10 +152,10 @@ class ActionEventLog(BaseModel):
 
     def add_event(self, event: object) -> None:
         """Add an action event to the log.
-        
+
         Args:
             event: ActionEvent instance to add.
-            
+
         Raises:
             TypeError: If event is not an ActionEvent instance.
         """
@@ -181,23 +189,23 @@ class ActionEventLog(BaseModel):
     @classmethod
     def load_from_file(cls, filepath: str) -> "ActionEventLog":
         """Load log from JSON file.
-        
+
         Args:
             filepath: Path to JSON file.
-            
+
         Returns:
             ActionEventLog instance.
-            
+
         Raises:
             ValueError: If loaded event_count doesn't match number of events.
         """
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         log = cls()
         for event_data in data.get("events", []):
             log.add_event(ActionEvent.from_dict(event_data))
-        
+
         loaded_count = data.get("event_count")
         if loaded_count is not None and loaded_count != len(log.events):
             raise ValueError(

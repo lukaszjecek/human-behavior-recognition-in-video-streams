@@ -91,6 +91,11 @@ def run_inference(
     source_adapter = _build_request_source_adapter(request)
 
     resolved_session_id = session_id or uuid.uuid4().hex
+    try:
+        uuid_session_id = uuid.UUID(resolved_session_id)
+    except ValueError:
+        uuid_session_id = None
+
     log_context = RuntimeLogContext(
         session_id=resolved_session_id,
         source_type=source_adapter.source_type,
@@ -148,6 +153,7 @@ def run_inference(
                         event_type=EventType.DETECTION,
                         data=evt,
                         camera_id=str(request.video_path.name) if request.video_path else None,
+                        session_id=uuid_session_id,
                     )
                     on_event(detection_payload)
 
@@ -163,6 +169,7 @@ def run_inference(
                             event_type=EventType.ALERT,
                             data=alert_data,
                             camera_id=str(request.video_path.name) if request.video_path else None,
+                            session_id=uuid_session_id,
                         )
                         on_event(alert_payload)
 
