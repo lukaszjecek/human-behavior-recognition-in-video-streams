@@ -88,9 +88,11 @@ export default function AlertLog() {
   }
 
   // Set up the simulation on component mount
+  // for mock eslint is ignored intentionally
   useEffect(() => {
     triggerSimulation()
     return clearTimers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleAcknowledge = (id) => {
@@ -122,6 +124,7 @@ export default function AlertLog() {
   }
 
   const activeDangerCount = getCountBySeverity('danger')
+  const activeAlertsCount = alerts.filter(a => !a.acknowledged).length
 
   return (
     <section className="panel flex flex-col" id="alert-log">
@@ -129,9 +132,9 @@ export default function AlertLog() {
         <h2 className="font-mono flex items-center gap-2 text-sm font-semibold">
           <span className={`w-2 h-2 rounded-full ${activeDangerCount > 0 ? 'bg-red animate-pulse' : 'bg-text-dim'}`} />
           Event Log
-          {alerts.filter(a => !a.acknowledged).length > 0 && (
+          {activeAlertsCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-surface-alt border border-border text-text">
-              {alerts.filter(a => !a.acknowledged).length} active
+              {activeAlertsCount} active
             </span>
           )}
         </h2>
@@ -167,6 +170,9 @@ export default function AlertLog() {
             placeholder="Search alerts or cameras..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSearchQuery('')
+            }}
             className="w-full bg-transparent border-none text-xs text-text focus:outline-none placeholder-text-faint font-mono"
           />
           {searchQuery && (
@@ -178,7 +184,7 @@ export default function AlertLog() {
 
         <div className="flex gap-1">
           {['all', 'danger', 'warning', 'normal'].map((tab) => {
-            const count = tab === 'all' ? alerts.filter(a => !a.acknowledged).length : getCountBySeverity(tab)
+            const count = tab === 'all' ? activeAlertsCount : getCountBySeverity(tab)
             const isActive = filter === tab
             return (
               <button
@@ -214,7 +220,6 @@ export default function AlertLog() {
             {filteredAlerts.map((alert) => {
               const isDanger = alert.severity === 'danger'
               const isWarning = alert.severity === 'warning'
-              const isNormal = alert.severity === 'normal'
 
               return (
                 <div
