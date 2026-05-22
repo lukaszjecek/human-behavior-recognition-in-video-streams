@@ -3,14 +3,13 @@ from pathlib import Path
 
 import torch
 import yaml
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from src.data.preprocess import VideoPreprocessor
 
 
 class VideoDataset(Dataset):
-    """
-    Dataset class that reads a JSONL manifest and prepares video tensors.
+    """Dataset class that reads a JSONL manifest and prepares video tensors.
     """
 
     def __init__(self, manifest_path: Path, data_dir: Path, split: str = "train", config_path: Path = None):
