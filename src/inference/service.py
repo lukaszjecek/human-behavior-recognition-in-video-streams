@@ -80,7 +80,11 @@ def run_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+<<<<<<< 82-feature-persist-event-and-alert-history-in-database
         on_event: Optional callback triggered when action events or alerts occur.
+=======
+        on_event: Optional callback for generated events/alerts.
+>>>>>>> main
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
@@ -247,7 +251,11 @@ def run_offline_mp4_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+<<<<<<< 82-feature-persist-event-and-alert-history-in-database
         on_event: Optional callback triggered when action events or alerts occur.
+=======
+        on_event: Optional callback for generated events/alerts.
+>>>>>>> main
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):

@@ -125,6 +125,7 @@ class InferenceSessionManager:
                 inference_request,
                 session.stop_event,
                 on_event,
+                websocket_manager.broadcast_sync,
             )
 
             # Only update to COMPLETED if not stopped manually
@@ -133,6 +134,16 @@ class InferenceSessionManager:
 
         except Exception as exc:
             logger.exception("Session %s execution failed", session.id)
+            import sys
+            import traceback
+            print(
+                f"ERROR: Session {session.id} execution failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+            logger.exception(f"Session {session.id} execution failed")
             # If the session wasn't explicitly stopped, mark as FAILED
             if session.status != SessionStatus.STOPPED:
                 session.update_status(SessionStatus.FAILED, str(exc))

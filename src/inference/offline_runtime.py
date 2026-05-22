@@ -161,6 +161,7 @@ def produce_frames_from_source(
                     source_adapter.source_ref,
                     e,
                 )
+            except Exception:
                 # Fallback for static image - read single frame and duplicate it
                 img = cv2.imread(source_adapter.source_ref)
                 if img is not None:
@@ -266,6 +267,7 @@ def produce_frames_from_source(
                             source_adapter.source_ref,
                             e,
                         )
+                    except Exception:
                         # Fallback for static image - read single frame and duplicate it
                         img = cv2.imread(source_adapter.source_ref)
                         if img is not None:
@@ -286,6 +288,11 @@ def produce_frames_from_source(
                                 frames_read += 1
             finally:
                 cap.release()
+
+        if frames_read == 0 and source_adapter.source_type == "file":
+            raise RuntimeError(
+                f"Could not read any frames from file source: {source_adapter.source_ref}"
+            )
     finally:
         frame_queue.put(EOF_SENTINEL)
 
@@ -714,11 +721,21 @@ def run_source(
         target=produce_frames_safe,
         args=(source_adapter, frame_queue, stats),
         kwargs={"stop_event": stop_event, "window_size": runtime_engine.window_size},
+        kwargs={
+            "stop_event": stop_event,
+            "window_size": runtime_engine.window_size,
+            "log_context": log_context,
+        },
     )
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
         kwargs={"stop_event": stop_event, "on_result": on_result},
+        kwargs={
+            "stop_event": stop_event,
+            "on_result": on_result,
+            "log_context": log_context,
+        },
     )
 
     producer.start()
@@ -883,6 +900,11 @@ def run_source_with_reconnect(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
         kwargs={"stop_event": stop_event, "on_result": on_result},
+        kwargs={
+            "stop_event": stop_event,
+            "on_result": on_result,
+            "log_context": log_context,
+        },
     )
 
     producer.start()

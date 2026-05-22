@@ -40,7 +40,22 @@ Represents a single detected action or behavior. Time is relative to the video s
   "context": {
     "scene_tag": "string",
     "confidence": float
-  } (optional)
+  } (optional),
+  "bboxes": [
+    {
+      "box_format": "string (optional)",
+      "coordinate_space": "string (optional)",
+      "frame_index": integer (optional),
+      "source_width": integer (optional),
+      "source_height": integer (optional),
+      "x_min": float (optional),
+      "y_min": float (optional),
+      "x_max": float (optional),
+      "y_max": float (optional),
+      "label": "string" (optional),
+      "confidence": float (optional)
+    }
+  ] (optional)
 }
 ```
 
@@ -56,6 +71,47 @@ Represents a single detected action or behavior. Time is relative to the video s
 | `end_timestamp` | float | No | Ending timestamp in seconds (relative to video start) |
 | `track_id` | integer | No | Tracking ID for multi-object tracking |
 | `context` | object | No | Contextual scene information (Sprint 3) |
+| `bboxes` | array | No | List of bounding boxes for objects involved in the event |
+
+### BoundingBox Record (elements of the bboxes array)
+
+Represents spatial information for a single detected object in a frame. The bounding box uses two corners to define a standard 2D axis-aligned rectangle:
+- **Top-Left Corner**: `(x_min, y_min)`
+- **Bottom-Right Corner**: `(x_max, y_max)`
+
+The frontend can calculate the remaining points (`(x_max, y_min)` and `(x_min, y_max)`) from these.
+
+```json
+{
+  "box_format": "string (optional)",
+  "coordinate_space": "string (optional)",
+  "frame_index": integer (optional),
+  "source_width": integer (optional),
+  "source_height": integer (optional),
+  "x_min": float (optional),
+  "y_min": float (optional),
+  "x_max": float (optional),
+  "y_max": float (optional),
+  "label": "string" (optional),
+  "confidence": float (optional)
+}
+```
+
+#### Field Descriptions for BoundingBox
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `box_format` | string | No | Coordinate layout format (e.g., `"xyxy"`, defaults to `"xyxy"`) |
+| `coordinate_space` | string | No | Coordinate space type (`"normalized"` for 0.0 to 1.0 relative coordinates, or `"source_pixels"` for absolute pixels) |
+| `frame_index` | integer | No | Specific frame index within the video segment where the object was detected |
+| `source_width` | integer | No | Width in pixels of the source video frame |
+| `source_height` | integer | No | Height in pixels of the source video frame |
+| `x_min` | float | No | Left boundary coordinate of the bounding box |
+| `y_min` | float | No | Top boundary coordinate of the bounding box |
+| `x_max` | float | No | Right boundary coordinate of the bounding box |
+| `y_max` | float | No | Bottom boundary coordinate of the bounding box |
+| `label` | string | No | Classification label of the object (e.g., "car", "person") |
+| `confidence` | float | No | Confidence score of the object detection (0.0 to 1.0) |
 
 ### AlertData Record (data for event_type: ALERT)
 
@@ -84,7 +140,11 @@ The Pydantic schema enforces:
 3. `0.0 <= confidence <= 1.0`
 4. `label` is non-empty string
 5. `start_timestamp <= end_timestamp` (if both provided)
-6. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
+6. `x_max >= x_min` and `y_max >= y_min` in `BoundingBox` (if both coordinates in a pair are provided)
+7. `0.0 <= confidence <= 1.0` in `BoundingBox` (if provided)
+8. `frame_index >= 0` in `BoundingBox` (if provided)
+9. `source_width > 0` and `source_height > 0` in `BoundingBox` (if provided)
+10. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
 
 ## Semantics of Time
 - **`timestamp`** inside `EventPayload` is an absolute ISO-8601 UTC timestamp representing the real-world time the event was produced.
@@ -201,6 +261,7 @@ sequenceDiagram
 Automated tests are written in [test_websocket.py](../tests/app/test_websocket.py). They cover:
 - **WebSocket Echo:** Validates standard WebSocket message echo loop.
 - **Live Event Broadcasting:** Spawns a mock WebSocket connection client using `TestClient.websocket_connect("/ws/live")`, pushes detection/alert payloads to the singleton `WebSocketManager`, and asserts that the client receives the serialized JSON structures conforming to the Sprint 3 payload contract.
+<<<<<<< 82-feature-persist-event-and-alert-history-in-database
 
 ---
 
@@ -295,3 +356,5 @@ docker compose exec api env PYTHONPATH=. pytest tests/app/test_persistence.py
    curl http://localhost:8000/api/events/
    ```
 
+=======
+>>>>>>> main
