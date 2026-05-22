@@ -171,7 +171,7 @@ export default function AlertLog() {
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="text-[10px] text-text-dim hover:text-text cursor-pointer px-1 font-mono">
-              ESC
+              CLEAR
             </button>
           )}
         </div>
@@ -226,7 +226,7 @@ export default function AlertLog() {
                       ? 'bg-red/3 hover:bg-red/6 border-l-3 border-red'
                       : isWarning
                       ? 'bg-amber/3 hover:bg-amber/6 border-l-3 border-amber'
-                      : 'hover:bg-surface-alt/20 border-l-3 border-blue'
+                      : 'bg-blue/3 hover:bg-blue/6 border-l-3 border-blue'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
