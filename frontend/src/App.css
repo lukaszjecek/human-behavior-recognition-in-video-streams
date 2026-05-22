@@ -136,3 +136,52 @@
     display: flex;
   }
 }
+
+/* ===== Alert Log Items & Severity Accents ===== */
+.border-l-3 {
+  border-left: 3px solid transparent;
+}
+.border-l-3.border-red {
+  border-left-color: var(--color-red);
+}
+.border-l-3.border-amber {
+  border-left-color: var(--color-amber);
+}
+.border-l-3.border-blue {
+  border-left-color: var(--color-blue);
+}
+
+.bg-red\/3 {
+  background-color: color-mix(in srgb, var(--color-red) 3%, transparent);
+}
+.hover\:bg-red\/6:hover {
+  background-color: color-mix(in srgb, var(--color-red) 6%, transparent);
+}
+
+.bg-amber\/3 {
+  background-color: color-mix(in srgb, var(--color-amber) 3%, transparent);
+}
+.hover\:bg-amber\/6:hover {
+  background-color: color-mix(in srgb, var(--color-amber) 6%, transparent);
+}
+
+.bg-blue\/10 {
+  background-color: color-mix(in srgb, var(--color-blue) 10%, transparent);
+}
+.border-blue\/20 {
+  border-color: color-mix(in srgb, var(--color-blue) 20%, transparent);
+}
+
+.bg-red\/10 {
+  background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+.border-red\/20 {
+  border-color: color-mix(in srgb, var(--color-red) 20%, transparent);
+}
+
+.bg-amber\/10 {
+  background-color: color-mix(in srgb, var(--color-amber) 10%, transparent);
+}
+.border-amber\/20 {
+  border-color: color-mix(in srgb, var(--color-amber) 20%, transparent);
+}
