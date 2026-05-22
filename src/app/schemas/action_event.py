@@ -37,6 +37,11 @@ class BoundingBox(BaseModel):
     """Spatial bounding box configuration with optional coordinates and labels."""
     model_config = ConfigDict(validate_assignment=True)
 
+    box_format: Optional[StrictStr] = Field(default="xyxy")
+    coordinate_space: Optional[StrictStr] = Field(default=None)
+    frame_index: Optional[StrictInt] = Field(default=None, ge=0)
+    source_width: Optional[StrictInt] = Field(default=None, gt=0)
+    source_height: Optional[StrictInt] = Field(default=None, gt=0)
     x_min: Optional[float] = Field(default=None)
     y_min: Optional[float] = Field(default=None)
     x_max: Optional[float] = Field(default=None)

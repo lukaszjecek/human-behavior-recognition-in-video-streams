@@ -907,6 +907,11 @@ class TestBoundingBoxSchema:
         assert bbox.y_max is None
         assert bbox.label is None
         assert bbox.confidence is None
+        assert bbox.box_format == "xyxy"
+        assert bbox.coordinate_space is None
+        assert bbox.frame_index is None
+        assert bbox.source_width is None
+        assert bbox.source_height is None
 
     def test_bounding_box_valid_partial(self) -> None:
         """Test BoundingBox with partially populated fields."""
@@ -993,3 +998,28 @@ class TestBoundingBoxSchema:
         assert len(deserialized_event.bboxes) == 2
         assert deserialized_event.bboxes[0].x_min == 0.1
         assert deserialized_event.bboxes[1].label == "person"
+
+    def test_bounding_box_new_metadata_fields(self) -> None:
+        """Test BoundingBox with the new metadata fields."""
+        bbox = BoundingBox(
+            coordinate_space="source_pixels",
+            frame_index=123,
+            source_width=1280,
+            source_height=720,
+        )
+        assert bbox.coordinate_space == "source_pixels"
+        assert bbox.frame_index == 123
+        assert bbox.source_width == 1280
+        assert bbox.source_height == 720
+        assert bbox.box_format == "xyxy"
+
+    def test_bounding_box_invalid_metadata_fields(self) -> None:
+        """Test BoundingBox fails validation for invalid metadata field values."""
+        with pytest.raises(pydantic.ValidationError):
+            BoundingBox(frame_index=-1)
+
+        with pytest.raises(pydantic.ValidationError):
+            BoundingBox(source_width=0)
+
+        with pytest.raises(pydantic.ValidationError):
+            BoundingBox(source_height=-10)

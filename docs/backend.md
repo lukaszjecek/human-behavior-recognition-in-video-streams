@@ -43,6 +43,11 @@ Represents a single detected action or behavior. Time is relative to the video s
   } (optional),
   "bboxes": [
     {
+      "box_format": "string (optional)",
+      "coordinate_space": "string (optional)",
+      "frame_index": integer (optional),
+      "source_width": integer (optional),
+      "source_height": integer (optional),
       "x_min": float (optional),
       "y_min": float (optional),
       "x_max": float (optional),
@@ -70,10 +75,19 @@ Represents a single detected action or behavior. Time is relative to the video s
 
 ### BoundingBox Record (elements of the bboxes array)
 
-Represents spatial information for a single detected object.
+Represents spatial information for a single detected object in a frame. The bounding box uses two corners to define a standard 2D axis-aligned rectangle:
+- **Top-Left Corner**: `(x_min, y_min)`
+- **Bottom-Right Corner**: `(x_max, y_max)`
+
+The frontend can calculate the remaining points (`(x_max, y_min)` and `(x_min, y_max)`) from these.
 
 ```json
 {
+  "box_format": "string (optional)",
+  "coordinate_space": "string (optional)",
+  "frame_index": integer (optional),
+  "source_width": integer (optional),
+  "source_height": integer (optional),
   "x_min": float (optional),
   "y_min": float (optional),
   "x_max": float (optional),
@@ -87,10 +101,15 @@ Represents spatial information for a single detected object.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `x_min` | float | No | Minimum horizontal boundary coordinate (0.0 to 1.0, or pixel value) |
-| `y_min` | float | No | Minimum vertical boundary coordinate (0.0 to 1.0, or pixel value) |
-| `x_max` | float | No | Maximum horizontal boundary coordinate (0.0 to 1.0, or pixel value) |
-| `y_max` | float | No | Maximum vertical boundary coordinate (0.0 to 1.0, or pixel value) |
+| `box_format` | string | No | Coordinate layout format (e.g., `"xyxy"`, defaults to `"xyxy"`) |
+| `coordinate_space` | string | No | Coordinate space type (`"normalized"` for 0.0 to 1.0 relative coordinates, or `"source_pixels"` for absolute pixels) |
+| `frame_index` | integer | No | Specific frame index within the video segment where the object was detected |
+| `source_width` | integer | No | Width in pixels of the source video frame |
+| `source_height` | integer | No | Height in pixels of the source video frame |
+| `x_min` | float | No | Left boundary coordinate of the bounding box |
+| `y_min` | float | No | Top boundary coordinate of the bounding box |
+| `x_max` | float | No | Right boundary coordinate of the bounding box |
+| `y_max` | float | No | Bottom boundary coordinate of the bounding box |
 | `label` | string | No | Classification label of the object (e.g., "car", "person") |
 | `confidence` | float | No | Confidence score of the object detection (0.0 to 1.0) |
 
@@ -123,7 +142,9 @@ The Pydantic schema enforces:
 5. `start_timestamp <= end_timestamp` (if both provided)
 6. `x_max >= x_min` and `y_max >= y_min` in `BoundingBox` (if both coordinates in a pair are provided)
 7. `0.0 <= confidence <= 1.0` in `BoundingBox` (if provided)
-8. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
+8. `frame_index >= 0` in `BoundingBox` (if provided)
+9. `source_width > 0` and `source_height > 0` in `BoundingBox` (if provided)
+10. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
 
 ## Semantics of Time
 - **`timestamp`** inside `EventPayload` is an absolute ISO-8601 UTC timestamp representing the real-world time the event was produced.

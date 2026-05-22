@@ -17,12 +17,17 @@
       "track_id": 15,
       "bboxes": [
         {
+          "box_format": "xyxy",
+          "coordinate_space": "source_pixels",
+          "frame_index": 315,
+          "source_width": 1280,
+          "source_height": 720,
           "x_min": 10.0,
           "y_min": 20.0,
           "x_max": 100.0,
           "y_max": 200.0,
           "label": "car",
-          "confidence": 0.9
+          "confidence": 0.90
         }
       ],
       "context": {

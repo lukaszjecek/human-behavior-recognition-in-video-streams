@@ -95,6 +95,10 @@ def test_websocket_live_stream_with_bboxes() -> None:
             y_max=200.0,
             label="car",
             confidence=0.9,
+            coordinate_space="source_pixels",
+            frame_index=123,
+            source_width=1280,
+            source_height=720,
         )
         action_evt = ActionEvent(
             start_frame_index=1,
@@ -125,6 +129,11 @@ def test_websocket_live_stream_with_bboxes() -> None:
         assert data["data"]["bboxes"][0]["label"] == "car"
         assert data["data"]["bboxes"][0]["x_min"] == 10.0
         assert data["data"]["bboxes"][0]["confidence"] == 0.9
+        assert data["data"]["bboxes"][0]["box_format"] == "xyxy"
+        assert data["data"]["bboxes"][0]["coordinate_space"] == "source_pixels"
+        assert data["data"]["bboxes"][0]["frame_index"] == 123
+        assert data["data"]["bboxes"][0]["source_width"] == 1280
+        assert data["data"]["bboxes"][0]["source_height"] == 720
 
 
 def test_websocket_api_echo() -> None:
