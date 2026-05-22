@@ -42,6 +42,7 @@ def save_event(db: Session, payload: EventPayload) -> DBEvent:
             timestamp=payload.timestamp,
             camera_id=payload.camera_id,
             event_type=payload.event_type.value,
+            session_id=payload.session_id,
             payload=payload.model_dump(mode="json"),
         )
         db.add(db_event)
@@ -63,6 +64,7 @@ def get_events(
     db: Session,
     event_type: str | None = None,
     camera_id: str | None = None,
+    session_id: UUID | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> Sequence[DBEvent]:
@@ -72,6 +74,7 @@ def get_events(
         db: The database session.
         event_type: Optional filter for event type (DETECTION / ALERT).
         camera_id: Optional filter for source camera reference.
+        session_id: Optional filter for session ID.
         limit: Max number of records to return.
         offset: Number of records to skip.
 
@@ -83,6 +86,8 @@ def get_events(
         stmt = stmt.where(DBEvent.event_type == event_type)
     if camera_id:
         stmt = stmt.where(DBEvent.camera_id == camera_id)
+    if session_id:
+        stmt = stmt.where(DBEvent.session_id == session_id)
 
     # Order by newest first
     stmt = stmt.order_by(DBEvent.timestamp.desc()).offset(offset).limit(limit)

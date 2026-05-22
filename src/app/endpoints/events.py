@@ -29,6 +29,10 @@ def read_events(
         default=None,
         description="Filter by camera/video reference",
     ),
+    session_id: UUID | None = Query(
+        default=None,
+        description="Filter by session ID",
+    ),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -38,6 +42,7 @@ def read_events(
         db,
         event_type=event_type,
         camera_id=camera_id,
+        session_id=session_id,
         limit=limit,
         offset=offset,
     )
