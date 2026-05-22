@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
+from src.inference.runtime_logging import RuntimeLogContext, log_event
 from src.inference.source_adapters import FileSourceAdapter, InferenceSourceAdapter
 from src.inference.tracker import BaseTracker, SingleTrackTracker
 
@@ -86,6 +87,7 @@ def produce_frames_from_source(
     frame_queue: Queue,
     stop_event: Optional[Event] = None,
     window_size: int = 16,
+    log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Read frames from a source adapter and push them to a queue.
 
@@ -99,10 +101,18 @@ def produce_frames_from_source(
         stop_event (Optional[Event]): When set, the producer stops reading
             new frames and exits.
         window_size (int): Number of frames in temporal window (used for image fallback).
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Raises:
         RuntimeError: If the source cannot be opened.
     """
+    log_event(
+        logger,
+        logging.INFO,
+        "source_opening",
+        "Opening inference source.",
+        log_context,
+    )
     try:
         is_webp = (
             source_adapter.source_type == "file"
@@ -169,6 +179,30 @@ def produce_frames_from_source(
                     raise RuntimeError(
                         "Could not open "
                         f"{source_adapter.source_type} source: {source_adapter.source_ref}",
+        try:
+            if not cap.isOpened():
+                log_event(
+                    logger,
+                    logging.ERROR,
+                    "source_open_failed",
+                    "Failed to open inference source.",
+                    log_context,
+                )
+                raise RuntimeError(
+                    "Could not open "
+                    f"{source_adapter.source_type} source: {source_adapter.source_ref}",
+                )
+
+            frames_read = 0
+            while True:
+                if stop_event is not None and stop_event.is_set():
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "source_stop_requested",
+                        "Stop event received; stopping source read.",
+                        log_context,
+                        frames_read=frames_read,
                     )
 
                 frames_read = 0
@@ -187,6 +221,16 @@ def produce_frames_from_source(
 
                     frames_read += 1
                     frame_queue.put(frame)
+                if not ret:
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "source_eof",
+                        "Reached end of source stream.",
+                        log_context,
+                        frames_read=frames_read,
+                    )
+                    break
 
                 # Fallback for images (like webp) if no frames were read by VideoCapture
                 if frames_read == 0 and source_adapter.source_type == "file":
@@ -268,6 +312,7 @@ def produce_frames_safe(
     stats: dict,
     stop_event: Optional[Event] = None,
     window_size: int = 16,
+    log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Run the frame producer and store any raised exception in stats."""
     try:
@@ -276,9 +321,19 @@ def produce_frames_safe(
             frame_queue,
             stop_event=stop_event,
             window_size=window_size,
+            log_context=log_context,
         )
     except Exception as exc:
         stats["producer_error"] = exc
+        log_event(
+            logger,
+            logging.ERROR,
+            "source_producer_failed",
+            "Source producer raised an exception.",
+            log_context,
+            exc_info=True,
+            error_type=type(exc).__name__,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +354,7 @@ def produce_frames_with_reconnect(
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
     window_size: int = 16,
+    log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Frame producer with exponential back-off reconnect for stream sources.
 
@@ -319,6 +375,7 @@ def produce_frames_with_reconnect(
         backoff_factor (float): Multiplier applied to *retry_delay* on each
             successive attempt.
         window_size (int): Number of frames in temporal window (used for image fallback).
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     if source_adapter.source_type not in _RTSP_SOURCE_TYPES:
         # Non-stream sources do not need reconnect logic.
@@ -328,6 +385,7 @@ def produce_frames_with_reconnect(
             stats,
             stop_event=stop_event,
             window_size=window_size,
+            log_context=log_context,
         )
         return
 
@@ -338,14 +396,25 @@ def produce_frames_with_reconnect(
     try:
         while True:
             if stop_event is not None and stop_event.is_set():
-                logger.debug("Reconnect producer: stop_event set before attempt.")
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "stream_stop_requested",
+                    "Stop event received before reconnect attempt.",
+                    log_context,
+                )
                 break
 
             try:
                 cap = source_adapter.open_capture()
             except Exception as open_exc:
-                logger.warning(
-                    "Reconnect producer: open_capture() raised: %s", open_exc
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "stream_open_failed",
+                    "open_capture() raised while reconnecting.",
+                    log_context,
+                    error_type=type(open_exc).__name__,
                 )
                 cap = None
 
@@ -358,21 +427,27 @@ def produce_frames_with_reconnect(
                         source_ref=source_adapter.source_ref,
                         frames_read=frames_read,
                     )
-                    logger.error(
-                        "Reconnect producer: max retries (%d) reached for %s.",
-                        max_retries,
-                        source_adapter.source_ref,
+                    log_event(
+                        logger,
+                        logging.ERROR,
+                        "stream_reconnect_exhausted",
+                        "Reconnect attempts exhausted for stream source.",
+                        log_context,
+                        max_retries=max_retries,
+                        frames_read=frames_read,
                     )
                     stats["producer_error"] = err
                     return
 
-                logger.warning(
-                    "Reconnect producer: could not open source %s "
-                    "(attempt %d/%d), retrying in %.1fs.",
-                    source_adapter.source_ref,
-                    attempts + 1,
-                    max_retries,
-                    current_delay,
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "stream_reconnect_scheduled",
+                    "Could not open stream source; scheduling reconnect.",
+                    log_context,
+                    attempt=attempts + 1,
+                    max_retries=max_retries,
+                    delay_s=current_delay,
                 )
                 _interruptible_sleep(current_delay, stop_event)
                 current_delay *= backoff_factor
@@ -385,9 +460,13 @@ def produce_frames_with_reconnect(
             try:
                 while True:
                     if stop_event is not None and stop_event.is_set():
-                        logger.debug(
-                            "Reconnect producer: stop_event set (read %d frames).",
-                            frames_read,
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "stream_stop_requested",
+                            "Stop event received while reading stream.",
+                            log_context,
+                            frames_read=frames_read,
                         )
                         stop_requested = True
                         break
@@ -396,11 +475,13 @@ def produce_frames_with_reconnect(
                     if not ret:
                         # Real read failure - reconnect logic will handle it.
                         connection_dropped = True
-                        logger.warning(
-                            "Reconnect producer: read() returned False for %s "
-                            "(frames read so far: %d). Will retry.",
-                            source_adapter.source_ref,
-                            frames_read,
+                        log_event(
+                            logger,
+                            logging.WARNING,
+                            "stream_read_failed",
+                            "Stream read returned False; will attempt reconnect.",
+                            log_context,
+                            frames_read=frames_read,
                         )
                         break
 
@@ -427,21 +508,28 @@ def produce_frames_with_reconnect(
                     source_ref=source_adapter.source_ref,
                     frames_read=frames_read,
                 )
-                logger.error(
-                    "Reconnect producer: max retries (%d) exhausted for %s.",
-                    max_retries,
-                    source_adapter.source_ref,
+                log_event(
+                    logger,
+                    logging.ERROR,
+                    "stream_reconnect_exhausted",
+                    "Reconnect attempts exhausted for stream source.",
+                    log_context,
+                    max_retries=max_retries,
+                    frames_read=frames_read,
                 )
                 stats["producer_error"] = err
                 return
 
-            logger.warning(
-                "Reconnect producer: scheduling reconnect for %s in %.1fs "
-                "(attempt %d/%d).",
-                source_adapter.source_ref,
-                current_delay,
-                attempts + 1,
-                max_retries,
+            log_event(
+                logger,
+                logging.WARNING,
+                "stream_reconnect_scheduled",
+                "Scheduling stream reconnect after read interruption.",
+                log_context,
+                attempt=attempts + 1,
+                max_retries=max_retries,
+                delay_s=current_delay,
+                frames_read=frames_read,
             )
             _interruptible_sleep(current_delay, stop_event)
             current_delay *= backoff_factor
@@ -470,6 +558,7 @@ def consume_frame_queue(
     stats: dict,
     stop_event: Optional[Event] = None,
     on_result: Optional[Callable[[InferenceResult], None]] = None,
+    log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Consume frames from a queue with an inference engine and update stats.
 
@@ -482,13 +571,28 @@ def consume_frame_queue(
             drained.
         on_result (Optional[Callable[[InferenceResult], None]]): Callback invoked
             when a valid InferenceResult is produced.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     frame_count = 0
     inference_results = []
+    log_event(
+        logger,
+        logging.INFO,
+        "consumer_started",
+        "Inference consumer started.",
+        log_context,
+    )
 
     while True:
         if stop_event is not None and stop_event.is_set():
             # Drain the queue until the sentinel arrives.
+            log_event(
+                logger,
+                logging.INFO,
+                "consumer_stop_requested",
+                "Stop event received; draining frame queue.",
+                log_context,
+            )
             while True:
                 try:
                     # get_nowait() would exit early on a momentary Empty
@@ -515,6 +619,16 @@ def consume_frame_queue(
             result = engine.process_frame(frame)
         except Exception as exc:
             stats["consumer_error"] = exc
+            log_event(
+                logger,
+                logging.ERROR,
+                "inference_execution_failed",
+                "Inference engine raised an exception.",
+                log_context,
+                exc_info=True,
+                frame_count=frame_count,
+                error_type=type(exc).__name__,
+            )
             break
 
         if result is not None:
@@ -529,6 +643,15 @@ def consume_frame_queue(
     stats["frame_count"] = frame_count
     stats["inference_count"] = len(inference_results)
     stats["inference_results"] = inference_results
+    log_event(
+        logger,
+        logging.INFO,
+        "consumer_completed",
+        "Inference consumer completed.",
+        log_context,
+        frame_count=frame_count,
+        inference_count=len(inference_results),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +666,7 @@ def run_source(
     emit_runtime_summary: bool = True,
     stop_event: Optional[Event] = None,
     on_result: Optional[Callable[[InferenceResult], None]] = None,
+    log_context: RuntimeLogContext | None = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run offline inference on a generic source adapter.
 
@@ -558,6 +682,7 @@ def run_source(
             consumer will stop early and the session will end gracefully.
         on_result: Optional callback function triggered when a new
             inference result is available.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Number of processed frames,
@@ -583,15 +708,26 @@ def run_source(
         "consumer_error": None,
     }
 
+    log_event(
+        logger,
+        logging.INFO,
+        "runtime_started",
+        "Inference runtime started.",
+        log_context,
+    )
+    start_time = time.monotonic()
+
     producer = Thread(
         target=produce_frames_safe,
         args=(source_adapter, frame_queue, stats),
         kwargs={"stop_event": stop_event, "window_size": runtime_engine.window_size},
+        kwargs={"stop_event": stop_event, "log_context": log_context},
     )
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
         kwargs={"stop_event": stop_event, "on_result": on_result},
+        kwargs={"stop_event": stop_event, "log_context": log_context},
     )
 
     producer.start()
@@ -601,18 +737,40 @@ def run_source(
     consumer.join()
 
     if stats["producer_error"] is not None:
-        raise RuntimeFailureState(
+        error_state = RuntimeFailureState(
             error=stats["producer_error"],
             phase="producer",
             frames_before_failure=stats["frame_count"],
-        ) from stats["producer_error"]
-        
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "runtime_failed",
+            "Inference runtime failed during producer phase.",
+            log_context,
+            phase=error_state.phase,
+            frames_before_failure=error_state.frames_before_failure,
+            error_type=type(error_state.error).__name__,
+        )
+        raise error_state from stats["producer_error"]
+
     if stats["consumer_error"] is not None:
-        raise RuntimeFailureState(
+        error_state = RuntimeFailureState(
             error=stats["consumer_error"],
             phase="consumer",
             frames_before_failure=stats["frame_count"],
-        ) from stats["consumer_error"]
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "runtime_failed",
+            "Inference runtime failed during consumer phase.",
+            log_context,
+            phase=error_state.phase,
+            frames_before_failure=error_state.frames_before_failure,
+            error_type=type(error_state.error).__name__,
+        )
+        raise error_state from stats["consumer_error"]
 
     frame_count = stats["frame_count"]
     inference_count = stats["inference_count"]
@@ -630,6 +788,22 @@ def run_source(
         print(f"Generated {inference_count} inference windows")
         print(f"Generated {len(action_events)} action events")
 
+    metrics = runtime_engine.get_metrics()
+    log_event(
+        logger,
+        logging.INFO,
+        "runtime_completed",
+        "Inference runtime completed.",
+        log_context,
+        frame_count=frame_count,
+        inference_count=inference_count,
+        event_count=len(action_events),
+        duration_s=round(time.monotonic() - start_time, 3),
+        total_frames_processed=metrics.get("total_frames_processed"),
+        total_frames_skipped=metrics.get("total_frames_skipped"),
+        total_inferences=metrics.get("total_inferences"),
+    )
+
     return frame_count, inference_count, inference_results, action_events
 
 
@@ -643,6 +817,7 @@ def run_source_with_reconnect(
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
     on_result: Optional[Callable[[InferenceResult], None]] = None,
+    log_context: RuntimeLogContext | None = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run inference with automatic reconnect for stream (RTSP) sources.
 
@@ -665,6 +840,7 @@ def run_source_with_reconnect(
         backoff_factor: Multiplier applied to *retry_delay* on each attempt.
         on_result: Optional callback function triggered when a new
             inference result is available.
+        log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
         tuple[int, int, list[Any], list[Any]]: Processed frames, inference
@@ -688,6 +864,18 @@ def run_source_with_reconnect(
         "consumer_error": None,
     }
 
+    log_event(
+        logger,
+        logging.INFO,
+        "runtime_started",
+        "Inference runtime started with reconnect support.",
+        log_context,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        backoff_factor=backoff_factor,
+    )
+    start_time = time.monotonic()
+
     producer = Thread(
         target=produce_frames_with_reconnect,
         args=(source_adapter, frame_queue, stats),
@@ -697,12 +885,14 @@ def run_source_with_reconnect(
             "retry_delay": retry_delay,
             "backoff_factor": backoff_factor,
             "window_size": runtime_engine.window_size,
+            "log_context": log_context,
         },
     )
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
         kwargs={"stop_event": stop_event, "on_result": on_result},
+        kwargs={"stop_event": stop_event, "log_context": log_context},
     )
 
     producer.start()
@@ -712,18 +902,40 @@ def run_source_with_reconnect(
     consumer.join()
 
     if stats["producer_error"] is not None:
-        raise RuntimeFailureState(
+        error_state = RuntimeFailureState(
             error=stats["producer_error"],
             phase="producer",
             frames_before_failure=stats["frame_count"],
-        ) from stats["producer_error"]
-        
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "runtime_failed",
+            "Inference runtime failed during producer phase.",
+            log_context,
+            phase=error_state.phase,
+            frames_before_failure=error_state.frames_before_failure,
+            error_type=type(error_state.error).__name__,
+        )
+        raise error_state from stats["producer_error"]
+
     if stats["consumer_error"] is not None:
-        raise RuntimeFailureState(
+        error_state = RuntimeFailureState(
             error=stats["consumer_error"],
             phase="consumer",
             frames_before_failure=stats["frame_count"],
-        ) from stats["consumer_error"]
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "runtime_failed",
+            "Inference runtime failed during consumer phase.",
+            log_context,
+            phase=error_state.phase,
+            frames_before_failure=error_state.frames_before_failure,
+            error_type=type(error_state.error).__name__,
+        )
+        raise error_state from stats["consumer_error"]
 
     frame_count = stats["frame_count"]
     inference_count = stats["inference_count"]
@@ -741,6 +953,22 @@ def run_source_with_reconnect(
         print(f"Generated {inference_count} inference windows")
         print(f"Generated {len(action_events)} action events")
 
+    metrics = runtime_engine.get_metrics()
+    log_event(
+        logger,
+        logging.INFO,
+        "runtime_completed",
+        "Inference runtime completed.",
+        log_context,
+        frame_count=frame_count,
+        inference_count=inference_count,
+        event_count=len(action_events),
+        duration_s=round(time.monotonic() - start_time, 3),
+        total_frames_processed=metrics.get("total_frames_processed"),
+        total_frames_skipped=metrics.get("total_frames_skipped"),
+        total_inferences=metrics.get("total_inferences"),
+    )
+
     return frame_count, inference_count, inference_results, action_events
 
 
@@ -750,6 +978,7 @@ def run_video(
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
     stop_event: Optional[Event] = None,
+    log_context: RuntimeLogContext | None = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run offline inference on a single local video file."""
     if not isinstance(video_path, str):
@@ -762,6 +991,7 @@ def run_video(
         tracker=tracker,
         emit_runtime_summary=emit_runtime_summary,
         stop_event=stop_event,
+        log_context=log_context,
     )
 
 
