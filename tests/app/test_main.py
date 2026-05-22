@@ -8,6 +8,7 @@ def test_main_writes_summary(tmp_path, monkeypatch):
     class_dir = subset_dir / "walking"
     class_dir.mkdir(parents=True)
     (class_dir / "sample.mp4").write_bytes(b"")
+    (class_dir / "sample_image.webp").write_bytes(b"")
 
     log_dir = tmp_path / "logs"
 
@@ -22,7 +23,7 @@ def test_main_writes_summary(tmp_path, monkeypatch):
     assert summary_path.exists()
 
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    assert summary["video_count"] == 1
+    assert summary["video_count"] == 2
     assert summary["class_count"] == 1
 
 

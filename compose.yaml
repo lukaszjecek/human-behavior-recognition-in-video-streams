@@ -105,6 +105,7 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
+      - ./data/raw:/app/data/raw
       - ./data/subset:/app/data/subset:ro
       - ./data/logs:/app/data/logs
       - ./configs:/app/configs:ro

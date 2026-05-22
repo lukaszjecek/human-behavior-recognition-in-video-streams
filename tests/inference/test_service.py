@@ -178,14 +178,14 @@ def test_run_offline_mp4_inference_rejects_rtsp_request(tmp_path):
         run_offline_mp4_inference(request)
 
 
-def test_run_offline_mp4_inference_rejects_non_mp4_input(tmp_path):
+def test_run_offline_mp4_inference_rejects_non_video_input(tmp_path):
     request = InferenceServiceRequest(
-        video_path=tmp_path / "sample.avi",
+        video_path=tmp_path / "sample.txt",
         checkpoint_path=tmp_path / "dummy_checkpoint.pth",
         config_path=tmp_path / "inference.yml",
     )
 
-    with pytest.raises(ValueError, match=r"\.mp4 extension"):
+    with pytest.raises(ValueError, match="supported video extension"):
         run_offline_mp4_inference(request)
 
 
@@ -199,3 +199,73 @@ def test_run_offline_mp4_inference_rejects_source_uri(tmp_path):
 
     with pytest.raises(ValueError, match="does not accept request.source_uri"):
         run_offline_mp4_inference(request)
+
+
+def test_run_offline_mp4_inference_image_fallback(monkeypatch, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
+    # Create dummy webp
+    video_path = tmp_path / "sample.webp"
+    video_path.write_bytes(b"mock bytes")
+
+    # Mock cv2.imread to return a mock frame
+    mock_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    monkeypatch.setattr("cv2.imread", lambda path: mock_frame)
+
+    request = InferenceServiceRequest(
+        video_path=video_path,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+
+    result = run_offline_mp4_inference(request)
+
+    # Since the config has temporal_window=4, the frame is duplicated 4 times.
+    assert result.frame_count == 4
+    assert result.inference_count == 1
+
+
+def test_run_offline_mp4_inference_animated_webp(monkeypatch, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)
+
+    # Create dummy webp path
+    video_path = tmp_path / "animated.webp"
+    video_path.write_bytes(b"mock bytes")
+
+    # Mock PIL Image.open to return a fake animated image
+    class FakeFrame:
+        def convert(self, mode):
+            return self
+        def __array__(self, dtype=None):
+            return np.zeros((64, 64, 3), dtype=np.uint8)
+
+    class FakePILImage:
+        is_animated = True
+        n_frames = 5
+        def __init__(self):
+            self._idx = 0
+        def __iter__(self):
+            return self
+
+    monkeypatch.setattr("PIL.Image.open", lambda path: FakePILImage())
+    monkeypatch.setattr("PIL.ImageSequence.Iterator", lambda img: [FakeFrame() for _ in range(5)])
+
+    request = InferenceServiceRequest(
+        video_path=video_path,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+
+    result = run_offline_mp4_inference(request)
+
+    # Since the animated image has 5 frames, all 5 frames should be processed.
+    assert result.frame_count == 5
+    assert result.inference_count == 1
+
+
