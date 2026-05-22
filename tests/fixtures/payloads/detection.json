@@ -1,0 +1,20 @@
+{
+  "event_id": "123e4567-e89b-12d3-a456-426614174000",
+  "timestamp": "2026-05-13T12:00:00Z",
+  "camera_id": "cam-01",
+  "version": "1.0",
+  "event_type": "DETECTION",
+  "data": {
+    "start_frame_index": 120,
+    "end_frame_index": 150,
+    "label": "walking",
+    "confidence": 0.95,
+    "start_timestamp": 4.0,
+    "end_timestamp": 5.0,
+    "track_id": 42,
+    "context": {
+      "scene_tag": "outdoor",
+      "confidence": 0.88
+    }
+  }
+}

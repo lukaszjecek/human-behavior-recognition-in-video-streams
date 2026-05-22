@@ -42,7 +42,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-            mapfile -t files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.py')
+            mapfile -t files < <(git diff --name-only --diff-filter=d "$BASE_SHA" "$HEAD_SHA" -- '*.py')
           else
             mapfile -t files < <(find src tests -type f -name '*.py' | sort)
           fi

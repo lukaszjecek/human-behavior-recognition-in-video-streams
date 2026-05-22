@@ -10,7 +10,7 @@ from typing import Optional, Union
 import numpy as np
 import torch
 
-from src.inference.action_event import ActionEvent, ActionEventLog
+from src.app.schemas.action_event import ActionEvent, ActionEventLog
 from src.inference.engine import InferenceResult
 
 logger = logging.getLogger(__name__)

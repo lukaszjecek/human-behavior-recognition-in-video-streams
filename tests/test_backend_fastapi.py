@@ -41,8 +41,9 @@ def test_websocket_echo():
         assert msg == "echo: hello"
 
 
-def test_database_url_auto_generated_from_fields():
+def test_database_url_auto_generated_from_fields(monkeypatch):
     """database_url is built from individual DB fields when not explicitly set."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     s = Settings(
         db_user="alice",
         db_password="secret",
@@ -53,8 +54,9 @@ def test_database_url_auto_generated_from_fields():
     assert s.database_url == "postgresql://alice:secret@pghost:5433/mydb"
 
 
-def test_database_url_explicit_overrides_auto_generation():
+def test_database_url_explicit_overrides_auto_generation(monkeypatch):
     """Explicit DATABASE_URL takes precedence over individual DB fields."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     explicit_url = "postgresql://other:pass@otherhost:5432/otherdb"
     s = Settings(
         db_user="alice",
@@ -67,9 +69,15 @@ def test_database_url_explicit_overrides_auto_generation():
     assert s.database_url == explicit_url
 
 
-def test_default_settings_db_fields():
+def test_default_settings_db_fields(monkeypatch):
     """Default DB settings are present and consistent."""
-    s = Settings()
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DB_HOST", raising=False)
+    monkeypatch.delenv("DB_PORT", raising=False)
+    monkeypatch.delenv("DB_USER", raising=False)
+    monkeypatch.delenv("DB_PASSWORD", raising=False)
+    monkeypatch.delenv("POSTGRES_DB", raising=False)
+    s = Settings(_env_file=None)
     assert s.db_host == "localhost"
     assert s.db_port == 5432
     assert s.db_user == "hbr_user"
