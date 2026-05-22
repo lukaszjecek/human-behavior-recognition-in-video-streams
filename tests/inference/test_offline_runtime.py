@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from src.inference.engine import InferenceEngine
-from src.inference.offline_runtime import run_source, run_video
+from src.inference.offline_runtime import RuntimeFailureState, run_source, run_video
 from src.inference.source_adapters import RtspSourceAdapter
 
 
@@ -102,3 +102,19 @@ def test_run_source_processes_rtsp_adapter_frames(monkeypatch):
     assert len(inference_results) == inference_windows
     assert len(action_events) == inference_windows
     assert all(event.track_id == 1 for event in action_events)
+
+
+def test_run_video_raises_on_empty_corrupt_file(tmp_path):
+    # Create an empty file (which will exist, but have 0 frames and fail image fallback)
+    corrupt_file = tmp_path / "corrupt.mp4"
+    corrupt_file.touch()
+
+    engine = InferenceEngine(model=DummyPredictionModel())
+
+    with pytest.raises(RuntimeFailureState) as exc_info:
+        run_video(str(corrupt_file), engine=engine)
+
+    assert exc_info.value.phase == "producer"
+    assert isinstance(exc_info.value.error, RuntimeError)
+    assert "Could not read any frames from file source" in str(exc_info.value.error)
+

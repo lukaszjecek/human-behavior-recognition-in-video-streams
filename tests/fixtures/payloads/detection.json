@@ -15,6 +15,21 @@
     "context": {
       "scene_tag": "outdoor",
       "confidence": 0.88
-    }
+    },
+    "bboxes": [
+      {
+        "box_format": "xyxy",
+        "coordinate_space": "normalized",
+        "frame_index": 135,
+        "source_width": 1280,
+        "source_height": 720,
+        "x_min": 0.15,
+        "y_min": 0.20,
+        "x_max": 0.45,
+        "y_max": 0.80,
+        "label": "person",
+        "confidence": 0.92
+      }
+    ]
   }
 }

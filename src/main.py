@@ -17,7 +17,7 @@ from src.inference.mp4_cli import (
 DATA_DIR = Path(getenv("DATA_DIR", "/app/data/raw"))
 LOG_DIR = Path(getenv("LOG_DIR", "/app/data/logs"))
 
-VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".webp"}
 
 
 def run_startup_summary() -> int:

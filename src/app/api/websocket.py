@@ -7,6 +7,7 @@ import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from src.app.services.websocket_manager import websocket_manager
 from src.inference.runtime_logging import (
     RuntimeLogContext,
     configure_runtime_logging,
@@ -70,4 +71,21 @@ async def websocket_echo(ws: WebSocket) -> None:
             await ws.close()
         except RuntimeError:
             # Rzucane, jeśli socket został już zamknięty przez klienta
+            pass
+
+
+@router.websocket("/live")
+async def websocket_live(ws: WebSocket) -> None:
+    """Live streaming websocket that sends detection and alert events to clients."""
+    await websocket_manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        websocket_manager.disconnect(ws)
+        try:
+            await ws.close()
+        except RuntimeError:
             pass

@@ -39,8 +39,12 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
         raise TypeError("request must be an InferenceCliRequest instance")
     configure_runtime_logging()
     _validate_request_paths(request)
-    if request.input_path.suffix.lower() != ".mp4":
-        raise ValueError("input_path must point to an .mp4 file")
+    allowed_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".webp"}
+    if request.input_path.suffix.lower() not in allowed_extensions:
+        raise ValueError(
+            "input_path must point to a supported video file "
+            f"({', '.join(sorted(allowed_extensions))})"
+        )
 
     session_id = uuid.uuid4().hex
     log_context = RuntimeLogContext(

@@ -40,7 +40,22 @@ Represents a single detected action or behavior. Time is relative to the video s
   "context": {
     "scene_tag": "string",
     "confidence": float
-  } (optional)
+  } (optional),
+  "bboxes": [
+    {
+      "box_format": "string (optional)",
+      "coordinate_space": "string (optional)",
+      "frame_index": integer (optional),
+      "source_width": integer (optional),
+      "source_height": integer (optional),
+      "x_min": float (optional),
+      "y_min": float (optional),
+      "x_max": float (optional),
+      "y_max": float (optional),
+      "label": "string" (optional),
+      "confidence": float (optional)
+    }
+  ] (optional)
 }
 ```
 
@@ -56,6 +71,47 @@ Represents a single detected action or behavior. Time is relative to the video s
 | `end_timestamp` | float | No | Ending timestamp in seconds (relative to video start) |
 | `track_id` | integer | No | Tracking ID for multi-object tracking |
 | `context` | object | No | Contextual scene information (Sprint 3) |
+| `bboxes` | array | No | List of bounding boxes for objects involved in the event |
+
+### BoundingBox Record (elements of the bboxes array)
+
+Represents spatial information for a single detected object in a frame. The bounding box uses two corners to define a standard 2D axis-aligned rectangle:
+- **Top-Left Corner**: `(x_min, y_min)`
+- **Bottom-Right Corner**: `(x_max, y_max)`
+
+The frontend can calculate the remaining points (`(x_max, y_min)` and `(x_min, y_max)`) from these.
+
+```json
+{
+  "box_format": "string (optional)",
+  "coordinate_space": "string (optional)",
+  "frame_index": integer (optional),
+  "source_width": integer (optional),
+  "source_height": integer (optional),
+  "x_min": float (optional),
+  "y_min": float (optional),
+  "x_max": float (optional),
+  "y_max": float (optional),
+  "label": "string" (optional),
+  "confidence": float (optional)
+}
+```
+
+#### Field Descriptions for BoundingBox
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `box_format` | string | No | Coordinate layout format (e.g., `"xyxy"`, defaults to `"xyxy"`) |
+| `coordinate_space` | string | No | Coordinate space type (`"normalized"` for 0.0 to 1.0 relative coordinates, or `"source_pixels"` for absolute pixels) |
+| `frame_index` | integer | No | Specific frame index within the video segment where the object was detected |
+| `source_width` | integer | No | Width in pixels of the source video frame |
+| `source_height` | integer | No | Height in pixels of the source video frame |
+| `x_min` | float | No | Left boundary coordinate of the bounding box |
+| `y_min` | float | No | Top boundary coordinate of the bounding box |
+| `x_max` | float | No | Right boundary coordinate of the bounding box |
+| `y_max` | float | No | Bottom boundary coordinate of the bounding box |
+| `label` | string | No | Classification label of the object (e.g., "car", "person") |
+| `confidence` | float | No | Confidence score of the object detection (0.0 to 1.0) |
 
 ### AlertData Record (data for event_type: ALERT)
 
@@ -84,7 +140,11 @@ The Pydantic schema enforces:
 3. `0.0 <= confidence <= 1.0`
 4. `label` is non-empty string
 5. `start_timestamp <= end_timestamp` (if both provided)
-6. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
+6. `x_max >= x_min` and `y_max >= y_min` in `BoundingBox` (if both coordinates in a pair are provided)
+7. `0.0 <= confidence <= 1.0` in `BoundingBox` (if provided)
+8. `frame_index >= 0` in `BoundingBox` (if provided)
+9. `source_width > 0` and `source_height > 0` in `BoundingBox` (if provided)
+10. Enumerated validation for `event_type` (`DETECTION`, `ALERT`).
 
 ## Semantics of Time
 - **`timestamp`** inside `EventPayload` is an absolute ISO-8601 UTC timestamp representing the real-world time the event was produced.
@@ -122,3 +182,177 @@ The backend provides asynchronous REST endpoints to manage offline video inferen
 - **Session Manager:** (`src/app/services/session_manager.py`) Manages state and `asyncio.Task` references in-memory.
 - **Background Execution:** Inference is pushed to a background thread using `asyncio.to_thread()` so the FastAPI server remains fully responsive.
 - **Graceful Shutdown:** Stopping a session injects a `threading.Event` signal deep into the offline frame producer loop (`src/inference/offline_runtime.py`), causing the video reading loop to break cleanly on the next frame.
+
+
+# Live WebSocket & Alerting Pipeline
+
+The backend supports near real-time streaming of live behavior detections and system alerts to downstream web clients using WebSockets.
+
+## Endpoints
+
+- `WS /ws/live` (also available as `WS /api/websocket/live`)
+  - Accepts incoming client WebSocket connections.
+  - Automatically registers the connection with the `WebSocketManager`.
+  - Streams `EventPayload` structures (both `DETECTION` and `ALERT` types) in JSON format in real-time.
+  - Automatically handles connection cleanup on client disconnect.
+
+- `WS /ws/echo` (also available as `WS /api/websocket/echo`)
+  - A simple testing endpoint that echoes client messages back.
+
+## Key Components
+
+### 1. WebSocketManager (`src/app/services/websocket_manager.py`)
+Provides a thread-safe singleton wrapper to register, manage, and broadcast events to all active WebSocket connections.
+- **Connection Registry:** Holds active FastAPI `WebSocket` connection objects.
+- **Thread Safety:** Uses `asyncio.run_coroutine_threadsafe` along with the captured ASGI event loop reference. This allows background inference threads (run via `asyncio.to_thread`) to safely submit broadcast requests back to the main asynchronous event loop.
+- **Auto-Cleanup:** If broadcasting to a specific client fails (e.g., due to network dropping), that client is silently disconnected and removed from the active connections pool.
+
+### 2. Runtime Callback Pipeline (`src/inference/offline_runtime.py`)
+- Employs an optional callback parameter `on_result: Optional[Callable[[InferenceResult], None]]` on `consume_frame_queue()`, `run_source()`, and `run_source_with_reconnect()`.
+- Whenever a valid `InferenceResult` window is computed by the `InferenceEngine`, it is immediately forwarded to the callback rather than waiting for the entire video to finish processing.
+
+### 3. Integrated Alerting Pipeline (`src/inference/service.py`)
+- During runtime, the `on_result` callback is mapped to the internal `handle_result` function.
+- This function:
+  1. Parses the raw model `InferenceResult`.
+  2. Builds the canonical `ActionEvent` via `ActionEventWriter`.
+  3. Sends a `DETECTION` `EventPayload` message to the `WebSocketManager`.
+  4. Feeds the event into the `AlertStateMachine`.
+  5. If the state machine triggers a state transition (entering/resolving alert state based on settings like `persistence_threshold`, `resolve_threshold`, and `danger_labels`), it constructs an `AlertData` structure and sends an `ALERT` `EventPayload` to the `WebSocketManager`.
+
+### 4. Configuration & Settings (`src/inference/runtime.py`)
+Alert behavior is governed by the `alert` section of the YAML configuration loaded into `InferenceRuntimeSettings`:
+- `persistence_threshold`: Number of consecutive frames/windows showing a danger label required to trigger an alert.
+- `resolve_threshold`: Number of consecutive frames/windows without danger labels required to resolve an alert.
+- `danger_labels`: A list of action labels categorized as dangerous (e.g., `"fall"`, `"violence"`).
+
+---
+
+## Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Source as Video/RTSP Source
+    participant Engine as Inference Engine
+    participant Runner as Inference Service Thread
+    participant StateMachine as Alert State Machine
+    participant WSManager as WebSocketManager
+    participant Client as WS Client (/ws/live)
+
+    Client->>WSManager: Connect /ws/live (FastAPI event loop)
+    WSManager-->>Client: Connection Accepted
+    Note over Runner, Source: background inference loop
+    Source->>Engine: Process Video Frames
+    Engine->>Runner: InferenceResult Computed
+    Runner->>WSManager: broadcast_sync(DETECTION Payload)
+    WSManager->>Client: Send JSON (DETECTION)
+    Runner->>StateMachine: process_event(ActionEvent)
+    alt Danger label threshold exceeded
+        StateMachine->>Runner: Alert Triggered
+        Runner->>WSManager: broadcast_sync(ALERT Payload)
+        WSManager->>Client: Send JSON (ALERT)
+    end
+```
+
+---
+
+## Verification and Testing
+
+Automated tests are written in [test_websocket.py](../tests/app/test_websocket.py). They cover:
+- **WebSocket Echo:** Validates standard WebSocket message echo loop.
+- **Live Event Broadcasting:** Spawns a mock WebSocket connection client using `TestClient.websocket_connect("/ws/live")`, pushes detection/alert payloads to the singleton `WebSocketManager`, and asserts that the client receives the serialized JSON structures conforming to the Sprint 3 payload contract.
+
+---
+
+# Database Persistence Layer
+
+This section details the database persistence architecture introduced in Sprint 3. The goal of this layer is to persist all system outputs (detections and alerts) generated by the integrated inference pipeline, enabling historical inspection beyond live streaming.
+
+## Architecture Overview
+
+We use **SQLAlchemy 2.0** as our Object Relational Mapper (ORM), with the following configurations:
+- **Production/Development Runtime**: **PostgreSQL** database (via `psycopg2-binary`).
+- **Testing Runtime**: An in-memory **SQLite** database (`sqlite:///:memory:`). To support multi-threaded test execution (e.g., background inference threads running alongside the FastAPI test client), we utilize `StaticPool` and disable thread checks (`check_same_thread = False`) to share a single in-memory database connection across all threads.
+
+Database sessions and the engine are initialized lazily in `src/app/db/session.py` to prevent import-time side effects and allow configuration overrides during testing.
+
+---
+
+## Database Schema
+
+All persisted events are stored in a single table named `events`. The structure uses metadata columns for indexing/filtering and stores the full, validated `EventPayload` model in a generic `JSON` column to ensure schema compatibility between SQLite (native JSON/Text) and PostgreSQL (native JSONB).
+
+### Table: `events`
+
+| Column Name | SQLAlchemy Type | Constraints | Description |
+|---|---|---|---|
+| `event_id` | `UUID` | Primary Key | Unique identifier for the event (matches `EventPayload.event_id`). |
+| `timestamp` | `DateTime(timezone=True)` | Index, Not Null | Absolute UTC timestamp of the event. |
+| `camera_id` | `String` | Index, Nullable | Identifier of the source camera/video. |
+| `event_type` | `String` | Index, Not Null | Type of event (e.g., `DETECTION`, `ALERT`). |
+| `payload` | `JSON` | Not Null | Complete serialized Pydantic `EventPayload` object. |
+
+---
+
+## Repository Layer
+
+The database interactions are encapsulated in `src/app/db/repository.py`:
+
+- **`save_event(db: Session, payload: EventPayload) -> DBEvent`**:
+  Validates the incoming payload, converts it to a `DBEvent` model, and commits it to the database. It handles and logs database write failures, raising a `ValueError` or database-level exception.
+- **`get_events(db: Session, event_type: str | None = None, camera_id: str | None = None, limit: int = 100, offset: int = 0) -> Sequence[DBEvent]`**:
+  Queries events, sorting them by newest first (`timestamp DESC`), and supports filtering by type or camera ID alongside standard pagination limit/offset.
+- **`get_event_by_id(db: Session, event_id: UUID) -> DBEvent | None`**:
+  Retrieves a specific event record by its unique UUID.
+
+---
+
+## FastAPI REST Endpoints
+
+Historical records are exposed via the `/api/events` router registered in `src/app/api/routes_impl.py`.
+
+### 1. Get Event and Alert History
+- **Endpoint**: `GET /api/events/`
+- **Query Parameters**:
+  - `event_type`: Filter by event type (`DETECTION` or `ALERT`) (optional).
+  - `camera_id`: Filter by source video reference (optional).
+  - `limit`: Max records to return (default: `100`, range: `1` to `1000`).
+  - `offset`: Pagination offset (default: `0`, min: `0`).
+- **Response**: `200 OK` with a list of `EventPayload` objects.
+
+### 2. Get Event by ID
+- **Endpoint**: `GET /api/events/{event_id}`
+- **Path Parameters**:
+  - `event_id`: Unique UUID of the event.
+- **Response**: `200 OK` with the matching `EventPayload` object, or `404 Not Found` if the ID does not exist.
+
+---
+
+## Verification and Testing
+
+### Automated Tests
+The persistence layer features full test coverage in `tests/app/test_persistence.py`, including:
+- Unit tests for repository write and read paths.
+- Repository error handling and schema validation.
+- FastAPI endpoints query behavior with mock databases.
+- Integration tests checking that real/mocked background session events automatically write to the database.
+
+To run the persistence test suite:
+```bash
+docker compose exec api env PYTHONPATH=. pytest tests/app/test_persistence.py
+```
+
+### Manual Verification
+1. Run `docker compose up --build` to start the backend with Postgres.
+2. Trigger an offline session by POSTing to `/api/sessions/`:
+   ```bash
+   curl -X POST http://localhost:8000/api/sessions/ \
+     -H "Content-Type: application/json" \
+     -d '{"video_path": "data/raw/20200423_1727227699855427971146089_1.webp"}'
+   ```
+3. Read back the history of generated events:
+   ```bash
+   curl http://localhost:8000/api/events/
+   ```
+
+

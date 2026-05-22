@@ -1,12 +1,13 @@
 """Offline producer-consumer runtime for adapter-based inference inputs."""
+
 import logging
 import time
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
-from src.inference.engine import InferenceEngine
+from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.runtime_logging import RuntimeLogContext, log_event
 from src.inference.source_adapters import FileSourceAdapter, InferenceSourceAdapter
@@ -33,9 +34,7 @@ class SourceInterruptedError(RuntimeError):
 
     def __init__(self, source_ref: str, frames_read: int = 0) -> None:
         """Initialise with source reference and frames-read count."""
-        super().__init__(
-            f"Source interrupted after {frames_read} frame(s): {source_ref}"
-        )
+        super().__init__(f"Source interrupted after {frames_read} frame(s): {source_ref}")
         self.source_ref = source_ref
         self.frames_read = frames_read
 
@@ -86,6 +85,7 @@ def produce_frames_from_source(
     source_adapter: InferenceSourceAdapter,
     frame_queue: Queue,
     stop_event: Optional[Event] = None,
+    window_size: int = 16,
     log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Read frames from a source adapter and push them to a queue.
@@ -99,10 +99,12 @@ def produce_frames_from_source(
         frame_queue (Queue): Queue used to pass frames to the consumer.
         stop_event (Optional[Event]): When set, the producer stops reading
             new frames and exits.
+        window_size (int): Number of frames in temporal window (used for image fallback).
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Raises:
-        RuntimeError: If the source cannot be opened.
+        RuntimeError: If an RTSP source cannot be opened. Other source types
+            may stop without raising on open failure.
     """
     log_event(
         logger,
@@ -112,52 +114,176 @@ def produce_frames_from_source(
         log_context,
     )
     try:
-        cap = source_adapter.open_capture()
-
-        try:
-            if not cap.isOpened():
-                log_event(
-                    logger,
-                    logging.ERROR,
-                    "source_open_failed",
-                    "Failed to open inference source.",
-                    log_context,
-                )
-                raise RuntimeError(
-                    "Could not open "
-                    f"{source_adapter.source_type} source: {source_adapter.source_ref}",
-                )
-
+        is_webp = (
+            source_adapter.source_type == "file"
+            and source_adapter.source_ref.lower().endswith(".webp")
+        )
+        if is_webp:
             frames_read = 0
-            while True:
-                if stop_event is not None and stop_event.is_set():
+            import sys
+
+            import cv2
+            import numpy as np
+            from PIL import Image, ImageSequence
+
+            try:
+                pil_img = Image.open(source_adapter.source_ref)
+                is_animated = getattr(pil_img, "is_animated", False)
+                n_frames = getattr(pil_img, "n_frames", 1)
+
+                if is_animated and n_frames > 1:
+                    print(
+                        f"INFO: Source {source_adapter.source_ref} "
+                        f"is an animated image with {n_frames} frames. "
+                        "Extracting frames using Pillow.",
+                        file=sys.stdout,
+                        flush=True,
+                    )
+                    logger.info(
+                        "Source is an animated image with %d frames. Extracting using Pillow.",
+                        n_frames,
+                    )
+                    for frame in ImageSequence.Iterator(pil_img):
+                        if stop_event is not None and stop_event.is_set():
+                            break
+                        frame_rgb = frame.convert("RGB")
+                        frame_bgr = cv2.cvtColor(np.array(frame_rgb), cv2.COLOR_RGB2BGR)
+                        frame_queue.put(frame_bgr)
+                        frames_read += 1
+                else:
+                    raise ValueError("Not an animated image")
+            except Exception as e:
+                logger.info(
+                    "Pillow failed to read animated image %s (%s). Falling back to static image.",
+                    source_adapter.source_ref,
+                    e,
+                )
+                # Fallback for static image - read single frame and duplicate it
+                img = cv2.imread(source_adapter.source_ref)
+                if img is not None:
+                    print(
+                        f"INFO: Source {source_adapter.source_ref} is a static image. "
+                        f"Duplicating frame {window_size} times.",
+                        file=sys.stdout,
+                        flush=True,
+                    )
+                    logger.info(f"Source is a static image. Duplicating frame {window_size} times.")
+                    for _ in range(window_size):
+                        if stop_event is not None and stop_event.is_set():
+                            break
+                        frame_queue.put(img)
+                        frames_read += 1
+        else:
+            cap = source_adapter.open_capture()
+            try:
+                if not cap.isOpened() and source_adapter.source_type in _RTSP_SOURCE_TYPES:
                     log_event(
                         logger,
-                        logging.INFO,
-                        "source_stop_requested",
-                        "Stop event received; stopping source read.",
+                        logging.ERROR,
+                        "source_open_failed",
+                        "Failed to open inference source.",
                         log_context,
-                        frames_read=frames_read,
                     )
-                    break
-
-                ret, frame = cap.read()
-
-                if not ret:
-                    log_event(
-                        logger,
-                        logging.INFO,
-                        "source_eof",
-                        "Reached end of source stream.",
-                        log_context,
-                        frames_read=frames_read,
+                    raise RuntimeError(
+                        "Could not open "
+                        f"{source_adapter.source_type} source: {source_adapter.source_ref}"
                     )
-                    break
 
-                frames_read += 1
-                frame_queue.put(frame)
-        finally:
-            cap.release()
+                frames_read = 0
+                while True:
+                    if stop_event is not None and stop_event.is_set():
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "source_stop_requested",
+                            "Stop event received; stopping source read.",
+                            log_context,
+                            frames_read=frames_read,
+                        )
+                        break
+
+                    ret, frame = cap.read()
+
+                    if not ret:
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "source_eof",
+                            "Reached end of source stream.",
+                            log_context,
+                            frames_read=frames_read,
+                        )
+                        break
+
+                    frames_read += 1
+                    frame_queue.put(frame)
+
+                # Fallback for images (like webp) if no frames were read by VideoCapture
+                if frames_read == 0 and source_adapter.source_type == "file":
+                    import sys
+
+                    import cv2
+                    import numpy as np
+                    from PIL import Image, ImageSequence
+
+                    try:
+                        pil_img = Image.open(source_adapter.source_ref)
+                        is_animated = getattr(pil_img, "is_animated", False)
+                        n_frames = getattr(pil_img, "n_frames", 1)
+
+                        if is_animated and n_frames > 1:
+                            print(
+                                f"INFO: Source {source_adapter.source_ref} "
+                                f"is an animated image with {n_frames} frames. "
+                                "Extracting frames using Pillow.",
+                                file=sys.stdout,
+                                flush=True,
+                            )
+                            logger.info(
+                                "Source is an animated image with %d frames. "
+                                "Extracting using Pillow.",
+                                n_frames,
+                            )
+                            for frame in ImageSequence.Iterator(pil_img):
+                                if stop_event is not None and stop_event.is_set():
+                                    break
+                                frame_rgb = frame.convert("RGB")
+                                frame_bgr = cv2.cvtColor(np.array(frame_rgb), cv2.COLOR_RGB2BGR)
+                                frame_queue.put(frame_bgr)
+                                frames_read += 1
+                        else:
+                            raise ValueError("Not an animated image")
+                    except Exception as e:
+                        logger.info(
+                            "Pillow failed to read animated image %s (%s). "
+                            "Falling back to static image.",
+                            source_adapter.source_ref,
+                            e,
+                        )
+                        # Fallback for static image - read single frame and duplicate it
+                        img = cv2.imread(source_adapter.source_ref)
+                        if img is not None:
+                            print(
+                                f"INFO: Source {source_adapter.source_ref} is a static image. "
+                                f"Duplicating frame {window_size} times.",
+                                file=sys.stdout,
+                                flush=True,
+                            )
+                            logger.info(
+                                f"Source is a static image. Duplicating frame {window_size} times."
+                            )
+                            for _ in range(window_size):
+                                if stop_event is not None and stop_event.is_set():
+                                    break
+                                frame_queue.put(img)
+                                frames_read += 1
+            finally:
+                cap.release()
+
+        if frames_read == 0 and source_adapter.source_type == "file":
+            raise RuntimeError(
+                f"Could not read any frames from file source: {source_adapter.source_ref}"
+            )
     finally:
         frame_queue.put(EOF_SENTINEL)
 
@@ -176,6 +302,7 @@ def produce_frames_safe(
     frame_queue: Queue,
     stats: dict,
     stop_event: Optional[Event] = None,
+    window_size: int = 16,
     log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Run the frame producer and store any raised exception in stats."""
@@ -184,6 +311,7 @@ def produce_frames_safe(
             source_adapter,
             frame_queue,
             stop_event=stop_event,
+            window_size=window_size,
             log_context=log_context,
         )
     except Exception as exc:
@@ -216,6 +344,7 @@ def produce_frames_with_reconnect(
     max_retries: int = _DEFAULT_MAX_RETRIES,
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
+    window_size: int = 16,
     log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Frame producer with exponential back-off reconnect for stream sources.
@@ -236,6 +365,7 @@ def produce_frames_with_reconnect(
         retry_delay (float): Initial seconds to wait before the first retry.
         backoff_factor (float): Multiplier applied to *retry_delay* on each
             successive attempt.
+        window_size (int): Number of frames in temporal window (used for image fallback).
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     if source_adapter.source_type not in _RTSP_SOURCE_TYPES:
@@ -245,6 +375,7 @@ def produce_frames_with_reconnect(
             frame_queue,
             stats,
             stop_event=stop_event,
+            window_size=window_size,
             log_context=log_context,
         )
         return
@@ -417,6 +548,7 @@ def consume_frame_queue(
     engine: InferenceEngine,
     stats: dict,
     stop_event: Optional[Event] = None,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
     log_context: RuntimeLogContext | None = None,
 ) -> None:
     """Consume frames from a queue with an inference engine and update stats.
@@ -428,6 +560,8 @@ def consume_frame_queue(
         stop_event (Optional[Event]): When set the consumer discards remaining
             queued frames and terminates as soon as the current item is
             drained.
+        on_result (Optional[Callable[[InferenceResult], None]]): Callback invoked
+            when a valid InferenceResult is produced.
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
     """
     frame_count = 0
@@ -453,9 +587,9 @@ def consume_frame_queue(
             while True:
                 try:
                     # get_nowait() would exit early on a momentary Empty
-                    # and leave the sentinel unconsumed, blocking 
+                    # and leave the sentinel unconsumed, blocking
                     # the producer on a bounded Queue.
-                    item = frame_queue.get(timeout=0.05) 
+                    item = frame_queue.get(timeout=0.05)
                 except Empty:
                     continue
                 if item is EOF_SENTINEL:
@@ -471,7 +605,7 @@ def consume_frame_queue(
             break
 
         frame_count += 1
-        
+
         try:
             result = engine.process_frame(frame)
         except Exception as exc:
@@ -490,6 +624,12 @@ def consume_frame_queue(
 
         if result is not None:
             inference_results.append(result)
+            if on_result is not None:
+                try:
+                    on_result(result)
+                except Exception as exc:
+                    stats["consumer_error"] = exc
+                    break
 
     stats["frame_count"] = frame_count
     stats["inference_count"] = len(inference_results)
@@ -516,6 +656,7 @@ def run_source(
     tracker: Optional[BaseTracker] = None,
     emit_runtime_summary: bool = True,
     stop_event: Optional[Event] = None,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
     log_context: RuntimeLogContext | None = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run offline inference on a generic source adapter.
@@ -530,6 +671,8 @@ def run_source(
             stats.
         stop_event: Optional threading.Event; when set the producer and
             consumer will stop early and the session will end gracefully.
+        on_result: Optional callback function triggered when a new
+            inference result is available.
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
@@ -538,8 +681,7 @@ def run_source(
         action events.
     """
     if not isinstance(source_adapter, InferenceSourceAdapter):
-        raise TypeError(
-            "source_adapter must be an InferenceSourceAdapter instance")
+        raise TypeError("source_adapter must be an InferenceSourceAdapter instance")
 
     runtime_engine = engine  # engine initialization moved to mp4_cli.py
     if runtime_engine is None:
@@ -568,12 +710,20 @@ def run_source(
     producer = Thread(
         target=produce_frames_safe,
         args=(source_adapter, frame_queue, stats),
-        kwargs={"stop_event": stop_event, "log_context": log_context},
+        kwargs={
+            "stop_event": stop_event,
+            "window_size": runtime_engine.window_size,
+            "log_context": log_context,
+        },
     )
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
-        kwargs={"stop_event": stop_event, "log_context": log_context},
+        kwargs={
+            "stop_event": stop_event,
+            "on_result": on_result,
+            "log_context": log_context,
+        },
     )
 
     producer.start()
@@ -662,6 +812,7 @@ def run_source_with_reconnect(
     max_retries: int = _DEFAULT_MAX_RETRIES,
     retry_delay: float = _DEFAULT_RETRY_DELAY,
     backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
+    on_result: Optional[Callable[[InferenceResult], None]] = None,
     log_context: RuntimeLogContext | None = None,
 ) -> tuple[int, int, list[Any], list[Any]]:
     """Run inference with automatic reconnect for stream (RTSP) sources.
@@ -683,6 +834,8 @@ def run_source_with_reconnect(
             :exc:`SourceInterruptedError`.
         retry_delay: Initial back-off delay in seconds.
         backoff_factor: Multiplier applied to *retry_delay* on each attempt.
+        on_result: Optional callback function triggered when a new
+            inference result is available.
         log_context (RuntimeLogContext | None): Optional log context for structured logging.
 
     Returns:
@@ -727,13 +880,18 @@ def run_source_with_reconnect(
             "max_retries": max_retries,
             "retry_delay": retry_delay,
             "backoff_factor": backoff_factor,
+            "window_size": runtime_engine.window_size,
             "log_context": log_context,
         },
     )
     consumer = Thread(
         target=consume_frame_queue,
         args=(frame_queue, runtime_engine, stats),
-        kwargs={"stop_event": stop_event, "log_context": log_context},
+        kwargs={
+            "stop_event": stop_event,
+            "on_result": on_result,
+            "log_context": log_context,
+        },
     )
 
     producer.start()
