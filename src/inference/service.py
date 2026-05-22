@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 from typing import Callable, Optional
-from typing import Callable
 
 import torch
 
