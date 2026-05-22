@@ -56,7 +56,6 @@ def test_database_url_auto_generated_from_fields(monkeypatch):
         db_host="pghost",
         db_port=5433,
         postgres_db="mydb",
-        _env_file=None,
     )
     assert s.database_url == "postgresql://alice:secret@pghost:5433/mydb"
 
@@ -78,7 +77,6 @@ def test_database_url_explicit_overrides_auto_generation(monkeypatch):
         db_port=5433,
         postgres_db="mydb",
         database_url=explicit_url,
-        _env_file=None,
     )
     assert s.database_url == explicit_url
 

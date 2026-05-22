@@ -223,8 +223,9 @@ def test_pipeline_integration_saves_events(
     mock_inference, client, test_db, tmp_path, sample_detection_payload
 ):
     """Test that events produced by the inference pipeline are persisted to database."""
+
     # Mock the pipeline execution to emit a single detection event
-    def mock_run_inference(request, stop_event, on_event):
+    def mock_run_inference(request, stop_event, on_event, session_id=None):
         if on_event:
             on_event(sample_detection_payload)
 

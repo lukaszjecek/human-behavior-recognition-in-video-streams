@@ -261,7 +261,6 @@ sequenceDiagram
 Automated tests are written in [test_websocket.py](../tests/app/test_websocket.py). They cover:
 - **WebSocket Echo:** Validates standard WebSocket message echo loop.
 - **Live Event Broadcasting:** Spawns a mock WebSocket connection client using `TestClient.websocket_connect("/ws/live")`, pushes detection/alert payloads to the singleton `WebSocketManager`, and asserts that the client receives the serialized JSON structures conforming to the Sprint 3 payload contract.
-<<<<<<< 82-feature-persist-event-and-alert-history-in-database
 
 ---
 
@@ -356,5 +355,4 @@ docker compose exec api env PYTHONPATH=. pytest tests/app/test_persistence.py
    curl http://localhost:8000/api/events/
    ```
 
-=======
->>>>>>> main
+

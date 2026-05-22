@@ -2,9 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
-<<<<<<< 82-feature-persist-event-and-alert-history-in-database
-from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
-=======
 from src.app.schemas.action_event import (
     ActionEvent,
     AlertData,
@@ -12,7 +9,6 @@ from src.app.schemas.action_event import (
     EventPayload,
     EventType,
 )
->>>>>>> main
 from src.app.services.websocket_manager import websocket_manager
 
 
@@ -86,8 +82,6 @@ def test_websocket_live_stream() -> None:
         assert data["data"]["message"] == "Alert triggered for label: jump"
 
 
-<<<<<<< 82-feature-persist-event-and-alert-history-in-database
-=======
 def test_websocket_live_stream_with_bboxes() -> None:
     """Test that live notifications with bounding boxes are pushed correctly."""
     app = create_app()
@@ -142,7 +136,6 @@ def test_websocket_live_stream_with_bboxes() -> None:
         assert data["data"]["bboxes"][0]["source_height"] == 720
 
 
->>>>>>> main
 def test_websocket_api_echo() -> None:
     """Test that the api prefix echo websocket works correctly."""
     app = create_app()
@@ -179,8 +172,6 @@ def test_websocket_api_live_stream() -> None:
         assert data["camera_id"] == "test_cam.mp4"
         assert data["data"]["label"] == "jump"
 
-<<<<<<< 82-feature-persist-event-and-alert-history-in-database
-=======
 
 def test_websocket_end_to_end_integration(tmp_path) -> None:
     """Test that live detections/alerts from active sessions are sent to websocket."""
@@ -208,23 +199,10 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
     # 2. Create a configuration YAML
     config_path = tmp_path / "config.yml"
     config_data = {
-        "pipeline": {
-            "target_resolution": [64, 64],
-            "temporal_window": 4
-        },
-        "inference": {
-            "stride": 2,
-            "class_labels": ["walk", "run", "fight"],
-            "device": "cpu"
-        },
-        "tracking": {
-            "default_track_id": 1
-        },
-        "alert": {
-            "persistence_threshold": 2,
-            "resolve_threshold": 1,
-            "danger_labels": ["fight"]
-        }
+        "pipeline": {"target_resolution": [64, 64], "temporal_window": 4},
+        "inference": {"stride": 2, "class_labels": ["walk", "run", "fight"], "device": "cpu"},
+        "tracking": {"default_track_id": 1},
+        "alert": {"persistence_threshold": 2, "resolve_threshold": 1, "danger_labels": ["fight"]},
     }
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config_data, f)
@@ -266,14 +244,14 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
         # Now, wait for websocket messages. We expect:
         # - DETECTION messages as windows are processed.
         # - An ALERT message once the persistence threshold is met.
-        
+
         received_detections = []
         received_alerts = []
-        
+
         start_time = time.time()
-        while (
-            len(received_detections) < 3 or len(received_alerts) < 1
-        ) and (time.time() - start_time < 15):
+        while (len(received_detections) < 3 or len(received_alerts) < 1) and (
+            time.time() - start_time < 15
+        ):
             try:
                 msg = websocket.receive_json()
                 if msg["event_type"] == "DETECTION":
@@ -301,6 +279,3 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
 
         # Clean up the session by stopping it
         client.post(f"/api/sessions/{session_id}/stop")
-
-
->>>>>>> main
