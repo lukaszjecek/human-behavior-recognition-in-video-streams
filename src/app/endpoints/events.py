@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from src.app.db.repository import get_event_by_id, get_events
+from src.app.db.repository import get_distinct_session_ids, get_event_by_id, get_events
 from src.app.db.session import get_db
 from src.app.schemas.action_event import EventPayload
 
@@ -51,6 +51,59 @@ def read_events(
     for db_evt in db_events:
         try:
             # db_evt.payload is parsed as dict automatically by SQLAlchemy JSON type
+            payloads.append(EventPayload.model_validate(db_evt.payload))
+        except Exception as e:
+            logger.error(
+                "Failed to deserialize stored payload for event %s: %s",
+                db_evt.event_id,
+                e,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error parsing stored event payload",
+            )
+    return payloads
+
+
+@router.get(
+    "/sessions",
+    response_model=list[UUID],
+    summary="Get All Unique Session IDs with Stored Events",
+)
+def read_unique_sessions(
+    db: Session = Depends(get_db),
+) -> list[UUID]:
+    """Retrieve list of all unique session UUIDs that have persisted events in the database."""
+    return get_distinct_session_ids(db)
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=list[EventPayload],
+    summary="Get Events by Session ID",
+)
+def read_events_by_session(
+    session_id: UUID,
+    event_type: str | None = Query(
+        default=None,
+        description="Filter by event type (DETECTION or ALERT)",
+    ),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[EventPayload]:
+    """Retrieve persisted event and alert payloads generated during a specific inference session."""
+    db_events = get_events(
+        db,
+        event_type=event_type,
+        session_id=session_id,
+        limit=limit,
+        offset=offset,
+    )
+
+    payloads: list[EventPayload] = []
+    for db_evt in db_events:
+        try:
             payloads.append(EventPayload.model_validate(db_evt.payload))
         except Exception as e:
             logger.error(

@@ -105,3 +105,16 @@ def get_event_by_id(db: Session, event_id: UUID) -> DBEvent | None:
         DBEvent | None: The database record if found, else None.
     """
     return db.get(DBEvent, event_id)
+
+
+def get_distinct_session_ids(db: Session) -> list[UUID]:
+    """Query the database for all unique, non-null session UUIDs associated with stored events.
+
+    Args:
+        db: The database session.
+
+    Returns:
+        list[UUID]: List of unique session UUIDs.
+    """
+    stmt = select(DBEvent.session_id).where(DBEvent.session_id.isnot(None)).distinct()
+    return list(db.scalars(stmt).all())
