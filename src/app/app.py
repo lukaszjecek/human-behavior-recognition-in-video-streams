@@ -3,7 +3,6 @@
 Provides create_app() that wires configuration, routers and basic error handling.
 """
 import logging
-import time
 import uuid
 from typing import Optional
 

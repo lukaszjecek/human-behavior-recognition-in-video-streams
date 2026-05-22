@@ -80,6 +80,7 @@ def run_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+        on_event: Optional callback triggered when action events or alerts occur.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
@@ -165,12 +166,6 @@ def run_inference(
                         )
                         on_event(alert_payload)
 
-    frame_count, inference_count, inference_results, _ = run_source_with_reconnect(
-        source_adapter=source_adapter,
-        engine=engine,
-        emit_runtime_summary=False,
-        stop_event=stop_event,
-        on_result=handle_result,
     log_event(
         logger,
         logging.INFO,
@@ -190,6 +185,7 @@ def run_inference(
             engine=engine,
             emit_runtime_summary=False,
             stop_event=stop_event,
+            on_result=handle_result,
             log_context=log_context,
         )
     except RuntimeFailureState as exc:
@@ -241,7 +237,6 @@ def run_inference(
 
 
 def run_offline_mp4_inference(
-
     request: InferenceServiceRequest,
     stop_event: Event | None = None,
     on_event: Optional[Callable[[EventPayload], None]] = None,
@@ -252,13 +247,18 @@ def run_offline_mp4_inference(
     Args:
         request: Input request describing source and model settings.
         stop_event: Optional stop flag for graceful shutdown.
+        on_event: Optional callback triggered when action events or alerts occur.
         session_id: Optional correlation ID for runtime logs.
     """
     if not isinstance(request, InferenceServiceRequest):
         raise TypeError("request must be an InferenceServiceRequest instance")
     _validate_offline_mp4_request(request)
-    return run_inference(request, stop_event=stop_event, on_event=on_event)
-    return run_inference(request, stop_event=stop_event, session_id=session_id)
+    return run_inference(
+        request,
+        stop_event=stop_event,
+        on_event=on_event,
+        session_id=session_id,
+    )
 
 
 def _validate_offline_mp4_request(request: InferenceServiceRequest) -> None:

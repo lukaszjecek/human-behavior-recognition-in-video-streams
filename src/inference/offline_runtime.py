@@ -183,61 +183,46 @@ def produce_frames_from_source(
             cap = source_adapter.open_capture()
             try:
                 if not cap.isOpened() and source_adapter.source_type in _RTSP_SOURCE_TYPES:
-                    raise RuntimeError(
-                        "Could not open "
-                        f"{source_adapter.source_type} source: {source_adapter.source_ref}",
-        try:
-            if not cap.isOpened():
-                log_event(
-                    logger,
-                    logging.ERROR,
-                    "source_open_failed",
-                    "Failed to open inference source.",
-                    log_context,
-                )
-                raise RuntimeError(
-                    "Could not open "
-                    f"{source_adapter.source_type} source: {source_adapter.source_ref}",
-                )
-
-            frames_read = 0
-            while True:
-                if stop_event is not None and stop_event.is_set():
                     log_event(
                         logger,
-                        logging.INFO,
-                        "source_stop_requested",
-                        "Stop event received; stopping source read.",
+                        logging.ERROR,
+                        "source_open_failed",
+                        "Failed to open inference source.",
                         log_context,
-                        frames_read=frames_read,
+                    )
+                    raise RuntimeError(
+                        "Could not open "
+                        f"{source_adapter.source_type} source: {source_adapter.source_ref}"
                     )
 
                 frames_read = 0
                 while True:
                     if stop_event is not None and stop_event.is_set():
-                        logger.debug(
-                            "Producer stopping early on stop_event (read %d frames).",
-                            frames_read,
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "source_stop_requested",
+                            "Stop event received; stopping source read.",
+                            log_context,
+                            frames_read=frames_read,
                         )
                         break
 
                     ret, frame = cap.read()
 
                     if not ret:
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "source_eof",
+                            "Reached end of source stream.",
+                            log_context,
+                            frames_read=frames_read,
+                        )
                         break
 
                     frames_read += 1
                     frame_queue.put(frame)
-                if not ret:
-                    log_event(
-                        logger,
-                        logging.INFO,
-                        "source_eof",
-                        "Reached end of source stream.",
-                        log_context,
-                        frames_read=frames_read,
-                    )
-                    break
 
                 # Fallback for images (like webp) if no frames were read by VideoCapture
                 if frames_read == 0 and source_adapter.source_type == "file":

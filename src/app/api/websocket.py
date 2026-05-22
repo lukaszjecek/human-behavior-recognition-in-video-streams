@@ -8,6 +8,11 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.app.services.websocket_manager import websocket_manager
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    configure_runtime_logging,
+    log_event,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
