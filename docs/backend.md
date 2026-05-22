@@ -290,6 +290,7 @@ All persisted events are stored in a single table named `events`. The structure 
 | `timestamp` | `DateTime(timezone=True)` | Index, Not Null | Absolute UTC timestamp of the event. |
 | `camera_id` | `String` | Index, Nullable | Identifier of the source camera/video. |
 | `event_type` | `String` | Index, Not Null | Type of event (e.g., `DETECTION`, `ALERT`). |
+| `session_id` | `UUID` | Index, Nullable | Optional session UUID from which the event was generated. |
 | `payload` | `JSON` | Not Null | Complete serialized Pydantic `EventPayload` object. |
 
 ---
@@ -300,10 +301,12 @@ The database interactions are encapsulated in `src/app/db/repository.py`:
 
 - **`save_event(db: Session, payload: EventPayload) -> DBEvent`**:
   Validates the incoming payload, converts it to a `DBEvent` model, and commits it to the database. It handles and logs database write failures, raising a `ValueError` or database-level exception.
-- **`get_events(db: Session, event_type: str | None = None, camera_id: str | None = None, limit: int = 100, offset: int = 0) -> Sequence[DBEvent]`**:
-  Queries events, sorting them by newest first (`timestamp DESC`), and supports filtering by type or camera ID alongside standard pagination limit/offset.
+- **`get_events(db: Session, event_type: str | None = None, camera_id: str | None = None, session_id: UUID | None = None, limit: int = 100, offset: int = 0) -> Sequence[DBEvent]`**:
+  Queries events, sorting them by newest first (`timestamp DESC`), and supports filtering by type, camera ID, or session ID alongside standard pagination limit/offset.
 - **`get_event_by_id(db: Session, event_id: UUID) -> DBEvent | None`**:
   Retrieves a specific event record by its unique UUID.
+- **`get_distinct_session_ids(db: Session) -> list[UUID]`**:
+  Retrieves all unique, non-null session UUIDs associated with persisted events.
 
 ---
 
@@ -316,11 +319,26 @@ Historical records are exposed via the `/api/events` router registered in `src/a
 - **Query Parameters**:
   - `event_type`: Filter by event type (`DETECTION` or `ALERT`) (optional).
   - `camera_id`: Filter by source video reference (optional).
+  - `session_id`: Filter by session UUID (optional).
   - `limit`: Max records to return (default: `100`, range: `1` to `1000`).
   - `offset`: Pagination offset (default: `0`, min: `0`).
 - **Response**: `200 OK` with a list of `EventPayload` objects.
 
-### 2. Get Event by ID
+### 2. Get All Unique Session IDs
+- **Endpoint**: `GET /api/events/sessions`
+- **Response**: `200 OK` with a list of unique session UUIDs.
+
+### 3. Get Events by Session ID
+- **Endpoint**: `GET /api/events/sessions/{session_id}`
+- **Path Parameters**:
+  - `session_id`: Unique UUID of the inference session.
+- **Query Parameters**:
+  - `event_type`: Filter by event type (`DETECTION` or `ALERT`) (optional).
+  - `limit`: Max records to return (default: `100`, range: `1` to `1000`).
+  - `offset`: Pagination offset (default: `0`, min: `0`).
+- **Response**: `200 OK` with a list of matching `EventPayload` objects.
+
+### 4. Get Event by ID
 - **Endpoint**: `GET /api/events/{event_id}`
 - **Path Parameters**:
   - `event_id`: Unique UUID of the event.
