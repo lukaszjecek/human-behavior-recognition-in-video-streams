@@ -1,3 +1,5 @@
+"""Dataset and dataloader helpers for video manifests."""
+
 import json
 from pathlib import Path
 
@@ -9,10 +11,16 @@ from src.data.preprocess import VideoPreprocessor
 
 
 class VideoDataset(Dataset):
-    """Dataset class that reads a JSONL manifest and prepares video tensors.
-    """
+    """Dataset class that reads a JSONL manifest and prepares video tensors."""
 
-    def __init__(self, manifest_path: Path, data_dir: Path, split: str = "train", config_path: Path = None):
+    def __init__(
+        self,
+        manifest_path: Path,
+        data_dir: Path,
+        split: str = "train",
+        config_path: Path | None = None,
+    ) -> None:
+        """Initialize the dataset from a manifest and optional pipeline config."""
         self.data_dir = data_dir
         self.samples = []
 
@@ -29,7 +37,7 @@ class VideoDataset(Dataset):
         self.preprocessor = VideoPreprocessor(
             target_resolution=tuple(res),
             temporal_window=t_window,
-            stride=t_window
+            stride=t_window,
         )
 
         with open(manifest_path, "r", encoding="utf-8") as f:
@@ -41,10 +49,12 @@ class VideoDataset(Dataset):
         unique_labels = sorted(list(set(s["label"] for s in self.samples)))
         self.label_to_idx = {label: i for i, label in enumerate(unique_labels)}
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of samples in the selected split."""
         return len(self.samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return the preprocessed tensor and label index for a sample."""
         sample = self.samples[idx]
         video_path = self.data_dir / sample["path"]
 
@@ -56,7 +66,13 @@ class VideoDataset(Dataset):
         return video_tensor, torch.tensor(label_idx, dtype=torch.long)
 
 
-def get_dataloader(manifest_path: Path, data_dir: Path, split: str = "train",
-                   batch_size: int = 4, config_path: Path = None) -> DataLoader:
+def get_dataloader(
+    manifest_path: Path,
+    data_dir: Path,
+    split: str = "train",
+    batch_size: int = 4,
+    config_path: Path | None = None,
+) -> DataLoader:
+    """Build a dataloader for the requested manifest split."""
     dataset = VideoDataset(manifest_path, data_dir, split, config_path)
     return DataLoader(dataset, batch_size=batch_size, shuffle=(split == "train"))
