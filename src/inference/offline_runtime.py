@@ -244,6 +244,11 @@ def produce_frames_from_source(
                                 frames_read += 1
             finally:
                 cap.release()
+
+        if frames_read == 0 and source_adapter.source_type == "file":
+            raise RuntimeError(
+                f"Could not read any frames from file source: {source_adapter.source_ref}"
+            )
     finally:
         frame_queue.put(EOF_SENTINEL)
 

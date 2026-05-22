@@ -45,6 +45,7 @@ def test_database_url_auto_generated_from_fields(monkeypatch):
     """database_url is built from individual DB fields when not explicitly set."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     s = Settings(
+        _env_file=None,
         db_user="alice",
         db_password="secret",
         db_host="pghost",
@@ -59,6 +60,7 @@ def test_database_url_explicit_overrides_auto_generation(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     explicit_url = "postgresql://other:pass@otherhost:5432/otherdb"
     s = Settings(
+        _env_file=None,
         db_user="alice",
         db_password="secret",
         db_host="pghost",
