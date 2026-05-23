@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""
-End-to-end smoke test script for Sprint 3.
+"""End-to-end smoke test script for Sprint 3.
+
 Verifies the integration chain: source -> inference -> alert/event -> API/WebSocket -> DB.
 Can be executed on the host (if dependencies are present) or within the API container.
 """
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
-import json
+from typing import Any
 
 # Setup sys.path to find the src package
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -17,14 +18,17 @@ sys.path.append(str(ROOT_DIR))
 
 # Try to import crucial dependencies or print run-in-docker instructions
 try:
-    import torch
-    import numpy as np
     import cv2
     import httpx
+    import numpy as np
+    import torch
     import websockets
 except ImportError as e:
     print(f"[SMOKE TEST] Error: Missing dependency '{e.name}'.")
-    print("[SMOKE TEST] To run this script, it is highly recommended to execute it inside the API container:")
+    print(
+        "[SMOKE TEST] To run this script, it is highly recommended to "
+        "execute it inside the API container:"
+    )
     print("  docker compose exec api python scripts/smoke_test.py")
     sys.exit(1)
 
@@ -51,7 +55,7 @@ CONTAINER_CHECKPOINT_PATH = "/app/data/logs/checkpoints/dummy_checkpoint.pth"
 CONTAINER_CONFIG_PATH = "/app/configs/data_pipeline.yml"
 
 
-def create_dummy_checkpoint():
+def create_dummy_checkpoint() -> None:
     """Create a dummy PyTorch model checkpoint compatible with DummyBehaviorModel."""
     from src.models.dummy import DummyBehaviorModel
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,7 +70,7 @@ def create_dummy_checkpoint():
     print(f"[SMOKE TEST] Generated dummy checkpoint at: {CHECKPOINT_PATH}")
 
 
-def create_dummy_video():
+def create_dummy_video() -> None:
     """Create a dummy 40-frame MP4 video using OpenCV."""
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -79,7 +83,11 @@ def create_dummy_video():
     )
     
     if not out.isOpened():
-        print("[SMOKE TEST] Error: Could not open VideoWriter. Make sure ffmpeg/plugins are installed.", file=sys.stderr)
+        print(
+            "[SMOKE TEST] Error: Could not open VideoWriter. "
+            "Make sure ffmpeg/plugins are installed.",
+            file=sys.stderr
+        )
         sys.exit(1)
 
     for i in range(40):
@@ -109,7 +117,7 @@ def create_dummy_video():
     print(f"[SMOKE TEST] Generated dummy video at: {VIDEO_PATH}")
 
 
-async def listen_ws_events(received_events: list, stop_event: asyncio.Event):
+async def listen_ws_events(received_events: list[Any], stop_event: asyncio.Event) -> None:
     """WebSocket listener to verify live streaming of detections and alerts."""
     uri = f"{WS_URL}/ws/live"
     print(f"[SMOKE TEST] Connecting to WebSocket: {uri}")
@@ -140,7 +148,7 @@ async def listen_ws_events(received_events: list, stop_event: asyncio.Event):
 async def check_api_health(client: httpx.AsyncClient) -> bool:
     """Wait for FastAPI API /health endpoint to be ready."""
     print(f"[SMOKE TEST] Checking API health at {API_URL}/health...")
-    for attempt in range(20):
+    for _ in range(20):
         try:
             response = await client.get(f"{API_URL}/health", timeout=2.0)
             if response.status_code == 200 and response.json().get("status") == "ok":
@@ -153,7 +161,7 @@ async def check_api_health(client: httpx.AsyncClient) -> bool:
     return False
 
 
-async def run_smoke_test():
+async def run_smoke_test() -> None:
     """Main smoke test orchestration flow."""
     print("=" * 70)
     print("STARTING SPRINT 3 INTEGRATION SMOKE TEST")
@@ -170,7 +178,7 @@ async def run_smoke_test():
             sys.exit(1)
 
         # 3. Spin up WebSocket live listener in the background
-        received_events = []
+        received_events: list[Any] = []
         stop_ws = asyncio.Event()
         ws_task = asyncio.create_task(listen_ws_events(received_events, stop_ws))
         
@@ -185,9 +193,13 @@ async def run_smoke_test():
             "device": "cpu"
         }
         
-        print(f"[SMOKE TEST] Starting session via POST /api/sessions/")
+        print("[SMOKE TEST] Starting session via POST /api/sessions/")
         try:
-            resp = await client.post(f"{API_URL}/api/sessions/", json=session_request, timeout=5.0)
+            resp = await client.post(
+                f"{API_URL}/api/sessions/",
+                json=session_request,
+                timeout=5.0
+            )
         except Exception as e:
             print(f"[SMOKE TEST] HTTP Request failed: {e}", file=sys.stderr)
             stop_ws.set()
@@ -195,7 +207,10 @@ async def run_smoke_test():
             sys.exit(1)
 
         if resp.status_code != 201:
-            print(f"[SMOKE TEST] Session creation failed with status {resp.status_code}: {resp.text}", file=sys.stderr)
+            print(
+                f"[SMOKE TEST] Session creation failed with status {resp.status_code}: {resp.text}",
+                file=sys.stderr
+            )
             stop_ws.set()
             await ws_task
             sys.exit(1)
@@ -205,13 +220,16 @@ async def run_smoke_test():
         print(f"[SMOKE TEST] Session created successfully. ID: {session_id}")
 
         # 5. Monitor Session status
-        print(f"[SMOKE TEST] Monitoring session status...")
+        print("[SMOKE TEST] Monitoring session status...")
         session_completed = False
         for _ in range(60):  # Wait up to 60 seconds
             await asyncio.sleep(1.0)
             status_resp = await client.get(f"{API_URL}/api/sessions/{session_id}")
             if status_resp.status_code != 200:
-                print(f"[SMOKE TEST] Failed to retrieve status: {status_resp.text}", file=sys.stderr)
+                print(
+                    f"[SMOKE TEST] Failed to retrieve status: {status_resp.text}",
+                    file=sys.stderr
+                )
                 break
                 
             status_data = status_resp.json()
@@ -222,7 +240,11 @@ async def run_smoke_test():
                 session_completed = True
                 break
             elif status in ("failed", "stopped"):
-                print(f"[SMOKE TEST] Session terminated early. Status: {status}. Error: {status_data.get('error')}", file=sys.stderr)
+                print(
+                    f"[SMOKE TEST] Session terminated early. Status: {status}. "
+                    f"Error: {status_data.get('error')}",
+                    file=sys.stderr
+                )
                 break
 
         # Stop WebSocket listener
@@ -231,19 +253,32 @@ async def run_smoke_test():
         await ws_task
 
         if not session_completed:
-            print("[SMOKE TEST] Smoke test failed: Session did not complete successfully.", file=sys.stderr)
+            print(
+                "[SMOKE TEST] Smoke test failed: Session did not complete successfully.",
+                file=sys.stderr
+            )
             sys.exit(1)
 
         # 6. Verify Database Persistence via REST API GET /api/events/
-        print(f"[SMOKE TEST] Verifying database persistence via GET /api/events/?session_id={session_id}")
+        print(
+            f"[SMOKE TEST] Verifying database persistence via "
+            f"GET /api/events/?session_id={session_id}"
+        )
         try:
-            events_resp = await client.get(f"{API_URL}/api/events/?session_id={session_id}", timeout=5.0)
+            events_resp = await client.get(
+                f"{API_URL}/api/events/?session_id={session_id}",
+                timeout=5.0
+            )
         except Exception as e:
             print(f"[SMOKE TEST] Failed to query persisted events: {e}", file=sys.stderr)
             sys.exit(1)
 
         if events_resp.status_code != 200:
-            print(f"[SMOKE TEST] Querying events returned status {events_resp.status_code}: {events_resp.text}", file=sys.stderr)
+            print(
+                f"[SMOKE TEST] Querying events returned status {events_resp.status_code}: "
+                f"{events_resp.text}",
+                file=sys.stderr
+            )
             sys.exit(1)
 
         db_events = events_resp.json()
@@ -251,18 +286,24 @@ async def run_smoke_test():
 
         # 7. Assertions
         if len(db_events) == 0:
-            print("[SMOKE TEST] FAILURE: DB is empty. Events were not persisted to database!", file=sys.stderr)
+            print(
+                "[SMOKE TEST] FAILURE: DB is empty. Events were not persisted to database!",
+                file=sys.stderr
+            )
             sys.exit(1)
 
         if len(received_events) == 0:
-            print("[SMOKE TEST] FAILURE: No live events were broadcasted over WebSocket!", file=sys.stderr)
+            print(
+                "[SMOKE TEST] FAILURE: No live events were broadcasted over WebSocket!",
+                file=sys.stderr
+            )
             sys.exit(1)
 
         print("=" * 70)
         print("VERIFICATION SUMMARY:")
-        print(f" - API liveness check:                      PASSED")
-        print(f" - Asynchronous Session initiation:          PASSED")
-        print(f" - In-process model inference processing:   PASSED (40 frames)")
+        print(" - API liveness check:                      PASSED")
+        print(" - Asynchronous Session initiation:          PASSED")
+        print(" - In-process model inference processing:   PASSED (40 frames)")
         print(f" - Live event broadcasting (WebSocket):     PASSED ({len(received_events)} events)")
         print(f" - Event/Alert persistence (DB):            PASSED ({len(db_events)} events)")
         print("=" * 70)
@@ -270,9 +311,14 @@ async def run_smoke_test():
         print("=" * 70)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Entry point for the smoke test."""
     try:
         asyncio.run(run_smoke_test())
     except KeyboardInterrupt:
         print("\n[SMOKE TEST] Aborted by user.")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
