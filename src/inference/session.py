@@ -58,7 +58,7 @@ class InferenceSession:
 
     def start(self) -> None:
         """Start the inference session in a background thread."""
-        configure_runtime_logging()
+        configure_runtime_logging(log_file="inference.log")
         with self._lock:
             if self._status != SessionStatus.IDLE:
                 raise RuntimeError(
