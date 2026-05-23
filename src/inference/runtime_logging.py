@@ -143,8 +143,16 @@ def configure_runtime_logging(
 
     # Always ensure both are initialized/configured with standard streams
     # and levels, but apply the FileHandler only to the correct target.
-    _get_structured_logger(level=level, log_file=log_file if suffix is None else None, logger_suffix=None)
-    _get_structured_logger(level=level, log_file=log_file if suffix == "inference" else None, logger_suffix="inference")
+    _get_structured_logger(
+        level=level,
+        log_file=log_file if suffix is None else None,
+        logger_suffix=None,
+    )
+    _get_structured_logger(
+        level=level,
+        log_file=log_file if suffix == "inference" else None,
+        logger_suffix="inference",
+    )
 
 
 def log_event(
