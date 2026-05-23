@@ -50,7 +50,8 @@ def read_events(
         logger,
         logging.DEBUG,
         "events_query_requested",
-        f"Querying event and alert history. Filters: type={event_type}, camera={camera_id}, session={session_id}",
+        "Querying event and alert history. Filters: "
+        f"type={event_type}, camera={camera_id}, session={session_id}",
         log_context,
         query_event_type=event_type,
         query_camera_id=camera_id,

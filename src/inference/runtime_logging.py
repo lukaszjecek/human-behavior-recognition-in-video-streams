@@ -259,7 +259,7 @@ def _get_structured_logger(
     return logger
 
 
-def log_audit_event(payload: Any) -> None:
+def log_audit_event(payload: object) -> None:
     """Write a serialized EventPayload to a dedicated audit.log file."""
     log_dir = os.getenv("LOG_DIR") or "data/logs"
     try:

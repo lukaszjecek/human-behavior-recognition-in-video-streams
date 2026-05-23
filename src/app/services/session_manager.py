@@ -129,7 +129,8 @@ class InferenceSessionManager:
                         logger,
                         logging.ERROR,
                         "database_write_failed",
-                        f"Database write-path failure for event {payload.event_id} in background session {session.id}: {db_err}",
+                        f"Database write-path failure for event {payload.event_id} "
+                        f"in background session {session.id}: {db_err}",
                         RuntimeLogContext(session_id=str(session.id)),
                         exc_info=True,
                         event_id=str(payload.event_id),
@@ -158,12 +159,18 @@ class InferenceSessionManager:
                     )
 
                 # 4. Log structured audit event
-                event_name = "audit_detection_published" if payload.event_type.value == "DETECTION" else "audit_alert_triggered"
+                is_detection = payload.event_type.value == "DETECTION"
+                event_name = (
+                    "audit_detection_published"
+                    if is_detection
+                    else "audit_alert_triggered"
+                )
                 log_event(
                     logger,
                     logging.INFO,
                     event_name,
-                    f"Published {payload.event_type.value} event {payload.event_id} for session {session.id}.",
+                    f"Published {payload.event_type.value} event {payload.event_id} "
+                    f"for session {session.id}.",
                     RuntimeLogContext(session_id=str(session.id)),
                     event_id=str(payload.event_id),
                     camera_id=payload.camera_id,

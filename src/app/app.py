@@ -8,7 +8,9 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
+from starlette.responses import Response
 
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
@@ -57,7 +59,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
 
     @app.middleware("http")
-    async def log_requests(request: Request, call_next):
+    async def log_requests(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
         import time
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.state.request_id = request_id

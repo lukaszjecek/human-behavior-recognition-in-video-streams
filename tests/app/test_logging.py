@@ -1,9 +1,6 @@
 import json
 import logging
-import os
-from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
