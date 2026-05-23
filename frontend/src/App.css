@@ -136,3 +136,96 @@
     display: flex;
   }
 }
+
+/* ===== Alert Log Items & Severity Accents (Refactored) ===== */
+.border-l-3 {
+  border-left: 4px solid transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.border-l-3.border-red {
+  border-left-color: var(--color-red);
+}
+.border-l-3.border-amber {
+  border-left-color: var(--color-amber);
+}
+.border-l-3.border-blue {
+  border-left-color: var(--color-blue);
+}
+
+.bg-red\/3 {
+  background-color: color-mix(in srgb, var(--color-red) 9%, transparent);
+}
+[data-theme="light"] .bg-red\/3 {
+  background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+.hover\:bg-red\/6:hover {
+  background-color: color-mix(in srgb, var(--color-red) 12%, transparent);
+}
+[data-theme="light"] .hover\:bg-red\/6:hover {
+  background-color: color-mix(in srgb, var(--color-red) 16%, transparent);
+}
+
+.bg-amber\/3 {
+  background-color: color-mix(in srgb, var(--color-amber) 4%, transparent);
+}
+[data-theme="light"] .bg-amber\/3 {
+  background-color: color-mix(in srgb, var(--color-amber) 7%, transparent);
+}
+.hover\:bg-amber\/6:hover {
+  background-color: color-mix(in srgb, var(--color-amber) 9%, transparent);
+}
+[data-theme="light"] .hover\:bg-amber\/6:hover {
+  background-color: color-mix(in srgb, var(--color-amber) 13%, transparent);
+}
+
+.bg-blue\/10 {
+  background-color: color-mix(in srgb, var(--color-blue) 10%, transparent);
+}
+.border-blue\/20 {
+  border-color: color-mix(in srgb, var(--color-blue) 20%, transparent);
+}
+
+.bg-red\/10 {
+  background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+.border-red\/20 {
+  border-color: color-mix(in srgb, var(--color-red) 20%, transparent);
+}
+
+.bg-amber\/10 {
+  background-color: color-mix(in srgb, var(--color-amber) 10%, transparent);
+}
+.border-amber\/20 {
+  border-color: color-mix(in srgb, var(--color-amber) 20%, transparent);
+}
+
+/* --- Blue / Normal Severity background mix & overrides --- */
+.bg-blue\/3 {
+  background-color: color-mix(in srgb, var(--color-blue) 4%, transparent);
+}
+.hover\:bg-blue\/6:hover {
+  background-color: color-mix(in srgb, var(--color-blue) 9%, transparent);
+}
+
+[data-theme="light"] .bg-blue\/3 {
+  background-color: color-mix(in srgb, var(--color-blue) 7%, transparent);
+}
+[data-theme="light"] .hover\:bg-blue\/6:hover {
+  background-color: color-mix(in srgb, var(--color-blue) 13%, transparent);
+}
+
+/* Boost active contrast of acknowledged items in Light mode */
+[data-theme="light"] .panel-body .opacity-40 {
+  opacity: 0.65;
+}
+
+/* Stronger border in light mode for the badge border elements */
+[data-theme="light"] .border-blue\/20 {
+  border-color: color-mix(in srgb, var(--color-blue) 35%, transparent);
+}
+[data-theme="light"] .border-red\/20 {
+  border-color: color-mix(in srgb, var(--color-red) 35%, transparent);
+}
+[data-theme="light"] .border-amber\/20 {
+  border-color: color-mix(in srgb, var(--color-amber) 35%, transparent);
+}
