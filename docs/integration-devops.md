@@ -314,3 +314,94 @@ log_dir: Path = "/app/data/logs"
 
 **Problem**: Database initialization fails
 - **Solution**: Remove volume and restart: `docker compose down -v && docker compose up --build`
+
+
+## Sprint 3 Integration Smoke Path
+
+To verify the correct setup, communication, and persistence of the entire integrated system, we have implemented an automated end-to-end smoke test path. 
+
+### Integrated Flow Chain
+The smoke path tests the following lifecycle:
+1. **Source / Input**: A 40-frame dummy video (`data/raw/smoke_sample.mp4`) is dynamically generated.
+2. **Inference**: A mock behavior model (`DummyBehaviorModel`) is dynamically created and stored under `data/logs/checkpoints/dummy_checkpoint.pth`.
+3. **API & WebSocket**: A FastAPI session is initiated via a REST HTTP POST request. A WebSocket client connects to `ws://localhost:8000/ws/live` and listens to live streamed events/alerts.
+4. **Processing**: The API runs the inference engine in a background thread, publishing frame detections and event payloads.
+5. **Database (DB)**: Detections and alerts are written in real-time to the PostgreSQL database via SQLAlchemy.
+6. **REST History**: The script queries the historical API `GET /api/events/?session_id=<session_id>` to confirm that all events have been correctly written to the database.
+
+### Running the Smoke Test
+
+1. **Spin up the multi-service stack**:
+   Make sure the Docker containers are built and running.
+   ```bash
+   docker compose up -d --build
+   ```
+
+2. **Execute the automated smoke script inside the API container**:
+   Since the container already installs all required packages (PyTorch, OpenCV, websockets, etc.), the easiest and most reliable way to run the smoke test is inside the `api` container.
+   ```bash
+   docker compose exec api python scripts/integration_smoke_test.py
+   ```
+
+3. **Expected Output**:
+   When the smoke test completes successfully, you will see a detailed verification summary in your terminal:
+   ```text
+   ======================================================================
+   STARTING SPRINT 3 INTEGRATION SMOKE TEST
+   ======================================================================
+   [SMOKE TEST] Generated dummy checkpoint at: /app/data/logs/checkpoints/dummy_checkpoint.pth
+   [SMOKE TEST] Generated dummy video at: /app/data/raw/smoke_sample.mp4
+   [SMOKE TEST] Checking API health at http://localhost:8000/health...
+   [SMOKE TEST] API is healthy and responding.
+   [SMOKE TEST] Connecting to WebSocket: ws://localhost:8000/ws/live
+   [SMOKE TEST] WebSocket connected successfully. Listening for live events...
+   [SMOKE TEST] Starting session via POST /api/sessions/
+   [SMOKE TEST] Session created successfully. ID: 1e571dbb-2041-419b-a249-14a01c873428
+   [SMOKE TEST] Monitoring session status...
+   [SMOKE TEST] Session Status: running
+   [SMOKE TEST] WS Event Received: DETECTION - ID: ...
+   [SMOKE TEST] WS Event Received: ALERT - ID: ...
+   [SMOKE TEST] Session Status: completed
+   [SMOKE TEST] Verifying database persistence via GET /api/events/?session_id=1e571dbb-2041-419b-a249-14a01c873428
+   [SMOKE TEST] Retrieved 20 events from database.
+   [SMOKE TEST] Received 20 events via WebSocket.
+   ======================================================================
+   VERIFICATION SUMMARY:
+    - API liveness check:                      PASSED
+    - Asynchronous Session initiation:          PASSED
+    - In-process model inference processing:   PASSED (40 frames)
+    - Live event broadcasting (WebSocket):     PASSED (20 events)
+    - Event/Alert persistence (DB):            PASSED (20 events)
+   ======================================================================
+   [SMOKE TEST] SUCCESS: Sprint 3 Integrated System Smoke Path is verified end-to-end!
+   ======================================================================
+   ```
+
+### Manual Verification of Logs and DB
+
+After a successful run, you can inspect the generated logs and DB state to confirm everything is working:
+
+1. **Check Backend Log**:
+   ```bash
+   tail -n 20 data/logs/backend.log
+   ```
+   You should see `session_start_requested`, `session_created`, `session_task_started`, `audit_detection_published`, `audit_alert_triggered`, and `session_task_completed`.
+
+2. **Check Inference Log**:
+   ```bash
+   tail -n 20 data/logs/inference.log
+   ```
+   You should see logs matching the model loading (`inference_session_started`, `inference_runtime_configured`, and `inference_session_completed`).
+
+3. **Check Audit Log**:
+   ```bash
+   cat data/logs/audit.log
+   ```
+   This will contain clean JSON-lines payloads for each generated detection and alert.
+
+4. **Verify Database Records**:
+   Run a direct PostgreSQL query to see the rows inserted into the `events` table:
+   ```bash
+   docker compose exec db psql -U hbr_user -d hbr_db -c "SELECT count(*), event_type FROM events GROUP BY event_type;"
+   ```
+
