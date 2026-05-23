@@ -101,7 +101,7 @@ These endpoints use `asyncio.to_thread` for non-blocking execution and native `t
 To verify the entire integrated flow (**Source -> Inference -> Alert/Event -> API/WebSocket -> DB**) end-to-end after bringing up the services, run the automated integration smoke test script inside the running API container:
 
 ```bash
-docker compose exec api python scripts/smoke_test.py
+docker compose exec api python scripts/integration_smoke_test.py
 ```
 
 This script will dynamically create all necessary dummy weights and videos, run the inference session, listen via WebSockets for events, and confirm database persistence. For more details, see [Integration and DevOps](docs/integration-devops.md#sprint-3-integration-smoke-path).

@@ -340,7 +340,7 @@ The smoke path tests the following lifecycle:
 2. **Execute the automated smoke script inside the API container**:
    Since the container already installs all required packages (PyTorch, OpenCV, websockets, etc.), the easiest and most reliable way to run the smoke test is inside the `api` container.
    ```bash
-   docker compose exec api python scripts/smoke_test.py
+   docker compose exec api python scripts/integration_smoke_test.py
    ```
 
 3. **Expected Output**:
