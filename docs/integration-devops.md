@@ -110,22 +110,28 @@ API_HOST=api             # DNS name of the API container on hbr-network
 API_PORT=8000            # API port (matches PORT env var)
 ```
 
-### Inference Runtime Logging
+### Backend & Inference Logging Setup
 
-The inference runtime emits **structured JSON logs** to stdout for lifecycle visibility and
-integration troubleshooting. Each log line includes correlation fields:
+All backend services use structured JSON logging. These logs are emitted to the container's stdout/stderr and also persisted to files inside the log directory (`LOG_DIR`, mapped to `data/logs` on the host).
 
-- `event`: short event identifier (e.g., `inference_session_started`)
-- `session_id`: per-run identifier used across all runtime logs
-- `source_type` / `source_ref`: file or RTSP source metadata
-  
-Optional build metadata (`BUILD_SHA`, `IMAGE_TAG`, `APP_VERSION`) is included when set.
+#### Structured Log Files
 
-You can control verbosity via `INFERENCE_LOG_LEVEL` (or `LOG_LEVEL` as a fallback). Example:
+Three primary log files are created under the `data/logs/` directory:
 
-```json
-{"timestamp":"2026-05-20T12:07:16.120000+00:00","level":"INFO","logger":"src.inference.service","message":"Inference session started.","event":"inference_session_started","session_id":"8f1d7c1f7c8b4e2c9d6c0a2f44d3b6c2","source_type":"file","source_ref":"/app/data/raw/sample.mp4","checkpoint_path":"/app/data/logs/checkpoints/baseline.pth","config_path":"/app/configs/data_pipeline.yml","device_request":"auto"}
-```
+1. **`backend.log`**: Structured log output for the FastAPI API application. Tracks all HTTP requests (start, completion, failures) and backend operations.
+2. **`inference.log`**: Structured log output for background and CLI-based inference sessions. Tracks model load events, GPU/CPU dispatching, frame processing status, and errors.
+3. **`audit.log`**: A dedicated, clean audit trail of every generated event or alert. Every line is a JSON-lines formatted `EventPayload` object conforming to the Sprint 3 payload contract.
+
+#### Log JSON Structure
+
+Each structured log line is a JSON object containing:
+
+- `timestamp`: ISO-8601 UTC timestamp of the log event.
+- `level`: Standard logging levels (`INFO`, `DEBUG`, `WARNING`, `ERROR`).
+- `logger`: The Python logger namespace.
+- `message`: Human-readable explanation.
+- `event`: Short, machine-readable event identifier (e.g. `http_request_start`, `session_task_started`, `audit_alert_triggered`).
+- `session_id`: The correlation identifier mapping to the request or background session ID.
 
 #### Log Detail Levels
 
@@ -135,26 +141,24 @@ Use `INFERENCE_LOG_DETAIL` (or `LOG_DETAIL` for API logs) to control how much me
 - `standard` — includes counts, timings, config paths, and request metadata.
 - `verbose` — includes all fields plus full exception stack traces.
 
-This allows reducing log volume when storage is tight while keeping the option to
-increase detail for investigations.
+This allows reducing log volume when storage is tight while keeping the option to increase detail for investigations.
 
-To centralize logs, ship container stdout to your preferred log backend (e.g. Docker
-logging driver, Fluent Bit, or a hosted log platform) — the JSON format is compatible
-with most collectors.
+To centralize logs in production, ship container stdout to your preferred log backend (e.g. Docker logging driver, Fluent Bit, or a hosted log platform) — the JSON format is compatible with most collectors.
 
 ### API Request Correlation
 
-The API generates a per-request `X-Request-ID` (or honors the incoming header) and
-returns it in the response headers. This ID is also logged as `session_id` in
-structured logs, so one request can be traced end-to-end.
+The FastAPI API intercepts every incoming HTTP request and checks for an `X-Request-ID` header. If it's missing, it generates a unique UUID4 hex.
+This ID is:
+- Attached to the request state (`request.state.request_id`).
+- Propagated as `session_id` to any log messages or background inference tasks spawned by that request.
+- Returned to the client in the `X-Request-ID` HTTP response header.
 
 ### Investigation Quick Steps
 
-1. Find the `session_id` (or `X-Request-ID`) from the failing request.
-2. Filter logs for that ID and look for `runtime_failed`, `inference_session_failed`,
-   or `http_request_failed` to locate the failing phase.
-3. If details are insufficient, temporarily switch `INFERENCE_LOG_DETAIL=verbose`
-   to capture full stack traces and detailed runtime metrics.
+1. Retrieve the `X-Request-ID` from the HTTP response headers of a failed request.
+2. Search `data/logs/backend.log` for this ID to trace the request lifecycle (`http_request_start` → `session_start_requested` → `session_created` or `session_start_failed` → `http_request_completed`).
+3. If the request triggered a background task, check `data/logs/backend.log` or `data/logs/inference.log` using the session's UUID as the `session_id` to trace the background execution (`session_task_started` → `inference_session_started` → detections/alerts → `session_task_completed`/`session_task_failed`).
+4. Read `data/logs/audit.log` to view a clean chronological sequence of all detections and alerts generated by the pipeline.
 
 ### Environment Wiring
 
