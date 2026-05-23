@@ -135,7 +135,16 @@ def configure_runtime_logging(
     log_file: str | Path | None = None,
 ) -> None:
     """Configure structured logging for inference runtime output."""
-    _get_structured_logger(level=level, log_file=log_file)
+    suffix: str | None = None
+    if log_file:
+        file_name = str(Path(log_file).name).lower()
+        if "inference" in file_name:
+            suffix = "inference"
+
+    # Always ensure both are initialized/configured with standard streams
+    # and levels, but apply the FileHandler only to the correct target.
+    _get_structured_logger(level=level, log_file=log_file if suffix is None else None, logger_suffix=None)
+    _get_structured_logger(level=level, log_file=log_file if suffix == "inference" else None, logger_suffix="inference")
 
 
 def log_event(
@@ -161,7 +170,8 @@ def log_event(
         )
     if fields:
         extra["fields"] = fields
-    structured_logger = _get_structured_logger()
+    suffix = "inference" if "inference" in logger.name else None
+    structured_logger = _get_structured_logger(logger_suffix=suffix)
     structured_logger.log(level, message, extra=extra, exc_info=exc_info)
 
 
@@ -209,9 +219,14 @@ def _resolve_log_detail() -> str:
 def _get_structured_logger(
     level: str | int | None = None,
     log_file: str | Path | None = None,
+    logger_suffix: str | None = None,
 ) -> logging.Logger:
     """Return a dedicated structured logger configured with JSON output."""
-    logger = logging.getLogger(_STRUCTURED_LOGGER_NAME)
+    if logger_suffix:
+        logger_name = f"{_STRUCTURED_LOGGER_NAME}.{logger_suffix}"
+    else:
+        logger_name = _STRUCTURED_LOGGER_NAME
+    logger = logging.getLogger(logger_name)
     resolved_level = _resolve_log_level(level)
     logger.setLevel(resolved_level)
     logger.propagate = False

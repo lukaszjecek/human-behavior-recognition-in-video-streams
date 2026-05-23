@@ -118,8 +118,8 @@ All backend services use structured JSON logging. These logs are emitted to the 
 
 Three primary log files are created under the `data/logs/` directory:
 
-1. **`backend.log`**: Structured log output for the FastAPI API application. Tracks all HTTP requests (start, completion, failures) and backend operations.
-2. **`inference.log`**: Structured log output for background and CLI-based inference sessions. Tracks model load events, GPU/CPU dispatching, frame processing status, and errors.
+1. **`backend.log`**: Structured log output for the FastAPI API application. Tracks all HTTP requests (start, completion, failures) and backend operations. Uses the `hbr.structured` logger.
+2. **`inference.log`**: Structured log output for background and CLI-based inference sessions. Tracks model load events, GPU/CPU dispatching, frame processing status, and errors. Uses the isolated `hbr.structured.inference` logger.
 3. **`audit.log`**: A dedicated, clean audit trail of every generated event or alert. Every line is a JSON-lines formatted `EventPayload` object conforming to the Sprint 3 payload contract.
 
 #### Log JSON Structure

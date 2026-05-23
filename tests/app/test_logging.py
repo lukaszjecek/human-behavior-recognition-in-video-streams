@@ -89,3 +89,46 @@ def test_configure_runtime_logging_creates_file(tmp_path, monkeypatch):
     for h in list(logger.handlers):
         logger.removeHandler(h)
         h.close()
+
+
+def test_configure_runtime_logging_isolation(tmp_path, monkeypatch):
+    """Verify that backend and inference logging targets are isolated."""
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("LOG_DIR", str(log_dir))
+
+    # Configure backend log file, then inference log file
+    configure_runtime_logging(log_file="backend.log")
+    configure_runtime_logging(log_file="inference.log")
+
+    # Get loggers representing backend and inference scopes
+    backend_logger = logging.getLogger("src.app.services.session_manager")
+    inference_logger = logging.getLogger("src.inference.session")
+
+    # Use log_event helper to log through both
+    from src.inference.runtime_logging import log_event
+    log_event(backend_logger, logging.INFO, "backend_evt", "Backend message")
+    log_event(inference_logger, logging.INFO, "inference_evt", "Inference message")
+
+    backend_log_file = log_dir / "backend.log"
+    inference_log_file = log_dir / "inference.log"
+
+    assert backend_log_file.exists()
+    assert inference_log_file.exists()
+
+    backend_content = backend_log_file.read_text(encoding="utf-8")
+    inference_content = inference_log_file.read_text(encoding="utf-8")
+
+    # Verify backend logs went ONLY to backend log file
+    assert "Backend message" in backend_content
+    assert "Inference message" not in backend_content
+
+    # Verify inference logs went ONLY to inference log file
+    assert "Inference message" in inference_content
+    assert "Backend message" not in inference_content
+
+    # Cleanup handlers for both loggers to avoid interfering with other tests
+    for logger_name in ("hbr.structured", "hbr.structured.inference"):
+        logger = logging.getLogger(logger_name)
+        for h in list(logger.handlers):
+            logger.removeHandler(h)
+            h.close()

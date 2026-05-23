@@ -383,9 +383,9 @@ To ensure observability and traceability of backend API lifecycles, background t
 The logging system leverages standard Python logging configured with a custom `JsonLogFormatter` that outputs JSON strings to console and files.
 
 - **FastAPI Application (`backend.log`)**:
-  Captures the lifecycle of API requests (starting, completed, failed) along with internal server events (e.g. database transactions, background task orchestration).
+  Captures the lifecycle of API requests (starting, completed, failed) along with internal server events (e.g. database transactions, background task orchestration). Uses the `hbr.structured` logger namespace.
 - **Inference Runtime (`inference.log`)**:
-  Captures offline and runtime processing events (e.g. video source initialization, window inference, pipeline failures, performance metrics).
+  Captures offline and runtime processing events (e.g. video source initialization, window inference, pipeline failures, performance metrics). Uses the isolated `hbr.structured.inference` logger namespace.
 - **Unified Event Format**:
   Every log record outputs a JSON line containing key metadata: `timestamp` (ISO-8601 UTC), `level`, `logger`, `message`, `event`, and optional correlation fields (`session_id` mapping to the request correlation ID).
 
