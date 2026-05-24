@@ -1,9 +1,10 @@
+"""Inference engine for frame-window based behavior prediction."""
+
 import collections
-from typing import Any, Optional, Tuple
-from dataclasses import dataclass
-from threading import Lock
 import logging
 import time
+from dataclasses import dataclass
+from threading import Lock
 
 from src.inference.buffer import FrameBuffer
 
@@ -12,23 +13,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class InferenceResult:
-    """
-    Stores metadata and prediction for an inference step.
-    """
-    window: Tuple[Any, ...]
+    """Stores metadata and prediction for an inference step."""
+
+    window: tuple[object, ...]
 
     start_frame_index: int
     end_frame_index: int
 
-    start_timestamp: Optional[float]
-    end_timestamp: Optional[float]
+    start_timestamp: float | None
+    end_timestamp: float | None
 
-    prediction: Optional[Any]
+    prediction: object | None
 
 
 class InferenceEngine:
-    """
-    Production-grade inference engine with:
+    """Production-grade inference engine.
 
     - configurable stride
     - frame + timestamp tracking
@@ -42,20 +41,15 @@ class InferenceEngine:
         self,
         window_size: int = 16,
         stride: int = 1,
-        model: Optional[Any] = None
-    ):
-        """
+        model: object | None = None,
+    ) -> None:
+        """Initialize the inference engine.
+
         Args:
-            window_size:
-                Number of frames per inference window.
-
-            stride:
-                Frames between inference triggers.
-
-            model:
-                Optional model object (callable PyTorch model or object with predict()).
+            window_size: Number of frames per inference window.
+            stride: Frames between inference triggers.
+            model: Optional model object (callable PyTorch model or object with predict()).
         """
-
         if window_size <= 0:
             raise ValueError("window_size must be > 0")
 
@@ -76,10 +70,10 @@ class InferenceEngine:
         self._timestamps = collections.deque(maxlen=window_size)
 
         # Last inference location
-        self._last_inference_frame: Optional[int] = None
+        self._last_inference_frame: int | None = None
 
         # Result tracking
-        self._latest_result: Optional[InferenceResult] = None
+        self._latest_result: InferenceResult | None = None
         self._unread_result: bool = False  # Track if there is a new, unconsumed result
         self._inference_active: bool = False
 
@@ -95,7 +89,7 @@ class InferenceEngine:
             "InferenceEngine initialized "
             "(window=%d stride=%d)",
             window_size,
-            stride
+            stride,
         )
 
     # ========================
@@ -104,19 +98,16 @@ class InferenceEngine:
 
     @property
     def window_size(self) -> int:
-        """
-        Single Source of Truth for window_size, delegated to the buffer.
-        """
+        """Single Source of Truth for window_size, delegated to the buffer."""
         return self.buffer.window_size
 
     @property
     def stride(self) -> int:
+        """Return the current inference stride."""
         return self._stride
 
-    def set_stride(self, stride: int):
-        """
-        Dynamically updates stride.
-        """
+    def set_stride(self, stride: int) -> None:
+        """Dynamically updates stride."""
         if stride <= 0:
             raise ValueError("stride must be > 0")
 
@@ -124,7 +115,7 @@ class InferenceEngine:
             logger.info(
                 "Stride changed from %d to %d",
                 self._stride,
-                stride
+                stride,
             )
             self._stride = stride
 
@@ -134,10 +125,10 @@ class InferenceEngine:
 
     def process_frame(
         self,
-        frame: Any,
-        timestamp: Optional[float] = None
-    ) -> Optional[InferenceResult]:
-
+        frame: object,
+        timestamp: float | None = None,
+    ) -> InferenceResult | None:
+        """Process a frame and return an inference result when one is triggered."""
         if timestamp is None:
             timestamp = time.time()
 
@@ -174,7 +165,8 @@ class InferenceEngine:
                     prediction = self.model.predict(window_snapshot)
                 else:
                     logger.warning(
-                        "Model is neither callable nor has a predict() method")
+                        "Model is neither callable nor has a predict() method",
+                    )
 
             result = InferenceResult(
                 window=window_snapshot,
@@ -182,7 +174,7 @@ class InferenceEngine:
                 end_frame_index=end_frame_snap,
                 start_timestamp=start_ts_snap,
                 end_timestamp=end_ts_snap,
-                prediction=prediction
+                prediction=prediction,
             )
 
         except Exception:
@@ -190,13 +182,16 @@ class InferenceEngine:
                 if self._generation == current_generation:
                     self._inference_active = False
             logger.error(
-                "Inference failed due to an exception.", exc_info=True)
+                "Inference failed due to an exception.",
+                exc_info=True,
+            )
             raise
 
         with self._lock:
             if self._generation != current_generation:
                 logger.debug(
-                    "Stale inference detected due to reset. Discarding result.")
+                    "Stale inference detected due to reset. Discarding result.",
+                )
                 return None
 
             self._last_inference_frame = end_frame_snap
@@ -209,7 +204,7 @@ class InferenceEngine:
             logger.debug(
                 "Inference completed (frames %d-%d)",
                 start_frame_snap,
-                end_frame_snap
+                end_frame_snap,
             )
 
         return result
@@ -219,7 +214,6 @@ class InferenceEngine:
     # ========================
 
     def _should_trigger_inference(self) -> bool:
-
         if self._last_inference_frame is None:
             return True
 
@@ -235,25 +229,22 @@ class InferenceEngine:
     # ========================
 
     def get_latest_result(
-        self
-    ) -> Optional[InferenceResult]:
-
+        self,
+    ) -> InferenceResult | None:
+        """Return the latest inference result and mark it as consumed."""
         with self._lock:
             self._unread_result = False  # Result consumed
             return self._latest_result
 
     def has_new_result(self) -> bool:
-
+        """Return whether the latest result has not been consumed."""
         with self._lock:
             return self._unread_result
 
     def peek_next_trigger_frame(
-        self
-    ) -> Optional[int]:
-        """
-        Predicts next inference frame index.
-        """
-
+        self,
+    ) -> int | None:
+        """Predicts next inference frame index."""
         with self._lock:
 
             if self._last_inference_frame is None:
@@ -269,7 +260,7 @@ class InferenceEngine:
             )
 
     def get_metrics(self) -> dict:
-
+        """Return frame processing and inference counters."""
         with self._lock:
 
             return {
@@ -280,10 +271,11 @@ class InferenceEngine:
                     self.total_inferences,
 
                 "total_frames_skipped":
-                    self.total_frames_skipped
+                    self.total_frames_skipped,
             }
 
-    def reset(self):
+    def reset(self) -> None:
+        """Reset buffered frames, results, and counters."""
         with self._lock:
             logger.info("Engine reset")
 

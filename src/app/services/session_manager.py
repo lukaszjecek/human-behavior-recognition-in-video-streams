@@ -11,6 +11,11 @@ from src.app.db.session import SessionLocal
 from src.app.schemas.action_event import EventPayload
 from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
 from src.app.services.websocket_manager import websocket_manager
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    log_audit_event,
+    log_event,
+)
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
 logger = logging.getLogger(__name__)
@@ -95,6 +100,14 @@ class InferenceSessionManager:
 
     async def _run_session_task(self, session: SessionData) -> None:
         """Background task that runs the blocking inference."""
+        log_event(
+            logger,
+            logging.INFO,
+            "session_task_started",
+            f"Background inference task started for session {session.id}.",
+            RuntimeLogContext(session_id=str(session.id)),
+            video_path=str(session.request.video_path),
+        )
         try:
             # Map API request to internal request
             inference_request = InferenceServiceRequest(
@@ -112,12 +125,57 @@ class InferenceSessionManager:
                     with SessionLocal() as db:
                         save_event(db, payload)
                 except Exception as db_err:
+                    log_event(
+                        logger,
+                        logging.ERROR,
+                        "database_write_failed",
+                        f"Database write-path failure for event {payload.event_id} "
+                        f"in background session {session.id}: {db_err}",
+                        RuntimeLogContext(session_id=str(session.id)),
+                        exc_info=True,
+                        event_id=str(payload.event_id),
+                        error_type=type(db_err).__name__,
+                    )
                     logger.error(
                         "Database write-path failure for event %s in background session %s: %s",
                         payload.event_id,
                         session.id,
                         db_err,
                     )
+
+                # 3. Write to file-based audit trail
+                try:
+                    log_audit_event(payload)
+                except Exception as audit_err:
+                    log_event(
+                        logger,
+                        logging.ERROR,
+                        "audit_file_write_failed",
+                        f"Failed to write event {payload.event_id} to audit log: {audit_err}",
+                        RuntimeLogContext(session_id=str(session.id)),
+                        exc_info=True,
+                        event_id=str(payload.event_id),
+                        error_type=type(audit_err).__name__,
+                    )
+
+                # 4. Log structured audit event
+                is_detection = payload.event_type.value == "DETECTION"
+                event_name = (
+                    "audit_detection_published"
+                    if is_detection
+                    else "audit_alert_triggered"
+                )
+                log_event(
+                    logger,
+                    logging.INFO,
+                    event_name,
+                    f"Published {payload.event_type.value} event {payload.event_id} "
+                    f"for session {session.id}.",
+                    RuntimeLogContext(session_id=str(session.id)),
+                    event_id=str(payload.event_id),
+                    camera_id=payload.camera_id,
+                    event_type=payload.event_type.value,
+                )
 
             # Run blocking call in a background thread
             await asyncio.to_thread(
@@ -131,8 +189,26 @@ class InferenceSessionManager:
             # Only update to COMPLETED if not stopped manually
             if session.status == SessionStatus.RUNNING:
                 session.update_status(SessionStatus.COMPLETED)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "session_task_completed",
+                    f"Background inference task completed successfully for session {session.id}.",
+                    RuntimeLogContext(session_id=str(session.id)),
+                    video_path=str(session.request.video_path),
+                )
 
         except Exception as exc:
+            log_event(
+                logger,
+                logging.ERROR,
+                "session_task_failed",
+                f"Background inference task failed for session {session.id}: {exc}",
+                RuntimeLogContext(session_id=str(session.id)),
+                exc_info=True,
+                video_path=str(session.request.video_path),
+                error_type=type(exc).__name__,
+            )
             logger.exception("Session %s execution failed", session.id)
             import sys
             import traceback

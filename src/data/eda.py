@@ -1,14 +1,17 @@
-import json
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
-import cv2
-import yaml
+"""Generate exploratory reports for dataset manifests."""
+
 import argparse
+import json
+from pathlib import Path
+
+import cv2
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import yaml
 
 
-def get_video_info(video_path: Path):
+def get_video_info(video_path: Path) -> dict[str, int | float] | None:
     """Probes video file for metadata using OpenCV."""
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -25,7 +28,8 @@ def get_video_info(video_path: Path):
     return info
 
 
-def main():
+def main() -> None:
+    """Run exploratory data analysis for the configured dataset."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/data_pipeline.yml")
     args = parser.parse_args()
@@ -72,7 +76,7 @@ def main():
         "min_duration": df["duration"].min(),
         "max_duration": df["duration"].max(),
         "common_resolutions": df.groupby(["width", "height"]).size().to_dict(),
-        "avg_fps": df["fps"].mean()
+        "avg_fps": df["fps"].mean(),
     }
 
     with open(report_dir / "eda_report.json", "w") as f:

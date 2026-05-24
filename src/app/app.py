@@ -8,7 +8,9 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
+from starlette.responses import Response
 
 from src.app.api.routes import router as api_router
 from src.app.api.websocket import router as ws_router
@@ -34,7 +36,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     Returns:
         Configured FastAPI instance with routers mounted.
     """
-    configure_runtime_logging()
+    configure_runtime_logging(log_file="backend.log")
     app_settings = settings or default_settings
     build_metadata = get_build_metadata()
 
@@ -56,6 +58,59 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         **build_metadata,
     )
 
+    @app.middleware("http")
+    async def log_requests(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        import time
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        request.state.request_id = request_id
+
+        log_context = RuntimeLogContext(session_id=request_id)
+        log_event(
+            logger,
+            logging.INFO,
+            "http_request_start",
+            f"HTTP {request.method} {request.url.path} started.",
+            log_context,
+            http_method=request.method,
+            http_path=request.url.path,
+        )
+
+        start_time = time.monotonic()
+        try:
+            response = await call_next(request)
+            duration = round(time.monotonic() - start_time, 4)
+            log_event(
+                logger,
+                logging.INFO,
+                "http_request_completed",
+                f"HTTP {request.method} {request.url.path} completed with {response.status_code}.",
+                log_context,
+                http_method=request.method,
+                http_path=request.url.path,
+                status_code=response.status_code,
+                duration_s=duration,
+            )
+            response.headers["X-Request-ID"] = request_id
+            return response
+        except Exception as exc:
+            duration = round(time.monotonic() - start_time, 4)
+            log_event(
+                logger,
+                logging.ERROR,
+                "http_request_failed",
+                f"HTTP {request.method} {request.url.path} failed: {exc}",
+                log_context,
+                exc_info=True,
+                http_method=request.method,
+                http_path=request.url.path,
+                error_type=type(exc).__name__,
+                duration_s=duration,
+            )
+            raise
+
     @app.on_event("startup")
     def on_startup() -> None:
         from src.app.db.session import init_db
@@ -70,9 +125,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Handle uncaught exceptions and return a generic 500 response."""
-        request_id = getattr(request.state, "request_id", None)
-        log_context = RuntimeLogContext(
-            session_id=request_id or uuid.uuid4().hex)
+        request_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+        log_context = RuntimeLogContext(session_id=request_id)
         log_event(
             logger,
             logging.ERROR,
@@ -87,6 +141,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error"},
+            headers={"X-Request-ID": request_id},
         )
 
     return app

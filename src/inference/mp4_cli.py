@@ -37,7 +37,7 @@ def run_mp4_to_json_action_inference(request: InferenceCliRequest) -> int:
     """Run end-to-end MP4 inference and save ActionEvent log as JSON."""
     if not isinstance(request, InferenceCliRequest):
         raise TypeError("request must be an InferenceCliRequest instance")
-    configure_runtime_logging()
+    configure_runtime_logging(log_file="inference.log")
     _validate_request_paths(request)
     allowed_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".webp"}
     if request.input_path.suffix.lower() not in allowed_extensions:
