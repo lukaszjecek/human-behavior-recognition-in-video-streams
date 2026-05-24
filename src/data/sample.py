@@ -1,3 +1,5 @@
+"""Generate dataset split manifests from raw video directories."""
+
 import argparse
 import json
 import random
@@ -10,18 +12,20 @@ import yaml
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
 
-def set_seed(seed: int):
+def set_seed(seed: int) -> None:
+    """Seed random sampling for reproducible split generation."""
     random.seed(seed)
 
 
 def generate_splits(video_paths: list[Path], splits_config: dict) -> list[dict]:
+    """Generate manifest entries grouped into train, validation, and test splits."""
     by_class = {}
     for p in video_paths:
         label = p.parent.name
         by_class.setdefault(label, []).append(p)
 
-    train_pct = splits_config.get('train', 0.7)
-    val_pct = splits_config.get('val', 0.15)
+    train_pct = splits_config.get("train", 0.7)
+    val_pct = splits_config.get("val", 0.15)
 
     manifest_entries = []
 
@@ -45,7 +49,7 @@ def generate_splits(video_paths: list[Path], splits_config: dict) -> list[dict]:
                 "video_id": p.stem,
                 "path": f"{label}/{p.name}",
                 "label": label,
-                "split": split
+                "split": split,
             }
             manifest_entries.append(entry)
 
@@ -53,6 +57,7 @@ def generate_splits(video_paths: list[Path], splits_config: dict) -> list[dict]:
 
 
 def main() -> int:
+    """Generate a JSONL manifest from configured raw video directories."""
     parser = argparse.ArgumentParser(description="Generate dataset splits and manifest.")
     parser.add_argument("--config", default="configs/data_pipeline.yml", help="Path to YAML config")
     parser.add_argument("--output", default="manifest.jsonl", help="Output filename")
