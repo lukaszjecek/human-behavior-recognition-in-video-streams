@@ -77,12 +77,41 @@ async def websocket_echo(ws: WebSocket) -> None:
 @router.websocket("/live")
 async def websocket_live(ws: WebSocket) -> None:
     """Live streaming websocket that sends detection and alert events to clients."""
+    configure_runtime_logging()
+    request_id = ws.headers.get("X-Request-ID") or uuid.uuid4().hex
+    log_context = RuntimeLogContext(session_id=request_id)
     await websocket_manager.connect(ws)
+    log_event(
+        logger,
+        logging.INFO,
+        "websocket_connected",
+        "Websocket live client connected.",
+        log_context,
+        ws_path="/ws/live",
+    )
     try:
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        pass
+        log_event(
+            logger,
+            logging.INFO,
+            "websocket_disconnected",
+            "Websocket live client disconnected.",
+            log_context,
+            ws_path="/ws/live",
+        )
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "websocket_failed",
+            "Websocket live handler failed with an exception.",
+            log_context,
+            exc_info=True,
+            ws_path="/ws/live",
+            error_type=type(exc).__name__,
+        )
     finally:
         websocket_manager.disconnect(ws)
         try:

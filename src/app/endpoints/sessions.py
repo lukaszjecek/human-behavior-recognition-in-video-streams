@@ -1,11 +1,19 @@
 """Implementation of session REST endpoints."""
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
+from starlette.requests import Request
 
 from src.app.schemas.session import SessionResponse, SessionStartRequest, SessionStatus
 from src.app.services.session_manager import manager
+from src.inference.runtime_logging import (
+    RuntimeLogContext,
+    log_event,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -16,11 +24,42 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Start Inference Session",
 )
-async def start_session(request: SessionStartRequest) -> SessionResponse:
+async def start_session(
+    request_body: SessionStartRequest,
+    request: Request,
+) -> SessionResponse:
     """Start a new asynchronous offline inference session."""
+    request_id = getattr(request.state, "request_id", None)
+    log_context = RuntimeLogContext(session_id=request_id)
+    log_event(
+        logger,
+        logging.INFO,
+        "session_start_requested",
+        f"Request to start session for video: {request_body.video_path}",
+        log_context,
+        video_path=str(request_body.video_path),
+    )
     try:
-        return manager.create_session(request)
+        response = manager.create_session(request_body)
+        log_event(
+            logger,
+            logging.INFO,
+            "session_created",
+            f"Successfully created session {response.id} for video: {request_body.video_path}",
+            RuntimeLogContext(session_id=str(response.id)),
+            video_path=str(request_body.video_path),
+        )
+        return response
     except ValueError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_start_failed",
+            f"Failed to start session: {exc}",
+            log_context,
+            video_path=str(request_body.video_path),
+            error_type="ValueError",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc)
@@ -32,10 +71,28 @@ async def start_session(request: SessionStartRequest) -> SessionResponse:
     response_model=SessionResponse,
     summary="Get Session Status",
 )
-async def get_session(session_id: UUID) -> SessionResponse:
+async def get_session(session_id: UUID, request: Request) -> SessionResponse:
     """Retrieve the current status and metadata of an inference session."""
+    request_id = getattr(request.state, "request_id", None)
+    log_context = RuntimeLogContext(session_id=request_id)
+    log_event(
+        logger,
+        logging.DEBUG,
+        "session_status_requested",
+        f"Retrieving status for session {session_id}.",
+        log_context,
+        target_session_id=str(session_id),
+    )
     session = manager.get_session(session_id)
     if not session:
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_not_found",
+            f"Session {session_id} not found.",
+            log_context,
+            target_session_id=str(session_id),
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found"
@@ -49,24 +106,69 @@ async def get_session(session_id: UUID) -> SessionResponse:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Stop Inference Session",
 )
-async def stop_session(session_id: UUID) -> SessionResponse:
+async def stop_session(session_id: UUID, request: Request) -> SessionResponse:
     """Stop an ongoing inference session."""
+    request_id = getattr(request.state, "request_id", None)
+    log_context = RuntimeLogContext(session_id=request_id)
+    log_event(
+        logger,
+        logging.INFO,
+        "session_stop_requested",
+        f"Request to stop session {session_id}.",
+        log_context,
+        target_session_id=str(session_id),
+    )
     session = manager.get_session(session_id)
     if not session:
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_stop_failed",
+            f"Stop failed: session {session_id} not found.",
+            log_context,
+            target_session_id=str(session_id),
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found"
         )
 
     if session.status not in (SessionStatus.PENDING, SessionStatus.RUNNING):
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_stop_failed",
+            f"Stop failed: session {session_id} is in status {session.status.value}.",
+            log_context,
+            target_session_id=str(session_id),
+            session_status=session.status.value,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot stop a session that is not running"
         )
 
-    # Calling stop_session on the manager will gracefully set the stop_event
     stopped_session = manager.stop_session(session_id)
     if not stopped_session:
-         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_stop_failed",
+            f"Stop failed: session {session_id} not found during stop operation.",
+            log_context,
+            target_session_id=str(session_id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "session_stopped",
+        f"Successfully signaled session {session_id} to stop.",
+        log_context,
+        target_session_id=str(session_id),
+    )
     return stopped_session

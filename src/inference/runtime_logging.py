@@ -7,6 +7,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 _DEFAULT_LEVEL = "INFO"
@@ -129,9 +130,29 @@ class JsonLogFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
-def configure_runtime_logging(level: str | int | None = None) -> None:
+def configure_runtime_logging(
+    level: str | int | None = None,
+    log_file: str | Path | None = None,
+) -> None:
     """Configure structured logging for inference runtime output."""
-    _get_structured_logger(level=level)
+    suffix: str | None = None
+    if log_file:
+        file_name = str(Path(log_file).name).lower()
+        if "inference" in file_name:
+            suffix = "inference"
+
+    # Always ensure both are initialized/configured with standard streams
+    # and levels, but apply the FileHandler only to the correct target.
+    _get_structured_logger(
+        level=level,
+        log_file=log_file if suffix is None else None,
+        logger_suffix=None,
+    )
+    _get_structured_logger(
+        level=level,
+        log_file=log_file if suffix == "inference" else None,
+        logger_suffix="inference",
+    )
 
 
 def log_event(
@@ -157,7 +178,8 @@ def log_event(
         )
     if fields:
         extra["fields"] = fields
-    structured_logger = _get_structured_logger()
+    suffix = "inference" if "inference" in logger.name else None
+    structured_logger = _get_structured_logger(logger_suffix=suffix)
     structured_logger.log(level, message, extra=extra, exc_info=exc_info)
 
 
@@ -202,18 +224,77 @@ def _resolve_log_detail() -> str:
     return _DEFAULT_DETAIL
 
 
-def _get_structured_logger(level: str | int | None = None) -> logging.Logger:
+def _get_structured_logger(
+    level: str | int | None = None,
+    log_file: str | Path | None = None,
+    logger_suffix: str | None = None,
+) -> logging.Logger:
     """Return a dedicated structured logger configured with JSON output."""
-    logger = logging.getLogger(_STRUCTURED_LOGGER_NAME)
+    if logger_suffix:
+        logger_name = f"{_STRUCTURED_LOGGER_NAME}.{logger_suffix}"
+    else:
+        logger_name = _STRUCTURED_LOGGER_NAME
+    logger = logging.getLogger(logger_name)
     resolved_level = _resolve_log_level(level)
-    if logger.handlers:
-        logger.setLevel(resolved_level)
-        return logger
-
-    detail = _resolve_log_detail()
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonLogFormatter(detail))
-    logger.addHandler(handler)
     logger.setLevel(resolved_level)
     logger.propagate = False
+
+    # Check if a StreamHandler is already registered
+    has_stream_handler = any(
+        isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        for h in logger.handlers
+    )
+
+    detail = _resolve_log_detail()
+    if not has_stream_handler:
+        handler = logging.StreamHandler()
+        handler.setFormatter(JsonLogFormatter(detail))
+        logger.addHandler(handler)
+
+    if log_file:
+        log_dir_env = os.getenv("LOG_DIR")
+        if log_dir_env:
+            log_file_path = Path(log_dir_env) / log_file
+        else:
+            log_file_path = Path(log_file)
+
+        # Check if file handler for this path already exists
+        has_file_handler = False
+        for h in logger.handlers:
+            if isinstance(h, logging.FileHandler):
+                try:
+                    if Path(h.baseFilename).resolve() == log_file_path.resolve():
+                        has_file_handler = True
+                        break
+                except Exception:
+                    pass
+
+        if not has_file_handler:
+            try:
+                log_file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+                file_handler.setFormatter(JsonLogFormatter(detail))
+                logger.addHandler(file_handler)
+            except Exception as e:
+                import sys
+                print(f"Error configuring FileHandler for structured logger: {e}", file=sys.stderr)
+
     return logger
+
+
+def log_audit_event(payload: object) -> None:
+    """Write a serialized EventPayload to a dedicated audit.log file."""
+    log_dir = os.getenv("LOG_DIR") or "data/logs"
+    try:
+        audit_path = Path(log_dir) / "audit.log"
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        if hasattr(payload, "model_dump"):
+            data = payload.model_dump(mode="json")
+        else:
+            data = payload
+        line = json.dumps(data, ensure_ascii=False)
+        with open(audit_path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        structured_logger = logging.getLogger(_STRUCTURED_LOGGER_NAME)
+        structured_logger.error(f"Failed to write event to audit log: {e}")
