@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import SettingsModal from './SettingsModal'
+import ContextSettings from './ContextSettings'
 
 export default function Header() {
   const [time, setTime] = useState(new Date())
@@ -72,7 +72,7 @@ export default function Header() {
         </div>
       </header>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ContextSettings isModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   )
 }

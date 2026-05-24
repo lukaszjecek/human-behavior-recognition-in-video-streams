@@ -229,3 +229,114 @@
 [data-theme="light"] .border-amber\/20 {
   border-color: color-mix(in srgb, var(--color-amber) 35%, transparent);
 }
+
+/* ===== Scene Context Dashboard Styles ===== */
+
+/* Toggle Switch Styling */
+.toggle-switch-container {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+
+.toggle-switch-checkbox {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--color-border);
+  border-radius: 34px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid var(--color-border);
+}
+
+.toggle-switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  top: 3px;
+  background-color: var(--color-text-dim);
+  border-radius: 50%;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease;
+}
+
+.toggle-switch-checkbox:checked + .toggle-switch-slider {
+  background-color: color-mix(in srgb, var(--color-amber) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-amber) 40%, transparent);
+}
+
+.toggle-switch-checkbox:checked + .toggle-switch-slider:before {
+  transform: translateX(14px);
+  background-color: var(--color-amber);
+}
+
+.toggle-switch-checkbox:focus-visible + .toggle-switch-slider {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 2px;
+}
+
+/* Accents & Glassmorphic mixes */
+.bg-green {
+  background-color: var(--color-green);
+}
+
+.bg-green\/5 {
+  background-color: color-mix(in srgb, var(--color-green) 5%, transparent);
+}
+
+.border-green\/25 {
+  border-color: color-mix(in srgb, var(--color-green) 20%, transparent);
+}
+
+[data-theme="light"] .border-green\/25 {
+  border-color: color-mix(in srgb, var(--color-green) 35%, transparent);
+}
+
+.bg-amber\/5 {
+  background-color: color-mix(in srgb, var(--color-amber) 5%, transparent);
+}
+
+.border-amber\/25 {
+  border-color: color-mix(in srgb, var(--color-amber) 20%, transparent);
+}
+
+[data-theme="light"] .border-amber\/25 {
+  border-color: color-mix(in srgb, var(--color-amber) 35%, transparent);
+}
+
+.bg-green\/10 {
+  background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
+}
+
+.border-green\/30 {
+  border-color: color-mix(in srgb, var(--color-green) 30%, transparent);
+}
+
+.bg-amber\/10 {
+  background-color: color-mix(in srgb, var(--color-amber) 10%, transparent);
+}
+
+.border-amber\/30 {
+  border-color: color-mix(in srgb, var(--color-amber) 30%, transparent);
+}
+
+.text-amber {
+  color: var(--color-amber);
+}
+
+.text-green {
+  color: var(--color-green);
+}
+
+.accent-amber {
+  accent-color: var(--color-amber);
+}
+

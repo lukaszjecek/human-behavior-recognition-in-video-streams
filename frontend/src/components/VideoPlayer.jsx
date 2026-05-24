@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import mockCoordinates from './mockCoordinates.json'
+import { useSceneContext } from '../context/SceneContext'
 
 export default function VideoPlayer() {
+  const { setBackendContext } = useSceneContext()
   const [videoSrc, setVideoSrc] = useState('/sample.mp4')
   const [fileName, setFileName] = useState('sample.mp4')
   const [isPlaying, setIsPlaying] = useState(true)
@@ -11,6 +13,7 @@ export default function VideoPlayer() {
   const canvasRef = useRef(null)
   const fileInputRef = useRef(null)
   const animationFrameId = useRef(null)
+  const lastReportedContext = useRef({ scene_tag: '', confidence: -1 })
 
   // Revoke object URL on source change or unmount to avoid memory leaks
   useEffect(() => {
@@ -84,6 +87,44 @@ export default function VideoPlayer() {
       const H = canvas.height
 
       ctx.clearRect(0, 0, W, H)
+
+      let activeTag = 'unknown'
+      let activeConfidence = 0.0
+
+      if (W > 0 && H > 0 && fileName === 'sample.mp4') {
+        const fps = 30
+        const frameIndex = Math.floor(video.currentTime * fps)
+
+        // Determine context tag and confidence score based on simulated timeline
+        if (frameIndex < 20) {
+          activeTag = 'unknown'
+          activeConfidence = 0.0
+        } else if (frameIndex < 90) {
+          activeTag = 'vehicle_setting'
+          activeConfidence = 0.92 + Math.sin(frameIndex * 0.15) * 0.015
+        } else if (frameIndex < 160) {
+          activeTag = 'outdoor'
+          activeConfidence = 0.88 + Math.cos(frameIndex * 0.1) * 0.01
+        } else if (frameIndex < 220) {
+          activeTag = 'outdoor'
+          activeConfidence = 0.95 + Math.sin(frameIndex * 0.05) * 0.008
+        } else {
+          activeTag = 'outdoor'
+          activeConfidence = 0.91 + Math.cos(frameIndex * 0.08) * 0.02
+        }
+      }
+
+      // Throttle React state updates to avoid rendering bottleneck
+      const roundedConf = Math.round(activeConfidence * 1000) / 1000
+      if (
+        lastReportedContext.current.scene_tag !== activeTag ||
+        Math.abs(lastReportedContext.current.confidence - roundedConf) > 0.005
+      ) {
+        lastReportedContext.current = { scene_tag: activeTag, confidence: roundedConf }
+        setTimeout(() => {
+          setBackendContext({ scene_tag: activeTag, confidence: roundedConf })
+        }, 0)
+      }
 
       if (W > 0 && H > 0 && fileName === 'sample.mp4') {
         const fps = 30
@@ -212,7 +253,7 @@ export default function VideoPlayer() {
         cancelAnimationFrame(animationFrameId.current)
       }
     }
-  }, [videoSrc])
+  }, [videoSrc, fileName, setBackendContext])
 
   return (
     <section className="panel flex flex-col" id="video-player">
