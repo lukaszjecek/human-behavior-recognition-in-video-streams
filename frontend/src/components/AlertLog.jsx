@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useWebSocket } from '../context/WebSocketContext'
 
 const ALL_MOCK_ALERTS = [
   {
@@ -58,7 +59,7 @@ const ALL_MOCK_ALERTS = [
 ]
 
 export default function AlertLog() {
-  const [alerts, setAlerts] = useState(() => ALL_MOCK_ALERTS.filter(a => a.delay === 0))
+  const { alerts, setAlerts } = useWebSocket()
   const [filter, setFilter] = useState('all') // 'all', 'danger', 'warning', 'normal'
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -87,22 +88,8 @@ export default function AlertLog() {
     })
   }
 
-  // Set up the asynchronous simulation timers on component mount.
-  // We schedule only the delayed timers (delay > 0) here because the initial state
-  // is already synchronously set to the delay === 0 items via the useState lazy initializer.
-  // This avoids calling setState synchronously in the effect, fully satisfying ESLint rules.
+  // Clear timers on unmount
   useEffect(() => {
-    ALL_MOCK_ALERTS.forEach(alert => {
-      if (alert.delay > 0) {
-        const tId = setTimeout(() => {
-          setAlerts(prev => {
-            if (prev.some(a => a.id === alert.id)) return prev
-            return [alert, ...prev]
-          })
-        }, alert.delay)
-        timersRef.current.push(tId)
-      }
-    })
     return clearTimers
   }, [])
 
