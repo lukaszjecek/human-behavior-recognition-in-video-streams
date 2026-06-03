@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { API_BASE_URL, getWsUrl } from '../config'
 import { useSceneContext } from './SceneContext'
@@ -161,6 +162,7 @@ export function WebSocketProvider({ children }) {
         clearTimeout(reconnectTimeoutRef.current)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const value = {
