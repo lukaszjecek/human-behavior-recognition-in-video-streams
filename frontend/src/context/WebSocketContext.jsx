@@ -53,6 +53,9 @@ export function WebSocketProvider({ children }) {
   const connect = () => {
     // Clear any existing connection and reconnect timers
     if (socketRef.current) {
+      socketRef.current.onclose = null
+      socketRef.current.onerror = null
+      socketRef.current.onmessage = null
       socketRef.current.close()
     }
     if (reconnectTimeoutRef.current) {
