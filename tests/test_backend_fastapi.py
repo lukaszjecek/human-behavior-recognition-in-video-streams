@@ -99,7 +99,7 @@ def test_default_settings_db_fields(monkeypatch):
 
 
 def test_cors_headers():
-    settings = Settings(cors_origins=["http://localhost:5173"])
+    settings = Settings(_env_file=None, cors_origins=["http://localhost:5173"])
     app = create_app(settings=settings)
     client = TestClient(app)
 
