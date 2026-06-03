@@ -96,3 +96,29 @@ def test_default_settings_db_fields(monkeypatch):
     assert s.db_password == "hbr_password"
     assert s.postgres_db == "hbr_db"
     assert s.database_url == "postgresql://hbr_user:hbr_password@localhost:5432/hbr_db"
+
+
+def test_cors_headers():
+    settings = Settings(cors_origins=["http://localhost:5173"])
+    app = create_app(settings=settings)
+    client = TestClient(app)
+
+    # Test options preflight request
+    headers = {
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "X-Custom",
+    }
+    response = client.options("/ws/ping", headers=headers)
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    # Test origin matching for simple request
+    response = client.get("/ws/ping", headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    # Test origin mismatch
+    response = client.get("/ws/ping", headers={"Origin": "http://unauthorized.com"})
+    assert "access-control-allow-origin" not in response.headers
+
