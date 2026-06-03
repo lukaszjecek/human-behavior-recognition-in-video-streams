@@ -156,7 +156,11 @@ export function WebSocketProvider({ children }) {
 
     return () => {
       if (socketRef.current) {
+        socketRef.current.onclose = null
+        socketRef.current.onerror = null
+        socketRef.current.onmessage = null
         socketRef.current.close()
+        socketRef.current = null
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
