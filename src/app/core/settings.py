@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     debug: bool = Field(False)
     host: str = Field("0.0.0.0")
     port: int = Field(8000)
-cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
 
     data_dir: Path = Field(Path("/app/data/raw"))
     log_dir: Path = Field(Path("/app/data/logs"))
