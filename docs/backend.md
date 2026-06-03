@@ -415,3 +415,10 @@ Audit logs follow the canonical JSON schema:
   "session_id": "uuid (corresponds to background session ID)"
 }
 ```
+
+## CORS Configuration
+
+To allow frontend clients (like the React dashboard) to communicate with the FastAPI backend from a different origin, CORS is configured on the application factory using FastAPI's `CORSMiddleware`.
+
+Origins are configurable via the `cors_origins` settings field in [settings.py](file:///d:/repos/human-behavior-recognition-in-video-streams/src/app/core/settings.py), which defaults to `["http://localhost:5173", "http://localhost:3000"]` (the standard ports used by the React development server).
+

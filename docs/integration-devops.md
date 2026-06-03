@@ -295,6 +295,7 @@ app_version: str = "0.1.0"
 debug: bool = False
 host: str = "0.0.0.0"
 port: int = 8000
+cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 db_host: str = "localhost"
 db_port: int = 5432
 db_user: str = "hbr_user"
