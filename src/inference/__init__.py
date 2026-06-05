@@ -10,6 +10,7 @@ from src.inference.offline_runtime import (
     run_source_with_reconnect,
     run_video,
 )
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.service import (
     InferenceServiceRequest,
     InferenceServiceResult,
@@ -29,6 +30,7 @@ __all__ = [
     "ActionEventLog",
     "ActionEventWriter",
     "InferenceEngine",
+    "InferenceEventPipeline",
     "InferenceResult",
     "InferenceServiceRequest",
     "InferenceServiceResult",
