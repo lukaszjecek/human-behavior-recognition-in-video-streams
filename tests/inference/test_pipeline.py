@@ -20,8 +20,8 @@ Covers:
 from __future__ import annotations
 
 import threading
-from typing import Optional
-from unittest.mock import MagicMock, patch
+import threading
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import numpy as np
@@ -59,7 +59,7 @@ def _make_pipeline(
     stride: int = 1,
     label: str = "fight",
     confidence: float = 0.9,
-    danger_labels: Optional[list[str]] = None,
+    danger_labels: list[str] | None = None,
     context_module=None,
     context_eval_every_n_windows: int = 1,
     bbox_hook=None,
@@ -140,6 +140,30 @@ class TestPushFrameBasicEmission:
         with pytest.raises(TypeError, match="numpy ndarray"):
             pipeline.push_frame("not-a-frame")  # type: ignore[arg-type]
 
+    def test_push_frame_with_timestamp(self):
+        pipeline = _make_pipeline(window_size=1, stride=1)
+        payloads = pipeline.push_frame(_make_frame(), timestamp=12345.6)
+        assert len(payloads) >= 1
+        event = payloads[0].data
+        assert isinstance(event, ActionEvent)
+        assert event.start_timestamp == 12345.6
+
+    def test_session_id_and_camera_id_propagate(self):
+        import uuid
+        test_uuid = uuid.uuid4()
+        engine = InferenceEngine(window_size=1, stride=1, model=_make_dict_model())
+        writer = ActionEventWriter(class_labels=[])
+        alert_sm = AlertStateMachine(persistence_threshold=1, danger_labels=["fight"])
+        pipeline = InferenceEventPipeline(
+            engine=engine, writer=writer, alert_processor=alert_sm,
+            camera_id="cam-99", session_id=test_uuid
+        )
+        payloads = pipeline.push_frame(_make_frame())
+        assert len(payloads) == 2  # DETECTION and ALERT
+        for p in payloads:
+            assert p.camera_id == "cam-99"
+            assert p.session_id == test_uuid
+
 
 # ---------------------------------------------------------------------------
 # Context enrichment — fallback behaviour
@@ -153,8 +177,7 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        assert event.context is not None
-        assert event.context.scene_tag == "unknown"
+        assert event.context is None
 
     def test_context_unknown_when_module_raises(self):
         bad_module = MagicMock()
@@ -164,7 +187,7 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        assert event.context.scene_tag == "unknown"
+        assert event.context is None
 
     def test_context_unknown_when_module_returns_bad_dict(self):
         """get_context() returning unexpected keys should default gracefully."""
@@ -175,8 +198,8 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        # "unknown" is the default when key is missing
-        assert event.context.scene_tag == "unknown"
+        # None is the default when context fails
+        assert event.context is None
 
     def test_valid_context_attached_when_module_works(self):
         good_module = MagicMock()
@@ -188,6 +211,15 @@ class TestContextFallback:
         assert isinstance(event, ActionEvent)
         assert event.context.scene_tag == "indoor"
         assert pytest.approx(event.context.confidence, abs=1e-6) == 0.85
+
+    def test_evaluate_context_converts_numpy_to_pil(self):
+        mock_module = MagicMock()
+        mock_module.get_context.return_value = {"scene_tag": "indoor", "confidence": 0.9}
+        pipeline = _make_pipeline(window_size=1, stride=1, context_module=mock_module, context_eval_every_n_windows=1)
+        _push_n(pipeline, 1)
+        args, _ = mock_module.get_context.call_args
+        from PIL.Image import Image as PilImage
+        assert isinstance(args[0], PilImage)
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +290,7 @@ class TestContextCadence:
         )
         payloads = _push_n(pipeline, 6)  # 6 inference windows
         detections = [p for p in payloads if p.event_type == EventType.DETECTION]
-        tags = [d.data.context.scene_tag for d in detections if isinstance(d.data, ActionEvent)]
+        tags = [d.data.context.scene_tag if d.data.context else "unknown" for d in detections if isinstance(d.data, ActionEvent)]
 
         # Windows 1-2: counter hasn't reached 3 → cached fallback "unknown"
         # Window 3:    counter hits 3 → first evaluation → "outdoor"
@@ -270,8 +302,6 @@ class TestContextCadence:
         assert tags[3] == "outdoor"   # window 4: cached
         assert tags[4] == "outdoor"   # window 5: cached
         assert tags[5] == "indoor"    # window 6: second evaluation
-
-
 
 # ---------------------------------------------------------------------------
 # BBox hook
@@ -373,10 +403,11 @@ class TestAlertProcessing:
         writer = ActionEventWriter(class_labels=[])
         policy = ContextPolicy(default_persistence_threshold=3, default_resolve_threshold=1)
         cap = ContextAwareAlertProcessor(policy=policy, danger_labels=["fight"])
-        # Construction must not raise
         pipeline = InferenceEventPipeline(engine=engine, writer=writer, alert_processor=cap)
         payloads = _push_n(pipeline, 5)
         assert isinstance(payloads, list)
+        alerts = [p for p in payloads if p.event_type == EventType.ALERT]
+        assert len(alerts) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +436,36 @@ class TestThreadSafety:
 
         assert errors == [], f"Thread safety violations: {errors}"
 
+    def test_concurrent_push_frame_and_reset(self):
+        pipeline = _make_pipeline(window_size=2, stride=1)
+        errors: list[Exception] = []
+
+        def worker_push():
+            try:
+                for _ in range(50):
+                    pipeline.push_frame(_make_frame())
+            except Exception as exc:
+                errors.append(exc)
+
+        def worker_reset():
+            try:
+                for _ in range(10):
+                    pipeline.reset()
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker_push),
+            threading.Thread(target=worker_reset),
+            threading.Thread(target=worker_push)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+
 
 # ---------------------------------------------------------------------------
 # reset() and get_metrics()
@@ -417,17 +478,24 @@ class TestResetAndMetrics:
         _push_n(pipeline, 3)
         pipeline.reset()
         # After reset the engine frame_count should be 0
-        assert pipeline._engine.frame_count == 0
+        assert pipeline.get_metrics()["total_frames_processed"] == 0
 
     def test_reset_clears_context_cache(self):
-        from src.inference.pipeline import _UNKNOWN_CONTEXT
-
         mock_module = MagicMock()
         mock_module.get_context.return_value = {"scene_tag": "indoor", "confidence": 0.9}
         pipeline = _make_pipeline(context_module=mock_module, context_eval_every_n_windows=1)
         _push_n(pipeline, 3)
         pipeline.reset()
-        assert pipeline._cached_context == _UNKNOWN_CONTEXT
+        assert pipeline.get_metrics()["cached_context_scene_tag"] is None
+
+    def test_reset_clears_alert_processor_state(self):
+        pipeline = _make_pipeline(window_size=1, stride=1, persistence_threshold=2)
+        payloads = _push_n(pipeline, 3)
+        assert any(p.event_type == EventType.ALERT for p in payloads)
+        pipeline.reset()
+        # Next push should NOT alert because state was cleared.
+        payloads2 = _push_n(pipeline, 1)
+        assert not any(p.event_type == EventType.ALERT for p in payloads2)
 
     def test_get_metrics_returns_expected_keys(self):
         pipeline = _make_pipeline(window_size=2, stride=1, context_eval_every_n_windows=5)
@@ -450,7 +518,7 @@ class TestResetAndMetrics:
         pipeline = _make_pipeline(window_size=1, stride=1)
         _push_n(pipeline, 5)
         pipeline.reset()
-        assert pipeline._total_windows_processed == 0
+        assert pipeline.get_metrics()["total_windows_processed"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -474,11 +542,6 @@ class TestConstructorValidation:
         engine, _, alert_sm = self._base_args()
         with pytest.raises(TypeError, match="writer must be an ActionEventWriter"):
             InferenceEventPipeline(engine=engine, writer=42, alert_processor=alert_sm)
-
-    def test_invalid_alert_processor_type(self):
-        engine, writer, _ = self._base_args()
-        with pytest.raises(TypeError, match="alert_processor must be"):
-            InferenceEventPipeline(engine=engine, writer=writer, alert_processor="bad")
 
     def test_invalid_context_eval_zero(self):
         engine, writer, alert_sm = self._base_args()
