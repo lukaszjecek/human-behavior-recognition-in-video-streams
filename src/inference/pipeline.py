@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Callable, Optional
+from typing import Any, Callable, Protocol
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -34,22 +34,31 @@ from src.app.schemas.action_event import (
     EventPayload,
     EventType,
 )
-from src.inference.alert_state_machine import AlertStateMachine
+from src.inference.alert_state_machine import AlertRaisedEvent, AlertStateMachine
 from src.inference.context_policy import ContextAwareAlertProcessor
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 
 logger = logging.getLogger(__name__)
 
+try:
+    from PIL import Image as PilImage
+except ImportError:
+    PilImage = None
+
 # Sentinel returned by ContextModule.get_context() when context is unavailable.
-_UNKNOWN_CONTEXT = ContextData(scene_tag="unknown", confidence=0.0)
+_UNKNOWN_CONTEXT: ContextData | None = None
 
 # Type alias for the optional bbox enrichment hook supplied by issue #119.
 BBoxHook = Callable[[ActionEvent], ActionEvent]
 
-# Type alias for the alert processor accepted by the pipeline.
-# Both AlertStateMachine and ContextAwareAlertProcessor are supported.
-AlertProcessor = AlertStateMachine | ContextAwareAlertProcessor
+# Protocols for injected components.
+class AlertProcessor(Protocol):
+    def process_event(self, event: ActionEvent) -> AlertRaisedEvent | None: ...
+    def reset_all(self) -> None: ...
+
+class ContextProvider(Protocol):
+    def get_context(self, frame: Any) -> dict: ...
 
 
 class InferenceEventPipeline:
@@ -133,7 +142,7 @@ class InferenceEventPipeline:
         writer: ActionEventWriter,
         alert_processor: AlertProcessor,
         *,
-        context_module: object | None = None,
+        context_module: ContextProvider | None = None,
         context_eval_every_n_windows: int = 5,
         bbox_hook: BBoxHook | None = None,
         camera_id: str | None = None,
@@ -145,13 +154,6 @@ class InferenceEventPipeline:
             raise TypeError("engine must be an InferenceEngine instance")
         if not isinstance(writer, ActionEventWriter):
             raise TypeError("writer must be an ActionEventWriter instance")
-        if not isinstance(
-            alert_processor, (AlertStateMachine, ContextAwareAlertProcessor)
-        ):
-            raise TypeError(
-                "alert_processor must be an AlertStateMachine or "
-                "ContextAwareAlertProcessor instance"
-            )
         if (
             not isinstance(context_eval_every_n_windows, int)
             or isinstance(context_eval_every_n_windows, bool)
@@ -183,9 +185,9 @@ class InferenceEventPipeline:
         self._track_id = track_id
 
         # Mutable pipeline state — protected by _lock.
-        self._lock = threading.Lock()
-        self._windows_since_context: int = 0  # counts down to next evaluation
-        self._cached_context: ContextData = _UNKNOWN_CONTEXT
+        self._lock = threading.RLock()
+        self._windows_since_context: int = 0  # counts up to next evaluation
+        self._cached_context: ContextData | None = _UNKNOWN_CONTEXT
         self._total_windows_processed: int = 0
 
         logger.debug(
@@ -236,6 +238,10 @@ class InferenceEventPipeline:
         """
         if not isinstance(frame, np.ndarray):
             raise TypeError("frame must be a numpy ndarray")
+        if frame.ndim != 3 or frame.shape[2] != 3:
+            raise ValueError("frame must have shape (H, W, 3)")
+        if frame.dtype != np.uint8:
+            raise TypeError("frame must have dtype uint8")
 
         with self._lock:
             result = self._engine.process_frame(frame, timestamp=timestamp)
@@ -254,10 +260,7 @@ class InferenceEventPipeline:
             self._windows_since_context = 0
             self._cached_context = _UNKNOWN_CONTEXT
             self._total_windows_processed = 0
-            if isinstance(self._alert_processor, AlertStateMachine):
-                self._alert_processor.reset_all()
-            elif isinstance(self._alert_processor, ContextAwareAlertProcessor):
-                self._alert_processor.reset_all()
+            self._alert_processor.reset_all()
             logger.info(
                 "InferenceEventPipeline reset (session_id=%s)", self._session_id
             )
@@ -272,8 +275,8 @@ class InferenceEventPipeline:
             return {
                 **engine_metrics,
                 "total_windows_processed": self._total_windows_processed,
-                "cached_context_scene_tag": self._cached_context.scene_tag,
-                "cached_context_confidence": self._cached_context.confidence,
+                "cached_context_scene_tag": self._cached_context.scene_tag if self._cached_context else None,
+                "cached_context_confidence": self._cached_context.confidence if self._cached_context else None,
                 "context_eval_every_n_windows": self._context_eval_every_n_windows,
             }
 
@@ -402,7 +405,7 @@ class InferenceEventPipeline:
 
         return event.model_copy(update={"context": self._cached_context})
 
-    def _evaluate_context(self, result: InferenceResult) -> ContextData:
+    def _evaluate_context(self, result: InferenceResult) -> ContextData | None:
         """Query the context module for the current inference window.
 
         Falls back to ``_UNKNOWN_CONTEXT`` when:
@@ -418,7 +421,7 @@ class InferenceEventPipeline:
 
         Returns
         -------
-        ContextData
+        ContextData | None
             Enriched context or the sentinel ``_UNKNOWN_CONTEXT``.
         """
         if self._context_module is None:
@@ -432,18 +435,21 @@ class InferenceEventPipeline:
             # ContextModule.get_context() expects a PIL Image.
             # Convert BGR numpy array → PIL Image here so that ContextModule
             # stays unchanged and callers who pass PIL images directly still work.
-            from PIL import Image as PilImage
-
             if isinstance(representative_frame, np.ndarray):
+                if PilImage is None:
+                    raise RuntimeError("PIL not installed")
                 rgb_frame = representative_frame[:, :, ::-1]  # BGR → RGB
                 pil_image = PilImage.fromarray(rgb_frame)
             else:
                 # Assume it is already a PIL Image (legacy callers).
                 pil_image = representative_frame
 
-            raw = self._context_module.get_context(pil_image)  # type: ignore[union-attr]
+            raw = self._context_module.get_context(pil_image)
 
             scene_tag = str(raw.get("scene_tag", "unknown"))
+            if scene_tag == "unknown":
+                return _UNKNOWN_CONTEXT
+
             confidence = float(raw.get("confidence", 0.0))
             context = ContextData(scene_tag=scene_tag, confidence=confidence)
 
@@ -498,11 +504,10 @@ class InferenceEventPipeline:
             )
             return event
 
-    def _run_alert_processor(self, event: ActionEvent):
+    def _run_alert_processor(self, event: ActionEvent) -> AlertRaisedEvent | None:
         """Forward *event* to whichever alert processor was injected.
 
-        Supports both ``AlertStateMachine`` (``process_event``) and
-        ``ContextAwareAlertProcessor`` (``process``).
+        Supports any processor adhering to the ``AlertProcessor`` protocol.
 
         Parameters
         ----------
@@ -515,9 +520,6 @@ class InferenceEventPipeline:
             Alert event when a track transitions to ACTIVE, ``None`` otherwise.
         """
         try:
-            if isinstance(self._alert_processor, ContextAwareAlertProcessor):
-                return self._alert_processor.process(event)
-            # AlertStateMachine
             return self._alert_processor.process_event(event)
         except Exception as exc:  # noqa: BLE001
             logger.error(
