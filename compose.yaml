@@ -73,6 +73,8 @@ services:
       - hbr-network
     environment:
       - NODE_ENV=development
+      - BACKEND_API_URL=http://api:8000
+      - BACKEND_WS_URL=ws://api:8000
     command: npm run dev
     stdin_open: true
     tty: true
