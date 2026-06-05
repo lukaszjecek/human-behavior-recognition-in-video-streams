@@ -42,7 +42,7 @@ except ImportError as _import_err:  # noqa: BLE001
 
 
 # Fallback returned whenever context inference is unavailable or fails.
-_FALLBACK_CONTEXT: dict[str, Any] = {"scene_tag": "unknown", "confidence": 0.0}
+_FALLBACK_CONTEXT: dict[str, Any] = {"scene_tag": "unknown", "confidence": -1.0}
 
 
 class ContextModule:
@@ -60,6 +60,26 @@ class ContextModule:
     or vision dependencies, and safe to call from :class:`InferenceEventPipeline`
     without guarding every call site.
     """
+
+    CONTEXT_MAP = {
+        "outdoor": (
+            919, 920,  # Street sign, traffic light
+            673, 555,  # Mouse (picket fence), fence
+            970, 971,  # Alp, valley (landscape)
+            704, 705,  # Parking meter, park bench
+        ),
+        "indoor": (
+            498, 500,  # Cinema, home theater
+            508, 603,  # Computer desk, heater
+            724, 743,  # Office, prison
+            849, 850,  # Store, sliding door
+        ),
+        "vehicle_setting": (
+            817, 511,  # Bus, car
+            407, 751,  # Ambulance, racer
+            654, 656,  # Minibus, minivan
+        ),
+    }
 
     def __init__(self) -> None:
         """Initialize the ContextModule with pre-trained MobileNetV2.
@@ -97,25 +117,6 @@ class ContextModule:
             self.model = None
             self.transform = None
 
-        self.context_map = {
-            "outdoor": [
-                919, 920,  # Street sign, traffic light
-                673, 555,  # Mouse (picket fence), fence
-                970, 971,  # Alp, valley (landscape)
-                704, 705,  # Parking meter, park bench
-            ],
-            "indoor": [
-                498, 500,  # Cinema, home theater
-                508, 603,  # Computer desk, heater
-                724, 743,  # Office, prison
-                849, 850,  # Store, sliding door
-            ],
-            "vehicle_setting": [
-                817, 511,  # Bus, car
-                407, 751,  # Ambulance, racer
-                654, 656,  # Minibus, minivan
-            ],
-        }
 
     def get_context(self, frame_tensor: "Image") -> dict:
         """Extract context from a given frame.
@@ -142,7 +143,7 @@ class ContextModule:
                 idx = predicted_idx.item()
                 conf_val = round(confidence.item(), 3)
 
-                for context, indexes in self.context_map.items():
+                for context, indexes in self.CONTEXT_MAP.items():
                     if idx in indexes:
                         return {"scene_tag": context, "confidence": conf_val}
                 return {"scene_tag": "unknown", "confidence": conf_val}
