@@ -273,7 +273,8 @@ def test_processor_context_switch_updates_thresholds():
     processor = _make_processor(outdoor_threshold=2, indoor_threshold=5)
     processor.process_event(_evt("fight", scene_tag="outdoor"))  # hit 1, threshold=2 → CANDIDATE
     # Switch to indoor — threshold becomes 5 but consecutive_hits stays at 1.
-    alert = processor.process_event(_evt("fight", scene_tag="indoor"))  # hit 2, threshold=5 → CANDIDATE
+    # hit 2, threshold=5 -> CANDIDATE
+    alert = processor.process_event(_evt("fight", scene_tag="indoor"))
     assert alert is None
     assert processor.get_state() == AlertState.CANDIDATE
 

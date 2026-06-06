@@ -54,7 +54,7 @@ class AlertProcessor(Protocol):
     def reset_all(self) -> None: ...
 
 class ContextProvider(Protocol):
-    def get_context(self, frame: Any) -> dict: ...
+    def get_context(self, frame: Any) -> dict: ...  # noqa: ANN401
 
 
 class InferenceEventPipeline:
@@ -225,7 +225,7 @@ class InferenceEventPipeline:
             Optional wall-clock timestamp (seconds since epoch) for this frame.
             When *None* the engine records the current time automatically.
 
-        Returns
+        Returns:
         -------
         list[EventPayload]
             Zero or more events emitted by this frame.  The list contains at
@@ -271,8 +271,12 @@ class InferenceEventPipeline:
             return {
                 **engine_metrics,
                 "total_windows_processed": self._total_windows_processed,
-                "cached_context_scene_tag": self._cached_context.scene_tag if self._cached_context else None,
-                "cached_context_confidence": self._cached_context.confidence if self._cached_context else None,
+                "cached_context_scene_tag": (
+                    self._cached_context.scene_tag if self._cached_context else None
+                ),
+                "cached_context_confidence": (
+                    self._cached_context.confidence if self._cached_context else None
+                ),
                 "context_eval_every_n_windows": self._context_eval_every_n_windows,
             }
 
@@ -295,7 +299,7 @@ class InferenceEventPipeline:
         result:
             Fresh ``InferenceResult`` from the inference engine.
 
-        Returns
+        Returns:
         -------
         list[EventPayload]
             DETECTION payload always included when ``ActionEvent`` is valid;
@@ -388,7 +392,7 @@ class InferenceEventPipeline:
             ``InferenceResult`` whose ``window`` provides raw frames for the
             context module.
 
-        Returns
+        Returns:
         -------
         ActionEvent
             New ``ActionEvent`` with ``context`` field populated.
@@ -415,7 +419,7 @@ class InferenceEventPipeline:
         result:
             ``InferenceResult`` from which the representative frame is taken.
 
-        Returns
+        Returns:
         -------
         ContextData | None
             Enriched context or the sentinel ``_UNKNOWN_CONTEXT``.
@@ -476,7 +480,7 @@ class InferenceEventPipeline:
         event:
             ``ActionEvent`` to enrich with bounding boxes.
 
-        Returns
+        Returns:
         -------
         ActionEvent
             The event returned by the hook, or the original event on failure.
@@ -512,7 +516,7 @@ class InferenceEventPipeline:
         event:
             ``ActionEvent`` to forward.
 
-        Returns
+        Returns:
         -------
         AlertRaisedEvent | None
             Alert event when a track transitions to ACTIVE, ``None`` otherwise.

@@ -20,20 +20,18 @@ Covers:
 from __future__ import annotations
 
 import threading
-import threading
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import numpy as np
 import pytest
 
-from src.app.schemas.action_event import ActionEvent, ContextData, EventPayload, EventType
+from src.app.schemas.action_event import ActionEvent, EventPayload, EventType
 from src.inference.alert_state_machine import AlertStateMachine
 from src.inference.context_policy import ContextAwareAlertProcessor, ContextPolicy
 from src.inference.engine import InferenceEngine
 from src.inference.json_writer import ActionEventWriter
 from src.inference.pipeline import InferenceEventPipeline
-
 
 # ---------------------------------------------------------------------------
 # Shared test helpers
@@ -215,7 +213,12 @@ class TestContextFallback:
     def test_evaluate_context_converts_numpy_to_pil(self):
         mock_module = MagicMock()
         mock_module.get_context.return_value = {"scene_tag": "indoor", "confidence": 0.9}
-        pipeline = _make_pipeline(window_size=1, stride=1, context_module=mock_module, context_eval_every_n_windows=1)
+        pipeline = _make_pipeline(
+            window_size=1,
+            stride=1,
+            context_module=mock_module,
+            context_eval_every_n_windows=1,
+        )
         _push_n(pipeline, 1)
         args, _ = mock_module.get_context.call_args
         from PIL.Image import Image as PilImage
@@ -290,7 +293,11 @@ class TestContextCadence:
         )
         payloads = _push_n(pipeline, 6)  # 6 inference windows
         detections = [p for p in payloads if p.event_type == EventType.DETECTION]
-        tags = [d.data.context.scene_tag if d.data.context else "unknown" for d in detections if isinstance(d.data, ActionEvent)]
+        tags = [
+            d.data.context.scene_tag if d.data.context else "unknown"
+            for d in detections
+            if isinstance(d.data, ActionEvent)
+        ]
 
         # Windows 1-2: counter hasn't reached 3 → cached fallback "unknown"
         # Window 3:    counter hits 3 → first evaluation → "outdoor"
