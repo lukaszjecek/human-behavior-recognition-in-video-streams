@@ -42,7 +42,7 @@ except ImportError as _import_err:  # noqa: BLE001
 
 
 # Fallback returned whenever context inference is unavailable or fails.
-_FALLBACK_CONTEXT: dict[str, Any] = {"scene_tag": "unknown", "confidence": -1.0}
+_FALLBACK_CONTEXT: dict[str, Any] = {"scene_tag": "unknown", "confidence": 0.0}
 
 
 class ContextModule:

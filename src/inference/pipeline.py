@@ -34,17 +34,13 @@ from src.app.schemas.action_event import (
     EventPayload,
     EventType,
 )
-from src.inference.alert_state_machine import AlertRaisedEvent, AlertStateMachine
-from src.inference.context_policy import ContextAwareAlertProcessor
+from src.inference.alert_state_machine import AlertRaisedEvent
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 
 logger = logging.getLogger(__name__)
 
-try:
-    from PIL import Image as PilImage
-except ImportError:
-    PilImage = None
+
 
 # Sentinel returned by ContextModule.get_context() when context is unavailable.
 _UNKNOWN_CONTEXT: ContextData | None = None
@@ -115,8 +111,7 @@ class InferenceEventPipeline:
     alert_processor:
         Either an :class:`~src.inference.alert_state_machine.AlertStateMachine`
         or a :class:`~src.inference.context_policy.ContextAwareAlertProcessor`.
-        The pipeline calls ``process_event(event)`` on the former and
-        ``process(event)`` on the latter.
+        The pipeline calls ``process_event(event)`` on both.
     context_module:
         Optional object exposing ``get_context(frame) -> dict``.  When *None*
         the pipeline always falls back to ``scene_tag="unknown"``.
@@ -243,10 +238,11 @@ class InferenceEventPipeline:
         if frame.dtype != np.uint8:
             raise TypeError("frame must have dtype uint8")
 
+        result = self._engine.process_frame(frame, timestamp=timestamp)
+        if result is None:
+            return []
+
         with self._lock:
-            result = self._engine.process_frame(frame, timestamp=timestamp)
-            if result is None:
-                return []
             return self._process_result(result)
 
     def reset(self) -> None:
@@ -436,7 +432,9 @@ class InferenceEventPipeline:
             # Convert BGR numpy array → PIL Image here so that ContextModule
             # stays unchanged and callers who pass PIL images directly still work.
             if isinstance(representative_frame, np.ndarray):
-                if PilImage is None:
+                try:
+                    from PIL import Image as PilImage
+                except ImportError:
                     raise RuntimeError("PIL not installed")
                 rgb_frame = representative_frame[:, :, ::-1]  # BGR → RGB
                 pil_image = PilImage.fromarray(rgb_frame)
