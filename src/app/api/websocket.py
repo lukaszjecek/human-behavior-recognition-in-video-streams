@@ -315,7 +315,7 @@ async def websocket_camera(ws: WebSocket) -> None:
                         "session_id": str(session.session_id),
                         "status": "failed",
                         "message": "Internal error occurred.",
-                        "error": str(exc),
+                        "error_type": type(exc).__name__,
                     }
                 )
             except Exception:
