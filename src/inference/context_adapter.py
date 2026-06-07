@@ -84,16 +84,22 @@ class ContextModule:
     def __init__(self) -> None:
         """Initialize the ContextModule with pre-trained MobileNetV2.
 
-        Raises:
-            RuntimeError: When torch/torchvision are unavailable.
+        Never raises.  When ``torch``/``torchvision`` are not installed, or
+        when the model weights cannot be loaded, the instance enters a
+        *degraded* mode: ``_available`` is set to ``False`` and
+        :meth:`get_context` returns
+        ``{"scene_tag": "unknown", "confidence": 0.0}`` on every call.
+        This guarantees that the inference pipeline can always construct a
+        ``ContextModule`` safely and that a missing dependency never propagates
+        as an exception to the caller.
         """
-        if not _DEPS_AVAILABLE:
-            raise RuntimeError(
-                "ContextModule requires torch and torchvision. "
-                "Install them or use context_module=None for unknown-context fallback."
-            )
+        self._available: bool = False
+        self.model = None
+        self.transform = None
 
-        self._available: bool = True
+        if not _DEPS_AVAILABLE:
+            # Warning already emitted at module-import time; no need to repeat it.
+            return
 
         try:
             self.model = models.mobilenet_v2(
@@ -107,15 +113,13 @@ class ContextModule:
                 T.ToTensor(),
                 T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
+            self._available = True
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "ContextModule: failed to load MobileNetV2 weights (%s). "
                 "get_context() will return fallback.",
                 exc,
             )
-            self._available = False
-            self.model = None
-            self.transform = None
 
 
     def get_context(self, frame_tensor: "Image") -> dict:
