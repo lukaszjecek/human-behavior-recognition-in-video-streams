@@ -61,3 +61,24 @@ Validate the codebase against ESLint rules and React hooks validation:
 ```bash
 npm run lint
 ```
+
+---
+
+## Backend Integration & Communication
+
+To ensure reliable and configurable communication with the FastAPI backend service, the frontend utilizes a dev-server proxy and a dynamic URL configuration.
+
+### 1. Configuration & Proxy Setup
+- **`config.js`**: Resolves `API_BASE_URL` and `WS_URL` dynamically. It checks for environment overrides (`VITE_API_BASE_URL` and `VITE_WS_URL`) and defaults to relative paths (`/api` and `/ws/live`) to leverage Vite's dev proxy.
+- **Vite Proxy (`vite.config.js`)**: During development, `/api` and `/ws` requests are caught by the Vite dev server and proxied to `BACKEND_API_URL` (default: `http://localhost:8000`) and `BACKEND_WS_URL` (default: `ws://localhost:8000`).
+- **Docker Compose Environment**: In Docker Compose, the `frontend` container is injected with environment variables `BACKEND_API_URL=http://api:8000` and `BACKEND_WS_URL=ws://api:8000`, routing the proxy through the private Docker bridge network.
+
+### 2. WebSocket Context & State Management (`WebSocketContext.jsx`)
+- **Event Listeners**: Establishes a WebSocket connection to the backend live channel (`/ws/live`). It filters and processes incoming `ALERT` and `DETECTION` events in real-time, updating the global alert list and sync-pushing scene context changes to `SceneContext`.
+- **Automatic History Fetch**: Once the WebSocket connection is established (`ws.onopen`), it queries the REST API history endpoint (`GET /api/events/?event_type=ALERT`) to initialize the log list. This avoids initial Bad Gateway (502) race conditions if the backend is slow to start up.
+- **Exponential Reconnect Backoff**: If the connection drops or is refused, the context automatically schedules reconnection retries, doubling the delay on each failure (capped at 30 seconds).
+
+### 3. Connection State Feedbacks
+- **StatusBar Indicator**: A small indicator in the bottom-right of the screen displays `WebSocket: Connected` (pulsing green dot), `Connecting...` (pulsing amber dot), or `Disconnected` (pulsing red dot).
+- **Top Warning Banner**: A persistent warning banner slides in at the very top of the window when the connection is lost (`disconnected` or `connecting`) to ensure immediate operator visibility.
+

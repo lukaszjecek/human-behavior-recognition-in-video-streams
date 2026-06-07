@@ -7,6 +7,7 @@ import uuid
 from typing import Optional
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
@@ -44,6 +45,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         title=app_settings.app_name,
         version=app_settings.app_version,
         debug=app_settings.debug,
+    )
+
+    # Configure CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     log_event(
