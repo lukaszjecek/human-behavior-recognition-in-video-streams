@@ -185,7 +185,7 @@ class ContextAwareAlertProcessor:
         ...     }
         ... )
         >>> processor = ContextAwareAlertProcessor(policy=policy, danger_labels=["fight"])
-        >>> alert = processor.process(event)  # None or AlertRaisedEvent
+        >>> alert = processor.process_event(event)  # None or AlertRaisedEvent
     """
 
     def __init__(
@@ -206,7 +206,7 @@ class ContextAwareAlertProcessor:
             danger_labels=danger_labels,
         )
 
-    def process(self, event: ActionEvent) -> Optional[AlertRaisedEvent]:
+    def process_event(self, event: ActionEvent) -> Optional[AlertRaisedEvent]:
         """Process one ActionEvent through policy and alert state machine.
 
         Steps:

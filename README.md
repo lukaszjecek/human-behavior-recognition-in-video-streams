@@ -96,6 +96,10 @@ The API now exposes endpoints for managing offline inference sessions asynchrono
 
 These endpoints use `asyncio.to_thread` for non-blocking execution and native `threading.Event` triggers down to the underlying inference loops to allow safe and clean interruptions without blocking the FastAPI event loop.
 
+### Shared Runtime Pipeline
+
+The `InferenceEventPipeline` (`src/inference/pipeline.py`) acts as the central contract for processing incoming frames across all video sources (MP4, RTSP, and WebSockets). It handles temporal inference window sliding, bounding-box enrichment, scene context evaluation, and stateful alert processing, yielding canonical `EventPayload` objects for detections and alerts.
+
 ### Integration Smoke Test
 
 To verify the entire integrated flow (**Source -> Inference -> Alert/Event -> API/WebSocket -> DB**) end-to-end after bringing up the services, run the automated integration smoke test script inside the running API container:
