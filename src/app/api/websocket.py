@@ -202,8 +202,9 @@ async def websocket_camera(ws: WebSocket) -> None:
             except ValueError:
                 session_uuid = uuid.uuid4()
 
-            import asyncio
+        import asyncio
 
+        try:
             session = await asyncio.to_thread(
                 CameraStreamSession,
                 checkpoint_path=Path(checkpoint_path_str),
