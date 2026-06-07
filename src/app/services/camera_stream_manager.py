@@ -120,20 +120,18 @@ class CameraStreamSession:
     async def process_frame(self, binary_frame: bytes) -> list[EventPayload]:
         """Decode binary frame bytes and process them through the pipeline.
 
-        Processing runs in a background thread to prevent blocking ASGI.
+        Decoding + inference runs in a background thread to prevent blocking ASGI.
         """
-        # Decode the JPEG/WebP frame
+        return await asyncio.to_thread(self.process_frame_sync, binary_frame)
+
+    def process_frame_sync(self, binary_frame: bytes) -> list[EventPayload]:
+        """Decode and process a binary frame through the pipeline and generate events."""
+        self._current_events = []
+
         nparr = np.frombuffer(binary_frame, np.uint8)
         frame_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if frame_bgr is None:
             raise ValueError("Failed to decode binary frame bytes into BGR image.")
-
-        # Dispatch the blocking CPU/GPU-bound processing to a background thread
-        return await asyncio.to_thread(self.process_frame_sync, frame_bgr)
-
-    def process_frame_sync(self, frame_bgr: np.ndarray) -> list[EventPayload]:
-        """Process BGR frame through the pipeline and generate events."""
-        self._current_events = []
 
         res = self.engine.process_frame(frame_bgr)
         if res is not None:
