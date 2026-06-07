@@ -157,7 +157,7 @@ async def websocket_camera(ws: WebSocket) -> None:
                     "session_id": request_id,
                     "status": "initialization_failed",
                     "message": "Invalid JSON initial message received.",
-                    "error": str(e),
+                    "error_type": type(e).__name__,
                 }
             )
             await ws.close(code=4000)
