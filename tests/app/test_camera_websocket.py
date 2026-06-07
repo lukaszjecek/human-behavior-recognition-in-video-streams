@@ -1,6 +1,7 @@
 """Automated integration tests for the browser camera WebSocket endpoint."""
 
 import uuid
+
 import cv2
 import numpy as np
 import pytest
@@ -207,7 +208,8 @@ def test_camera_ws_processing_flow(client, test_db, pipeline_assets):
         raw_bytes = jpeg_bytes.tobytes()
 
         # Send frames to trigger window inferences (temporal_window=4, stride=2)
-        # To get detections and alerts, we need to complete at least 2 windows (consecutive danger labels)
+        # To get detections and alerts, we need to complete at least 2 windows
+        # (consecutive danger labels)
         # Window 1: frames 0-3 (requires 4 frames).
         # Window 2: frames 2-5 (requires 6 frames total).
         for _ in range(6):

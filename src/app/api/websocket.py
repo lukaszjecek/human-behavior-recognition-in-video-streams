@@ -2,6 +2,7 @@
 
 Provides a namespace for future websocket endpoints.
 """
+
 import logging
 import uuid
 from pathlib import Path
@@ -150,13 +151,15 @@ async def websocket_camera(ws: WebSocket) -> None:
         try:
             init_message = await ws.receive_json()
         except Exception as e:
-            await ws.send_json({
-                "message_type": "STATUS",
-                "session_id": request_id,
-                "status": "initialization_failed",
-                "message": "Invalid JSON initial message received.",
-                "error": str(e)
-            })
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": request_id,
+                    "status": "initialization_failed",
+                    "message": "Invalid JSON initial message received.",
+                    "error": str(e),
+                }
+            )
             await ws.close(code=4000)
             return
 
@@ -166,12 +169,14 @@ async def websocket_camera(ws: WebSocket) -> None:
         session_id_str = init_message.get("session_id")
 
         if not checkpoint_path_str or not config_path_str:
-            await ws.send_json({
-                "message_type": "STATUS",
-                "session_id": request_id,
-                "status": "initialization_failed",
-                "message": "Missing checkpoint_path or config_path in initialization message."
-            })
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": request_id,
+                    "status": "initialization_failed",
+                    "message": "Missing checkpoint_path or config_path in initialization message.",
+                }
+            )
             await ws.close(code=4000)
             return
 
@@ -181,12 +186,14 @@ async def websocket_camera(ws: WebSocket) -> None:
             try:
                 session_uuid = uuid.UUID(session_id_str)
             except ValueError:
-                await ws.send_json({
-                    "message_type": "STATUS",
-                    "session_id": request_id,
-                    "status": "initialization_failed",
-                    "message": f"Invalid session_id UUID format: {session_id_str}"
-                })
+                await ws.send_json(
+                    {
+                        "message_type": "STATUS",
+                        "session_id": request_id,
+                        "status": "initialization_failed",
+                        "message": f"Invalid session_id UUID format: {session_id_str}",
+                    }
+                )
                 await ws.close(code=4000)
                 return
         else:
@@ -203,23 +210,27 @@ async def websocket_camera(ws: WebSocket) -> None:
                 session_id=session_uuid,
             )
         except Exception as e:
-            await ws.send_json({
-                "message_type": "STATUS",
-                "session_id": str(session_uuid),
-                "status": "initialization_failed",
-                "message": "Pipeline initialization failed.",
-                "error": str(e)
-            })
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": str(session_uuid),
+                    "status": "initialization_failed",
+                    "message": "Pipeline initialization failed.",
+                    "error": str(e),
+                }
+            )
             await ws.close(code=4000)
             return
 
         # Send successful initialization status back
-        await ws.send_json({
-            "message_type": "STATUS",
-            "session_id": str(session.session_id),
-            "status": "initialized",
-            "message": "Camera session successfully initialized."
-        })
+        await ws.send_json(
+            {
+                "message_type": "STATUS",
+                "session_id": str(session.session_id),
+                "status": "initialized",
+                "message": "Camera session successfully initialized.",
+            }
+        )
 
         # 2. Receive and process binary frames
         while True:
@@ -234,12 +245,14 @@ async def websocket_camera(ws: WebSocket) -> None:
                         "Stop request received from client.",
                         session.log_context,
                     )
-                    await ws.send_json({
-                        "message_type": "STATUS",
-                        "session_id": str(session.session_id),
-                        "status": "stopped",
-                        "message": "Camera streaming stopped by request."
-                    })
+                    await ws.send_json(
+                        {
+                            "message_type": "STATUS",
+                            "session_id": str(session.session_id),
+                            "status": "stopped",
+                            "message": "Camera streaming stopped by request.",
+                        }
+                    )
                     break
                 else:
                     # Ignore other text messages
@@ -261,13 +274,16 @@ async def websocket_camera(ws: WebSocket) -> None:
                         exc_info=True,
                         error_type=type(frame_err).__name__,
                     )
-                    # Send a status message to notify the frontend, but do NOT crash or close the connection
-                    await ws.send_json({
-                        "message_type": "STATUS",
-                        "session_id": str(session.session_id),
-                        "status": "running",
-                        "message": f"Error processing frame: {frame_err}"
-                    })
+                    # Send a status message to notify the frontend,
+                    # but do NOT crash or close the connection
+                    await ws.send_json(
+                        {
+                            "message_type": "STATUS",
+                            "session_id": str(session.session_id),
+                            "status": "running",
+                            "message": f"Error processing frame: {frame_err}",
+                        }
+                    )
 
     except WebSocketDisconnect:
         log_event(
@@ -291,13 +307,15 @@ async def websocket_camera(ws: WebSocket) -> None:
         )
         if session:
             try:
-                await ws.send_json({
-                    "message_type": "STATUS",
-                    "session_id": str(session.session_id),
-                    "status": "failed",
-                    "message": "Internal error occurred.",
-                    "error": str(exc)
-                })
+                await ws.send_json(
+                    {
+                        "message_type": "STATUS",
+                        "session_id": str(session.session_id),
+                        "status": "failed",
+                        "message": "Internal error occurred.",
+                        "error": str(exc),
+                    }
+                )
             except Exception:
                 pass
     finally:

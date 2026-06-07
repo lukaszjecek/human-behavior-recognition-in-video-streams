@@ -187,7 +187,10 @@ class CameraStreamSession:
                 logger,
                 logging.ERROR,
                 "database_write_failed",
-                f"Database write-path failure for browser camera event {payload.event_id}: {db_err}",
+                (
+                    f"Database write-path failure for browser camera "
+                    f"event {payload.event_id}: {db_err}"
+                ),
                 self.log_context,
                 exc_info=True,
                 event_id=str(payload.event_id),
@@ -202,7 +205,10 @@ class CameraStreamSession:
                 logger,
                 logging.ERROR,
                 "audit_file_write_failed",
-                f"Failed to write browser camera event {payload.event_id} to audit log: {audit_err}",
+                (
+                    f"Failed to write browser camera event {payload.event_id} "
+                    f"to audit log: {audit_err}"
+                ),
                 self.log_context,
                 exc_info=True,
                 event_id=str(payload.event_id),
