@@ -213,24 +213,30 @@ def test_camera_ws_processing_flow(client, test_db, pipeline_assets):
         for _ in range(6):
             ws.send_bytes(raw_bytes)
 
+        # Send stop message to close the websocket connection cleanly and send final status message
+        ws.send_text("stop")
+
         received_detections = []
         received_alerts = []
+        received_statuses = []
 
-        # We read responses with a timeout/limit since frames might produce multiple events
-        # We expect at least 2 DETECTIONs and 1 ALERT (consecutive fight labels)
-        for _ in range(10):
+        # Read responses until connection is closed
+        while True:
             try:
                 msg = ws.receive_json()
                 if msg.get("event_type") == "DETECTION":
                     received_detections.append(msg)
                 elif msg.get("event_type") == "ALERT":
                     received_alerts.append(msg)
+                elif msg.get("message_type") == "STATUS":
+                    received_statuses.append(msg)
             except Exception:
                 break
 
         # Assert detections and alerts were received
         assert len(received_detections) >= 2
         assert len(received_alerts) >= 1
+        assert any(status["status"] == "stopped" for status in received_statuses)
 
         # Check detection event fields
         det = received_detections[0]
