@@ -218,7 +218,7 @@ async def websocket_camera(ws: WebSocket) -> None:
                     "session_id": str(session_uuid),
                     "status": "initialization_failed",
                     "message": "Pipeline initialization failed.",
-                    "error": str(e),
+                    "error_type": type(e).__name__,
                 }
             )
             await ws.close(code=4000)
