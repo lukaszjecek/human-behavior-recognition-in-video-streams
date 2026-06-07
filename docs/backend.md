@@ -199,6 +199,34 @@ The backend supports near real-time streaming of live behavior detections and sy
 - `WS /ws/echo` (also available as `WS /api/websocket/echo`)
   - A simple testing endpoint that echoes client messages back.
 
+- `WS /ws/camera` (also available as `WS /api/websocket/camera`)
+  - Accepts incoming client WebSocket connections from browser camera sources.
+  - Requires an initial JSON text message to initialize the inference model pipeline:
+    ```json
+    {
+      "checkpoint_path": "string (absolute path to the model checkpoint file)",
+      "config_path": "string (absolute path to the runtime configuration file)",
+      "device": "string (optional, e.g. 'cpu' or 'cuda')",
+      "session_id": "string (optional UUID format; generated if not provided)"
+    }
+    ```
+  - After successful initialization, expects a continuous stream of binary frames (JPEG or WebP data).
+  - Accepts a text message `"stop"` to cleanly terminate the streaming session.
+  - Sends back two categories of JSON messages:
+    1. **Events**: Standard `EventPayload` structures (both `DETECTION` and `ALERT` types) generated during streaming.
+    2. **Status Messages**: Lifecycle and error events distinct from detection payloads.
+    
+    ##### Non-Event Status Message Envelope
+    ```json
+    {
+      "message_type": "STATUS",
+      "session_id": "string (UUID)",
+      "status": "initialization_failed" | "initialized" | "running" | "stopped" | "failed",
+      "message": "Descriptive status message details",
+      "error": "Optional traceback or technical error details"
+    }
+    ```
+
 ## Key Components
 
 ### 1. WebSocketManager (`src/app/services/websocket_manager.py`)
