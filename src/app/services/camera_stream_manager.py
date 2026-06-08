@@ -3,15 +3,14 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
 import threading
+from pathlib import Path
 from uuid import UUID, uuid4
-
-from fastapi import WebSocket, WebSocketDisconnect
-import torch
 
 import cv2
 import numpy as np
+import torch
+from fastapi import WebSocket, WebSocketDisconnect
 
 from src.app.db.repository import save_event
 from src.app.db.session import SessionLocal
@@ -46,7 +45,10 @@ def is_relative_to_safe(path: Path, parent: Path) -> bool:
 
 
 def validate_safe_path(path: Path, allowed_extensions: list[str]) -> bool:
-    """Validate that path exists, is a file, has allowed extension, and prevents directory traversal."""
+    """Validate that path is safe, has correct suffix, and exists.
+
+    Prevents directory traversal attacks.
+    """
     try:
         resolved_path = path.resolve()
     except Exception:
@@ -59,12 +61,12 @@ def validate_safe_path(path: Path, allowed_extensions: list[str]) -> bool:
         return False
 
     cwd = Path.cwd().resolve()
-    
+
     # Check standard temp directories (important for running tests safely)
     temp_paths = [Path(os.environ.get("TEMP", "/tmp"))]
     if "TMP" in os.environ:
         temp_paths.append(Path(os.environ["TMP"]))
-        
+
     # Check relative to cwd, any of the temp paths, or /app (for Docker container deployment)
     if is_relative_to_safe(resolved_path, cwd):
         return True
@@ -73,7 +75,7 @@ def validate_safe_path(path: Path, allowed_extensions: list[str]) -> bool:
             return True
     if is_relative_to_safe(resolved_path, Path("/app")):
         return True
-        
+
     return False
 
 
@@ -81,6 +83,7 @@ class ModelCache:
     """Thread-safe cache for loaded PyTorch models to avoid expensive per-session reloads."""
 
     def __init__(self) -> None:
+        """Initialize the model cache registry and re-entrant lock."""
         self._cache: dict[tuple[str, str], torch.nn.Module] = {}
         self._lock = threading.Lock()
 
@@ -142,9 +145,13 @@ class CameraStreamSession:
 
         # 1. Load configuration and resolve paths/device (with safe path validation)
         if not validate_safe_path(self.config_path, [".yml", ".yaml"]):
-            raise ValueError(f"Configuration file path is invalid or restricted: {self.config_path}")
+            raise ValueError(
+                f"Configuration file path is invalid or restricted: {self.config_path}"
+            )
         if not validate_safe_path(self.checkpoint_path, [".pth", ".pt"]):
-            raise ValueError(f"Model checkpoint file path is invalid or restricted: {self.checkpoint_path}")
+            raise ValueError(
+                f"Model checkpoint file path is invalid or restricted: {self.checkpoint_path}"
+            )
 
         self.settings = load_runtime_settings(self.config_path)
         self.device = resolve_inference_device(
@@ -317,8 +324,9 @@ async def handle_camera_websocket(ws: WebSocket) -> None:
     initializing the inference pipeline session (reusing cached model weights),
     and processing incoming binary video frames in real-time.
     """
-    from src.inference.runtime_logging import configure_runtime_logging
     import uuid
+
+    from src.inference.runtime_logging import configure_runtime_logging
 
     configure_runtime_logging()
     request_id = ws.headers.get("X-Request-ID") or uuid.uuid4().hex

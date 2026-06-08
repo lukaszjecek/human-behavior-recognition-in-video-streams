@@ -5,7 +5,6 @@ Provides a namespace for future websocket endpoints.
 
 import logging
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 

@@ -239,8 +239,9 @@ def test_camera_ws_realtime_observable_before_stop(client, pipeline_assets):
         assert det_msg["data"]["label"] == "fight"
 
         # Send 2 more frames to complete Window 2 (frames 2-5, total 6 frames).
-        # Since both window 1 and window 2 output 'fight' (danger label) and persistence_threshold is 2:
-        # Window 2 will trigger another DETECTION followed by an ALERT.
+        # Since both window 1 and window 2 output 'fight' (danger label)
+        # and persistence_threshold is 2, window 2 will trigger another
+        # DETECTION followed by an ALERT.
         for _ in range(2):
             ws.send_bytes(raw_bytes)
 
