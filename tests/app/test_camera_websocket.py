@@ -140,6 +140,25 @@ def test_camera_ws_initialization_failure_invalid_paths(client, tmp_path):
         assert resp["message_type"] == "STATUS"
         assert resp["status"] == "initialization_failed"
         assert "Pipeline initialization failed" in resp["message"]
+        assert resp["error_type"] == "ValueError"
+        assert "invalid or restricted" in resp["error"]
+
+
+def test_camera_ws_initialization_failure_path_traversal(client):
+    """Test that path traversal attempts or files outside allowed directories are blocked."""
+    with client.websocket_connect("/api/websocket/camera") as ws:
+        # A path that resides outside allowed CWD/TEMP/app
+        init_payload = {
+            "checkpoint_path": "/restricted/model.pth",
+            "config_path": "/restricted/config.yml",
+        }
+        ws.send_json(init_payload)
+
+        resp = ws.receive_json()
+        assert resp["message_type"] == "STATUS"
+        assert resp["status"] == "initialization_failed"
+        assert resp["error_type"] == "ValueError"
+        assert "invalid or restricted" in resp["error"]
 
 
 def test_camera_ws_stop_message(client, pipeline_assets):
@@ -181,8 +200,57 @@ def test_camera_ws_invalid_frame_bytes(client, pipeline_assets):
         assert resp["message_type"] == "STATUS"
         assert resp["status"] == "running"
         assert "Error processing frame" in resp["message"]
+        assert resp["error_type"] == "ValueError"
+        assert "Failed to decode binary frame" in resp["error"]
 
         # Send a stop message to verify connection is still active and can be closed cleanly
+        ws.send_text("stop")
+        resp = ws.receive_json()
+        assert resp["status"] == "stopped"
+
+
+def test_camera_ws_realtime_observable_before_stop(client, pipeline_assets):
+    """Test that client can receive detections and alerts without having to send 'stop' first."""
+    ckpt_path, config_path = pipeline_assets
+    session_id = uuid.uuid4()
+    with client.websocket_connect("/api/websocket/camera") as ws:
+        init_payload = {
+            "checkpoint_path": str(ckpt_path),
+            "config_path": str(config_path),
+            "session_id": str(session_id),
+        }
+        ws.send_json(init_payload)
+        ws.receive_json()  # Consume the init status
+
+        # Create dummy 64x64 BGR frames
+        frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        _, jpeg_bytes = cv2.imencode(".jpg", frame)
+        raw_bytes = jpeg_bytes.tobytes()
+
+        # Window size is 4, stride is 2.
+        # Send 4 frames to complete Window 1 -> should trigger DETECTION immediately.
+        for _ in range(4):
+            ws.send_bytes(raw_bytes)
+
+        # We should be able to receive a DETECTION JSON immediately without sending stop!
+        det_msg = ws.receive_json()
+        assert det_msg["event_type"] == "DETECTION"
+        assert det_msg["session_id"] == str(session_id)
+        assert det_msg["data"]["label"] == "fight"
+
+        # Send 2 more frames to complete Window 2 (frames 2-5, total 6 frames).
+        # Since both window 1 and window 2 output 'fight' (danger label) and persistence_threshold is 2:
+        # Window 2 will trigger another DETECTION followed by an ALERT.
+        for _ in range(2):
+            ws.send_bytes(raw_bytes)
+
+        # Read next two messages - we expect one DETECTION and one ALERT.
+        messages = [ws.receive_json(), ws.receive_json()]
+        event_types = [m["event_type"] for m in messages]
+        assert "DETECTION" in event_types
+        assert "ALERT" in event_types
+
+        # Finally, send stop cleanly
         ws.send_text("stop")
         resp = ws.receive_json()
         assert resp["status"] == "stopped"

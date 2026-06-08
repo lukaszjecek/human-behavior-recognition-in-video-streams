@@ -223,7 +223,8 @@ The backend supports near real-time streaming of live behavior detections and sy
       "session_id": "string (UUID)",
       "status": "initialization_failed" | "initialized" | "running" | "stopped" | "failed",
       "message": "Descriptive status message details",
-      "error": "Optional traceback or technical error details"
+      "error": "Optional traceback or technical error details",
+      "error_type": "Optional exception class name"
     }
     ```
 
@@ -253,6 +254,14 @@ Alert behavior is governed by the `alert` section of the YAML configuration load
 - `persistence_threshold`: Number of consecutive frames/windows showing a danger label required to trigger an alert.
 - `resolve_threshold`: Number of consecutive frames/windows without danger labels required to resolve an alert.
 - `danger_labels`: A list of action labels categorized as dangerous (e.g., `"fall"`, `"violence"`).
+
+### 5. Camera Session Optimization and Path Security (`src/app/services/camera_stream_manager.py`)
+- **Safe Path Validation**: To prevent arbitrary server file reads or directory traversal via client-supplied configurations and checkpoints:
+  - Both `checkpoint_path` and `config_path` must resolve to absolute paths.
+  - Suffixes are restricted to `.pt`/`.pth` for weights, and `.yml`/`.yaml` for config.
+  - Paths are validated to exist and must reside strictly within either the current working directory, the container root `/app` (in production/Docker environment), or system temporary directories (for secure automated testing).
+- **Model Weight Cache (`ModelCache`)**: To eliminate the latency and memory overhead of reloading neural network models on client reconnects, loaded models are kept in a thread-safe global registry. A `threading.Lock` serializes concurrent accesses from different thread-pool threads while `asyncio.to_thread` guarantees that model loading/lookup never blocks FastAPI's main Event Loop.
+- **Real-Time (Non-EOF) Event Flow**: Detections and alerts are evaluated and pushed over the WebSocket immediately as each frame completes. Frontend clients do not need to send `"stop"` or wait for an EOF signal to observe live inference events; the stream remains fully active and observable in real-time.
 
 ---
 
