@@ -2,11 +2,13 @@
 
 Provides a namespace for future websocket endpoints.
 """
+
 import logging
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from src.app.services.camera_stream_manager import handle_camera_websocket
 from src.app.services.websocket_manager import websocket_manager
 from src.inference.runtime_logging import (
     RuntimeLogContext,
@@ -118,3 +120,13 @@ async def websocket_live(ws: WebSocket) -> None:
             await ws.close()
         except RuntimeError:
             pass
+
+
+@router.websocket("/camera")
+async def websocket_camera(ws: WebSocket) -> None:
+    """Browser-camera WebSocket endpoint.
+
+    Delegates the stream lifecycle, validation, and frame processing loop
+    to the service layer.
+    """
+    await handle_camera_websocket(ws)
