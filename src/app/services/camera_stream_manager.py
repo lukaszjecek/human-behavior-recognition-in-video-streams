@@ -14,15 +14,14 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from src.app.db.repository import save_event
 from src.app.db.session import SessionLocal
-from src.app.schemas.action_event import AlertData, EventPayload, EventType
+from src.app.schemas.action_event import EventPayload
 from src.app.services.websocket_manager import websocket_manager
-from src.inference.pipeline import InferenceEventPipeline
 from src.inference.alert_state_machine import AlertStateMachine
 from src.inference.engine import InferenceEngine
 from src.inference.json_writer import ActionEventWriter
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.runtime import (
     WindowModelAdapter,
-    expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
     resolve_inference_device,

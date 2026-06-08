@@ -11,13 +11,13 @@ from typing import Callable, Optional
 
 import torch
 
-from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
+from src.app.schemas.action_event import ActionEvent, EventPayload
 from src.inference.alert_state_machine import AlertStateMachine
+from src.inference.context_adapter import ContextModule
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
-from src.inference.context_adapter import ContextModule
-from src.inference.pipeline import InferenceEventPipeline
 from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
