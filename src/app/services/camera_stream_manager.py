@@ -2,8 +2,13 @@
 
 import asyncio
 import logging
+import os
 from pathlib import Path
+import threading
 from uuid import UUID, uuid4
+
+from fastapi import WebSocket, WebSocketDisconnect
+import torch
 
 import cv2
 import numpy as np
@@ -30,6 +35,72 @@ from src.inference.runtime_logging import (
 from src.inference.tensorize import FrameTensorizer
 
 logger = logging.getLogger(__name__)
+
+
+def is_relative_to_safe(path: Path, parent: Path) -> bool:
+    """Check if path is relative to parent safely (supporting cross-drive/different formats)."""
+    try:
+        return path.resolve().is_relative_to(parent.resolve())
+    except ValueError:
+        return False
+
+
+def validate_safe_path(path: Path, allowed_extensions: list[str]) -> bool:
+    """Validate that path exists, is a file, has allowed extension, and prevents directory traversal."""
+    try:
+        resolved_path = path.resolve()
+    except Exception:
+        return False
+
+    if resolved_path.suffix.lower() not in allowed_extensions:
+        return False
+
+    if not resolved_path.is_file():
+        return False
+
+    cwd = Path.cwd().resolve()
+    
+    # Check standard temp directories (important for running tests safely)
+    temp_paths = [Path(os.environ.get("TEMP", "/tmp"))]
+    if "TMP" in os.environ:
+        temp_paths.append(Path(os.environ["TMP"]))
+        
+    # Check relative to cwd, any of the temp paths, or /app (for Docker container deployment)
+    if is_relative_to_safe(resolved_path, cwd):
+        return True
+    for tp in temp_paths:
+        if is_relative_to_safe(resolved_path, tp):
+            return True
+    if is_relative_to_safe(resolved_path, Path("/app")):
+        return True
+        
+    return False
+
+
+class ModelCache:
+    """Thread-safe cache for loaded PyTorch models to avoid expensive per-session reloads."""
+
+    def __init__(self) -> None:
+        self._cache: dict[tuple[str, str], torch.nn.Module] = {}
+        self._lock = threading.Lock()
+
+    def get_model(self, checkpoint_path: Path, device: torch.device) -> torch.nn.Module:
+        """Resolve path and retrieve/load the model in a thread-safe manner."""
+        resolved_path = checkpoint_path.resolve()
+        key = (str(resolved_path), str(device))
+        with self._lock:
+            if key not in self._cache:
+                model = load_model_from_checkpoint(resolved_path, device)
+                self._cache[key] = model
+            return self._cache[key]
+
+    def clear(self) -> None:
+        """Clear all loaded models from cache."""
+        with self._lock:
+            self._cache.clear()
+
+
+model_cache = ModelCache()
 
 
 class CameraStreamSession:
@@ -69,11 +140,11 @@ class CameraStreamSession:
             device_request=self.device_request,
         )
 
-        # 1. Load configuration and resolve paths/device
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
-        if not self.checkpoint_path.exists():
-            raise FileNotFoundError(f"Model checkpoint file not found: {self.checkpoint_path}")
+        # 1. Load configuration and resolve paths/device (with safe path validation)
+        if not validate_safe_path(self.config_path, [".yml", ".yaml"]):
+            raise ValueError(f"Configuration file path is invalid or restricted: {self.config_path}")
+        if not validate_safe_path(self.checkpoint_path, [".pth", ".pt"]):
+            raise ValueError(f"Model checkpoint file path is invalid or restricted: {self.checkpoint_path}")
 
         self.settings = load_runtime_settings(self.config_path)
         self.device = resolve_inference_device(
@@ -81,8 +152,8 @@ class CameraStreamSession:
             config_device=self.settings.device,
         )
 
-        # 2. Load model & adapters
-        self.model = load_model_from_checkpoint(self.checkpoint_path, self.device)
+        # 2. Load model & adapters (utilizing ModelCache to reuse model weights)
+        self.model = model_cache.get_model(self.checkpoint_path, self.device)
         self.tensorizer = FrameTensorizer(target_resolution=self.settings.target_resolution)
         self.model_adapter = WindowModelAdapter(
             model=self.model,
@@ -237,3 +308,237 @@ class CameraStreamSession:
             f"Camera stream session {self.session_id} closed.",
             self.log_context,
         )
+
+
+async def handle_camera_websocket(ws: WebSocket) -> None:
+    """Handles the lifecycle of a browser-camera WebSocket connection.
+
+    This includes receiving the initial JSON configuration, validating paths/session,
+    initializing the inference pipeline session (reusing cached model weights),
+    and processing incoming binary video frames in real-time.
+    """
+    from src.inference.runtime_logging import configure_runtime_logging
+    import uuid
+
+    configure_runtime_logging()
+    request_id = ws.headers.get("X-Request-ID") or uuid.uuid4().hex
+    log_context = RuntimeLogContext(
+        session_id=request_id,
+        source_type="websocket_camera",
+        source_ref="live_stream",
+    )
+
+    await ws.accept()
+
+    log_event(
+        logger,
+        logging.INFO,
+        "camera_websocket_connected",
+        "Camera websocket client connected.",
+        log_context,
+        ws_path="/ws/camera",
+    )
+
+    session: CameraStreamSession | None = None
+    session_uuid = None
+    try:
+        # 1. Parse initial JSON init message
+        try:
+            init_message = await ws.receive_json()
+        except Exception as e:
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": request_id,
+                    "status": "initialization_failed",
+                    "message": "Invalid JSON initial message received.",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            )
+            await ws.close(code=4000)
+            return
+
+        checkpoint_path_str = init_message.get("checkpoint_path")
+        config_path_str = init_message.get("config_path")
+        device_str = init_message.get("device")
+        session_id_str = init_message.get("session_id")
+
+        if not checkpoint_path_str or not config_path_str:
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": request_id,
+                    "status": "initialization_failed",
+                    "message": "Missing checkpoint_path or config_path in initialization message.",
+                }
+            )
+            await ws.close(code=4000)
+            return
+
+        # Generate or parse session ID
+        if session_id_str:
+            try:
+                session_uuid = UUID(session_id_str)
+            except ValueError as e:
+                await ws.send_json(
+                    {
+                        "message_type": "STATUS",
+                        "session_id": request_id,
+                        "status": "initialization_failed",
+                        "message": f"Invalid session_id UUID format: {session_id_str}",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                )
+                await ws.close(code=4000)
+                return
+        else:
+            try:
+                session_uuid = UUID(request_id)
+            except ValueError:
+                session_uuid = uuid4()
+
+        # Initialize the session inside the thread pool to avoid blocking the event loop
+        try:
+            session = await asyncio.to_thread(
+                CameraStreamSession,
+                checkpoint_path=Path(checkpoint_path_str),
+                config_path=Path(config_path_str),
+                device=device_str,
+                session_id=session_uuid,
+            )
+        except Exception as e:
+            await ws.send_json(
+                {
+                    "message_type": "STATUS",
+                    "session_id": str(session_uuid),
+                    "status": "initialization_failed",
+                    "message": "Pipeline initialization failed.",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            )
+            await ws.close(code=4000)
+            return
+
+        # Send successful initialization status back
+        await ws.send_json(
+            {
+                "message_type": "STATUS",
+                "session_id": str(session.session_id),
+                "status": "initialized",
+                "message": "Camera session successfully initialized.",
+            }
+        )
+
+        # 2. Receive and process binary frames
+        while True:
+            msg = await ws.receive()
+            if "text" in msg:
+                text_data = msg["text"]
+                if text_data == "stop":
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "camera_websocket_stop_requested",
+                        "Stop request received from client.",
+                        session.log_context,
+                    )
+                    await ws.send_json(
+                        {
+                            "message_type": "STATUS",
+                            "session_id": str(session.session_id),
+                            "status": "stopped",
+                            "message": "Camera streaming stopped by request.",
+                        }
+                    )
+                    break
+                else:
+                    # Ignore other text messages
+                    continue
+            elif "bytes" in msg:
+                binary_frame = msg["bytes"]
+                try:
+                    events = await session.process_frame(binary_frame)
+                    # Send generated events back to the client immediately (realtime)
+                    for event in events:
+                        await ws.send_json(event.model_dump(mode="json"))
+                except Exception as frame_err:
+                    log_event(
+                        logger,
+                        logging.ERROR,
+                        "camera_websocket_frame_failed",
+                        f"Failed to process frame: {frame_err}",
+                        session.log_context,
+                        exc_info=True,
+                        error_type=type(frame_err).__name__,
+                    )
+                    # Send a status message to notify the frontend,
+                    # but do NOT crash or close the connection
+                    await ws.send_json(
+                        {
+                            "message_type": "STATUS",
+                            "session_id": str(session.session_id),
+                            "status": "running",
+                            "message": f"Error processing frame: {frame_err}",
+                            "error": str(frame_err),
+                            "error_type": type(frame_err).__name__,
+                        }
+                    )
+
+    except WebSocketDisconnect:
+        log_event(
+            logger,
+            logging.INFO,
+            "camera_websocket_disconnected",
+            "Camera websocket client disconnected.",
+            session.log_context if session else log_context,
+            ws_path="/ws/camera",
+        )
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "camera_websocket_failed",
+            "Camera websocket handler failed with an exception.",
+            session.log_context if session else log_context,
+            exc_info=True,
+            ws_path="/ws/camera",
+            error_type=type(exc).__name__,
+        )
+        if session:
+            try:
+                await ws.send_json(
+                    {
+                        "message_type": "STATUS",
+                        "session_id": str(session.session_id),
+                        "status": "failed",
+                        "message": "Internal error occurred.",
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    }
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                await ws.send_json(
+                    {
+                        "message_type": "STATUS",
+                        "session_id": str(session_uuid) if session_uuid else request_id,
+                        "status": "failed",
+                        "message": "Internal error occurred.",
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    }
+                )
+            except Exception:
+                pass
+    finally:
+        if session:
+            session.close()
+        try:
+            await ws.close()
+        except RuntimeError:
+            pass
