@@ -180,11 +180,22 @@ class CameraStreamSession:
             danger_labels=self.settings.danger_labels,
         )
         self.writer = ActionEventWriter(class_labels=self.settings.class_labels)
+
+        context_module = None
+        try:
+            from src.inference.context_adapter import ContextModule
+
+            context_module = ContextModule()
+        except Exception as exc:
+            logger.warning(
+                "ContextModule failed to initialize for browser_camera session: %s", exc
+            )
+
         self.pipeline = InferenceEventPipeline(
             engine=self.engine,
             writer=self.writer,
             alert_processor=self.alert_sm,
-            context_module=None,
+            context_module=context_module,
             camera_id="browser_camera",
             session_id=self.session_id,
             track_id=self.settings.default_track_id,
