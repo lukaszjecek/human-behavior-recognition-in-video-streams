@@ -1,5 +1,7 @@
 """Module for training the baseline behavior recognition model."""
 
+# ruff: noqa: E402
+
 import argparse
 import json
 import os
@@ -7,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+from torch.utils.data import DataLoader
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -138,7 +142,9 @@ def load_resume_checkpoint(
     return start_epoch, best_val_accuracy, best_val_loss
 
 
-def build_class_mapping(train_loader) -> tuple[dict[str, int], dict[int, str], list[str]]:
+def build_class_mapping(
+    train_loader: DataLoader,
+) -> tuple[dict[str, int], dict[int, str], list[str]]:
     """Build stable class mapping from the train split."""
     label_to_idx = train_loader.dataset.label_to_idx
     idx_to_label = {idx: label for label, idx in label_to_idx.items()}
@@ -167,7 +173,7 @@ def compute_accuracy(
 def train_one_epoch(
     *,
     model: torch.nn.Module,
-    train_loader,
+    train_loader: DataLoader,
     criterion: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scaler: GradScaler,
@@ -216,7 +222,7 @@ def train_one_epoch(
 def evaluate(
     *,
     model: torch.nn.Module,
-    data_loader,
+    data_loader: DataLoader,
     criterion: torch.nn.Module,
     device: torch.device,
     use_amp: bool,
@@ -271,9 +277,17 @@ def evaluate(
 def main() -> int:
     """Main entrypoint for the training script."""
     parser = argparse.ArgumentParser(description="Training entrypoint for the baseline model")
-    parser.add_argument("--config", default="configs/train.yml", help="Path to training config file")
+    parser.add_argument(
+        "--config",
+        default="configs/train.yml",
+        help="Path to training config file",
+    )
 
-    parser.add_argument("--data-dir", default=None, help="Override root data directory, e.g. /data")
+    parser.add_argument(
+        "--data-dir",
+        default=None,
+        help="Override root data directory, e.g. /data",
+    )
     parser.add_argument(
         "--checkpoints-dir",
         default=None,
@@ -283,16 +297,55 @@ def main() -> int:
 
     parser.add_argument("--batch-size", type=int, default=None, help="Override batch size")
     parser.add_argument("--epochs", type=int, default=None, help="Override number of epochs")
-    parser.add_argument("--learning-rate", type=float, default=None, help="Override learning rate")
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=None,
+        help="Override learning rate",
+    )
 
-    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto", help="Training device")
-    parser.add_argument("--expected-classes", type=int, default=None, help="Fail if detected class count differs")
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Training device",
+    )
+    parser.add_argument(
+        "--expected-classes",
+        type=int,
+        default=None,
+        help="Fail if detected class count differs",
+    )
     parser.add_argument("--num-workers", type=int, default=None, help="DataLoader worker count")
-    parser.add_argument("--prefetch-factor", type=int, default=2, help="DataLoader prefetch factor")
-    parser.add_argument("--save-every", type=int, default=1, help="Save checkpoint every N epochs")
-    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True, help="Use AMP on CUDA")
-    parser.add_argument("--validate", action=argparse.BooleanOptionalAction, default=True, help="Run validation after each epoch")
-    parser.add_argument("--resume-from", default=None, help="Path to checkpoint used to resume training")
+    parser.add_argument(
+        "--prefetch-factor",
+        type=int,
+        default=2,
+        help="DataLoader prefetch factor",
+    )
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=1,
+        help="Save checkpoint every N epochs",
+    )
+    parser.add_argument(
+        "--amp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use AMP on CUDA",
+    )
+    parser.add_argument(
+        "--validate",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run validation after each epoch",
+    )
+    parser.add_argument(
+        "--resume-from",
+        default=None,
+        help="Path to checkpoint used to resume training",
+    )
 
     args = parser.parse_args()
 
@@ -333,7 +386,11 @@ def main() -> int:
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     epochs = args.epochs if args.epochs is not None else config["training"]["epochs"]
-    batch_size = args.batch_size if args.batch_size is not None else config["training"]["batch_size"]
+    batch_size = (
+        args.batch_size
+        if args.batch_size is not None
+        else config["training"]["batch_size"]
+    )
     learning_rate = (
         args.learning_rate
         if args.learning_rate is not None
@@ -592,8 +649,14 @@ def main() -> int:
             "train_batches": train_metrics["batches"],
             "train_samples": train_metrics["samples"],
             "val_loss": round(final_val_loss, 6) if final_val_loss is not None else None,
-            "val_accuracy": round(final_val_accuracy, 6) if final_val_accuracy is not None else None,
-            "val_top5_accuracy": round(final_val_top5_accuracy, 6) if final_val_top5_accuracy is not None else None,
+            "val_accuracy": (
+                round(final_val_accuracy, 6) if final_val_accuracy is not None else None
+            ),
+            "val_top5_accuracy": (
+                round(final_val_top5_accuracy, 6)
+                if final_val_top5_accuracy is not None
+                else None
+            ),
             "val_batches": val_metrics["batches"],
             "val_samples": val_metrics["samples"],
             "num_classes": num_classes,
@@ -697,7 +760,9 @@ def main() -> int:
         json.dump(
             {
                 "checkpoint_path": str(final_checkpoint_path),
-                "best_checkpoint_path": str(best_checkpoint_path) if best_checkpoint_path.exists() else None,
+                "best_checkpoint_path": (
+                    str(best_checkpoint_path) if best_checkpoint_path.exists() else None
+                ),
                 "classes_path": str(classes_path),
                 "runtime_labels_path": str(runtime_labels_path),
                 "log_file": str(log_file),

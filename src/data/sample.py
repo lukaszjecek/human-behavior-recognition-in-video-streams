@@ -36,7 +36,11 @@ def validate_splits_config(splits_config: dict[str, Any]) -> None:
         raise ValueError(f"Split percentages must sum to 1.0, got {total}")
 
 
-def generate_splits(video_paths: list[Path], raw_dir: Path, splits_config: dict[str, Any]) -> list[dict]:
+def generate_splits(
+    video_paths: list[Path],
+    raw_dir: Path,
+    splits_config: dict[str, Any],
+) -> list[dict]:
     """Generate manifest entries grouped into train, validation, and test splits."""
     validate_splits_config(splits_config)
 
@@ -93,15 +97,28 @@ def print_split_warnings(class_split_counts: dict[str, Counter]) -> None:
 def main() -> int:
     """Generate a JSONL manifest from configured raw video directories."""
     parser = argparse.ArgumentParser(description="Generate dataset splits and manifest.")
-    parser.add_argument("--config", default="configs/data_pipeline.yml", help="Path to YAML config")
+    parser.add_argument(
+        "--config",
+        default="configs/data_pipeline.yml",
+        help="Path to YAML config",
+    )
     parser.add_argument("--output", default="manifest.jsonl", help="Output filename or path")
-    parser.add_argument("--raw-dir", default=None, help="Override raw video directory, e.g. /data/raw")
+    parser.add_argument(
+        "--raw-dir",
+        default=None,
+        help="Override raw video directory, e.g. /data/raw",
+    )
     parser.add_argument(
         "--manifests-dir",
         default=None,
         help="Override manifests output directory, e.g. /data/manifests",
     )
-    parser.add_argument("--expected-classes", type=int, default=None, help="Fail if class count differs")
+    parser.add_argument(
+        "--expected-classes",
+        type=int,
+        default=None,
+        help="Fail if class count differs",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Override split seed")
     args = parser.parse_args()
 
@@ -113,7 +130,11 @@ def main() -> int:
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    seed = args.seed if args.seed is not None else config.get("pipeline", {}).get("seed", 42)
+    seed = (
+        args.seed
+        if args.seed is not None
+        else config.get("pipeline", {}).get("seed", 42)
+    )
     set_seed(seed)
 
     raw_dir = (
