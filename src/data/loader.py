@@ -1,6 +1,7 @@
 """Dataset and dataloader helpers for video manifests."""
 
 import json
+import random
 from pathlib import Path
 
 import torch
@@ -19,10 +20,14 @@ class VideoDataset(Dataset):
         data_dir: Path,
         split: str = "train",
         config_path: Path | None = None,
+        label_to_idx: dict[str, int] | None = None,
+        window_strategy: str = "auto",
     ) -> None:
         """Initialize the dataset from a manifest and optional pipeline config."""
         self.data_dir = data_dir
+        self.split = split
         self.samples = []
+        self.window_strategy = self._resolve_window_strategy(window_strategy, split)
 
         if config_path and config_path.exists():
             with open(config_path, "r", encoding="utf-8") as f:
@@ -46,12 +51,50 @@ class VideoDataset(Dataset):
                 if entry["split"] == split:
                     self.samples.append(entry)
 
-        unique_labels = sorted(list(set(s["label"] for s in self.samples)))
-        self.label_to_idx = {label: i for i, label in enumerate(unique_labels)}
+        if label_to_idx is None:
+            unique_labels = sorted(list(set(s["label"] for s in self.samples)))
+            self.label_to_idx = {label: i for i, label in enumerate(unique_labels)}
+        else:
+            self.label_to_idx = dict(label_to_idx)
+
+        self.idx_to_label = {idx: label for label, idx in self.label_to_idx.items()}
+
+    @staticmethod
+    def _resolve_window_strategy(window_strategy: str, split: str) -> str:
+        """Resolve automatic window strategy from split name."""
+        allowed = {"auto", "first", "middle", "random"}
+        if window_strategy not in allowed:
+            raise ValueError(f"window_strategy must be one of {sorted(allowed)}")
+
+        if window_strategy != "auto":
+            return window_strategy
+
+        if split == "train":
+            return "random"
+
+        return "middle"
 
     def __len__(self) -> int:
         """Return the number of samples in the selected split."""
         return len(self.samples)
+
+    def _select_window(self, windows: torch.Tensor) -> torch.Tensor:
+        """Select one temporal window from preprocessed video windows."""
+        num_windows = len(windows)
+
+        if num_windows == 0:
+            raise ValueError("Cannot select a window from an empty tensor")
+
+        if self.window_strategy == "first":
+            window_idx = 0
+        elif self.window_strategy == "middle":
+            window_idx = num_windows // 2
+        elif self.window_strategy == "random":
+            window_idx = random.randrange(num_windows)
+        else:
+            raise ValueError(f"Unsupported window_strategy: {self.window_strategy}")
+
+        return windows[window_idx]
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Return the preprocessed tensor and label index for a sample."""
@@ -63,8 +106,15 @@ class VideoDataset(Dataset):
         if len(windows) == 0:
             raise ValueError(f"No frames/windows extracted from video: {video_path}")
 
-        video_tensor = windows[0]
-        label_idx = self.label_to_idx[sample["label"]]
+        label = sample["label"]
+        if label not in self.label_to_idx:
+            raise KeyError(
+                f"Label '{label}' is not present in label_to_idx. "
+                "Check split consistency and class mapping."
+            )
+
+        video_tensor = self._select_window(windows)
+        label_idx = self.label_to_idx[label]
 
         return video_tensor, torch.tensor(label_idx, dtype=torch.long)
 
@@ -79,9 +129,18 @@ def get_dataloader(
     pin_memory: bool = False,
     persistent_workers: bool = False,
     prefetch_factor: int = 2,
+    label_to_idx: dict[str, int] | None = None,
+    window_strategy: str = "auto",
 ) -> DataLoader:
     """Build a dataloader for the requested manifest split."""
-    dataset = VideoDataset(manifest_path, data_dir, split, config_path)
+    dataset = VideoDataset(
+        manifest_path=manifest_path,
+        data_dir=data_dir,
+        split=split,
+        config_path=config_path,
+        label_to_idx=label_to_idx,
+        window_strategy=window_strategy,
+    )
 
     dataloader_kwargs = {
         "dataset": dataset,
