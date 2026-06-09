@@ -60,6 +60,9 @@ class VideoDataset(Dataset):
 
         windows = self.preprocessor.process(video_path)
 
+        if len(windows) == 0:
+            raise ValueError(f"No frames/windows extracted from video: {video_path}")
+
         video_tensor = windows[0]
         label_idx = self.label_to_idx[sample["label"]]
 
@@ -72,7 +75,24 @@ def get_dataloader(
     split: str = "train",
     batch_size: int = 4,
     config_path: Path | None = None,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    persistent_workers: bool = False,
+    prefetch_factor: int = 2,
 ) -> DataLoader:
     """Build a dataloader for the requested manifest split."""
     dataset = VideoDataset(manifest_path, data_dir, split, config_path)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=(split == "train"))
+
+    dataloader_kwargs = {
+        "dataset": dataset,
+        "batch_size": batch_size,
+        "shuffle": split == "train",
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+    }
+
+    if num_workers > 0:
+        dataloader_kwargs["persistent_workers"] = persistent_workers
+        dataloader_kwargs["prefetch_factor"] = prefetch_factor
+
+    return DataLoader(**dataloader_kwargs)
