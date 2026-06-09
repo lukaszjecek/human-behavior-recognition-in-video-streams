@@ -168,7 +168,7 @@ def run_inference(
     def handle_result(res: InferenceResult) -> None:
         expanded = expand_batched_inference_results([res])
         for r in expanded:
-            payloads = pipeline._process_result(r)
+            payloads = pipeline.process_result(r)
             for payload in payloads:
                 if on_event is not None:
                     on_event(payload)

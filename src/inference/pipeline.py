@@ -261,6 +261,14 @@ class InferenceEventPipeline:
                 "InferenceEventPipeline reset (session_id=%s)", self._session_id
             )
 
+    def process_result(self, result: InferenceResult) -> list[EventPayload]:
+        """Process an already computed inference result through the pipeline."""
+        if not isinstance(result, InferenceResult):
+            raise TypeError("result must be an InferenceResult")
+
+        with self._lock:
+            return self._process_result(result)
+
     def get_metrics(self) -> dict:
         """Return a snapshot of pipeline-level counters.
 
