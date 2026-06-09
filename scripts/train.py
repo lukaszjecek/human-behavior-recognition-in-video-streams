@@ -17,6 +17,10 @@ def main() -> int:
     """Main entrypoint for the training script."""
     parser = argparse.ArgumentParser(description="Trainin entrypoint for the baseline mdl")
     parser.add_argument("--config", default="configs/train.yml", help="Path to config file")
+    # server trainin args
+    parser.add_argument("--data-dir", default=None, help="Override root data directory (server use)")
+    parser.add_argument("--checkpoints-dir", default=None, help="Override checkpoints directory (server use)")
+    parser.add_argument("--batch-size", type=int, default=None, help="Override batch size for powerful GPUs")
     args = parser.parse_args()
 
     # config loadin
@@ -24,10 +28,19 @@ def main() -> int:
         config = yaml.safe_load(f)
 
     # path settin
-    manifest_path = Path(config['directories']['manifests']) / 'manifest.jsonl'
-    raw_dir = Path(config['directories']['raw'])
-    checkpoints_dir = Path(config['directories']['checkpoints'])
-    logs_dir = Path(config['directories']['logs'])
+    if args.data_dir:
+        base_data = Path(args.data_dir)
+        manifest_path = base_data / 'manifests' / 'manifest.jsonl'
+        raw_dir = base_data / 'raw'
+    else:
+        manifest_path = Path(config['directories']['manifests']) / 'manifest.jsonl'
+        raw_dir = Path(config['directories']['raw'])
+    if args.checkpoints_dir:
+        checkpoints_dir = Path(args.checkpoints_dir)
+        logs_dir = Path(args.checkpoints_dir) # Zapisujemy logi też tam, żeby Łukasz miał wszystko w jednym miejscu
+    else:
+        checkpoints_dir = Path(config['directories']['checkpoints'])
+        logs_dir = Path(config['directories']['logs'])
 
     # output fleders
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
@@ -35,11 +48,12 @@ def main() -> int:
 
     # parameters
     epochs = config['training']['epochs']
-    batch_size = config['training']['batch_size']
+    batch_size = args.batch_size if args.batch_size else config['training']['batch_size']
     learning_rate = config['training']['learning_rate']
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device selected for training {device}")
+    print(f"Using batch size: {batch_size}")
 
     train_loader = get_dataloader(
         manifest_path=manifest_path,
