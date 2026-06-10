@@ -11,11 +11,13 @@ from typing import Callable, Optional
 
 import torch
 
-from src.app.schemas.action_event import ActionEvent, AlertData, EventPayload, EventType
+from src.app.schemas.action_event import ActionEvent, EventPayload
 from src.inference.alert_state_machine import AlertStateMachine
+from src.inference.context_adapter import ContextModule
 from src.inference.engine import InferenceEngine, InferenceResult
 from src.inference.json_writer import ActionEventWriter
 from src.inference.offline_runtime import RuntimeFailureState, run_source_with_reconnect
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.runtime import (
     InferenceRuntimeSettings,
     WindowModelAdapter,
@@ -141,37 +143,35 @@ def run_inference(
     )
     writer = ActionEventWriter(class_labels=settings.class_labels)
 
+    context_module = None
+    try:
+        context_module = ContextModule()
+    except Exception as exc:
+        logger.warning("ContextModule failed to initialize in run_inference: %s", exc)
+
+    camera_id = None
+    if request.video_path is not None:
+        camera_id = str(request.video_path.name)
+    elif request.source_uri is not None:
+        camera_id = str(request.source_uri)
+
+    pipeline = InferenceEventPipeline(
+        engine=engine,
+        writer=writer,
+        alert_processor=alert_sm,
+        context_module=context_module,
+        camera_id=camera_id,
+        session_id=uuid_session_id,
+        track_id=settings.default_track_id,
+    )
+
     def handle_result(res: InferenceResult) -> None:
         expanded = expand_batched_inference_results([res])
         for r in expanded:
-            tid = settings.default_track_id
-            added = writer.add_result(r, track_id=tid)
-            if added:
-                evt = writer.get_log().events[-1]
+            payloads = pipeline.process_result(r)
+            for payload in payloads:
                 if on_event is not None:
-                    detection_payload = EventPayload(
-                        event_type=EventType.DETECTION,
-                        data=evt,
-                        camera_id=str(request.video_path.name) if request.video_path else None,
-                        session_id=uuid_session_id,
-                    )
-                    on_event(detection_payload)
-
-                alert_evt = alert_sm.process_event(evt)
-                if alert_evt is not None:
-                    alert_data = AlertData(
-                        severity="HIGH",
-                        message=f"Alert triggered for label: {alert_evt.label}",
-                        action_event=alert_evt.triggering_event,
-                    )
-                    if on_event is not None:
-                        alert_payload = EventPayload(
-                            event_type=EventType.ALERT,
-                            data=alert_data,
-                            camera_id=str(request.video_path.name) if request.video_path else None,
-                            session_id=uuid_session_id,
-                        )
-                        on_event(alert_payload)
+                    on_event(payload)
 
     log_event(
         logger,

@@ -245,9 +245,7 @@ To support context-aware alerting in Sprint 3, a lightweight **Context Module** 
 - **Performance:** Deterministic output confirmed via local verification tests (`tests/inference/test_context.py`).
 
 ### Output Contract
-The `ContextModule` enriches inference with scene-level context metadata, but the current `actions.json` writer still emits the legacy flat `ActionEventLog` structure (`event_count` plus `events`). Consumers should not assume the file is already wrapped in the unified `EventPayload` structure defined in `src/app/schemas/action_event.py`.
-
-Context values such as the following may be used internally or by future output-schema revisions, but they are not yet guaranteed to appear as a nested `context` object in every serialized event in `actions.json`:
+The `ContextModule` enriches inference with scene-level context metadata. All paths (browser camera, RTSP, and MP4) now utilize the unified `InferenceEventPipeline`; when context evaluation is enabled and produces a non-`unknown` scene tag, the nested `context` object is populated on emitted `ActionEvent`s (and serialized into `actions.json`).
 
 ```json
 "context": {
