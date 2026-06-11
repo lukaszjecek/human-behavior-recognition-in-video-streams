@@ -170,6 +170,14 @@ def compute_accuracy(
     return int(correct.any(dim=1).sum().item())
 
 
+def format_duration(seconds: float) -> str:
+    """Format elapsed seconds as HH:MM:SS."""
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def train_one_epoch(
     *,
     model: torch.nn.Module,
@@ -179,6 +187,9 @@ def train_one_epoch(
     scaler: GradScaler,
     device: torch.device,
     use_amp: bool,
+    epoch: int,
+    epochs: int,
+    log_every: int,
 ) -> dict[str, Any]:
     """Run one training epoch and return train metrics."""
     model.train()
@@ -187,6 +198,14 @@ def train_one_epoch(
     batches = 0
     samples = 0
     correct_top1 = 0
+    total_batches = len(train_loader)
+    total_samples = None
+    if hasattr(train_loader, "dataset"):
+        try:
+            total_samples = len(train_loader.dataset)
+        except TypeError:
+            total_samples = None
+    epoch_start_time = time.monotonic()
 
     for videos, labels in train_loader:
         videos = videos.to(device, non_blocking=device.type == "cuda")
@@ -203,10 +222,39 @@ def train_one_epoch(
         scaler.update()
 
         batch_size = labels.size(0)
-        epoch_loss += loss.item()
+        batch_loss = loss.item()
+        epoch_loss += batch_loss
         batches += 1
         samples += batch_size
         correct_top1 += compute_accuracy(outputs.detach(), labels, top_k=1)
+
+        should_log_progress = log_every > 0 and (
+            batches % log_every == 0 or batches == total_batches
+        )
+        if should_log_progress:
+            elapsed_seconds = time.monotonic() - epoch_start_time
+            avg_seconds_per_batch = elapsed_seconds / batches if batches > 0 else 0.0
+            remaining_batches = max(total_batches - batches, 0)
+            eta_seconds = avg_seconds_per_batch * remaining_batches
+            percent_complete = (
+                (batches / total_batches) * 100.0 if total_batches > 0 else 0.0
+            )
+            avg_loss = epoch_loss / batches if batches > 0 else 0.0
+            accuracy = correct_top1 / samples if samples > 0 else 0.0
+            total_samples_display = str(total_samples) if total_samples is not None else "?"
+
+            print(
+                f"Epoch [{epoch}/{epochs}] "
+                f"Batch [{batches}/{total_batches}] "
+                f"{percent_complete:.2f}% "
+                f"samples={samples}/{total_samples_display} "
+                f"loss={batch_loss:.6f} "
+                f"avg_loss={avg_loss:.6f} "
+                f"acc={accuracy:.6f} "
+                f"elapsed={format_duration(elapsed_seconds)} "
+                f"eta={format_duration(eta_seconds)}",
+                flush=True,
+            )
 
     if batches == 0 or samples == 0:
         raise ValueError("No batches produced by train DataLoader")
@@ -330,6 +378,12 @@ def main() -> int:
         help="Save checkpoint every N epochs",
     )
     parser.add_argument(
+        "--log-every",
+        type=int,
+        default=100,
+        help="Print training progress every N batches; use 0 to disable",
+    )
+    parser.add_argument(
         "--amp",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -408,6 +462,9 @@ def main() -> int:
 
     if args.save_every <= 0:
         raise ValueError("save_every must be > 0")
+
+    if args.log_every < 0:
+        raise ValueError("log_every must be >= 0")
 
     if args.num_workers is None:
         num_workers = min(16, os.cpu_count() or 1)
@@ -614,6 +671,9 @@ def main() -> int:
             scaler=scaler,
             device=device,
             use_amp=use_amp,
+            epoch=epoch,
+            epochs=epochs,
+            log_every=args.log_every,
         )
 
         final_train_loss = train_metrics["loss"]
