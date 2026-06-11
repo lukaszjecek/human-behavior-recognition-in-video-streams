@@ -1,111 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useWebSocket } from '../context/WebSocketContext'
 
-const ALL_MOCK_ALERTS = [
-  {
-    id: 1,
-    time: '20:18:45',
-    severity: 'danger',
-    message: 'Aggression Detected (fight simulation)',
-    camera: 'CAM',
-    acknowledged: false,
-    delay: 5000 // appears at 5 seconds
-  },
-  {
-    id: 2,
-    time: '20:17:12',
-    severity: 'warning',
-    message: 'Unusual running speed detected',
-    camera: 'CAM',
-    acknowledged: false,
-    delay: 4000 // appears at 4 seconds
-  },
-  {
-    id: 3,
-    time: '20:15:30',
-    severity: 'normal',
-    message: 'Person exiting vehicle',
-    camera: 'CAM',
-    acknowledged: false,
-    delay: 3000 // appears at 3 seconds
-  },
-  {
-    id: 4,
-    time: '20:12:05',
-    severity: 'normal',
-    message: 'Vehicle doors opened',
-    camera: 'CAM',
-    acknowledged: false,
-    delay: 2000 // appears at 2 seconds
-  },
-  {
-    id: 5,
-    time: '20:10:50',
-    severity: 'warning',
-    message: 'Person loitering near restricted boundary',
-    camera: 'CAM',
-    acknowledged: false,
-    delay: 1000 // appears at 1 second
-  },
-  {
-    id: 6,
-    time: '20:08:15',
-    severity: 'normal',
-    message: 'Camera connection established',
-    camera: 'CAM',
-    acknowledged: true,
-    delay: 0 // instantly visible
-  }
-]
-
 export default function AlertLog() {
-  const { alerts, setAlerts } = useWebSocket()
+  const { state, dispatch } = useWebSocket()
+  const alerts = state.alerts
   const [filter, setFilter] = useState('all') // 'all', 'danger', 'warning', 'normal'
   const [searchQuery, setSearchQuery] = useState('')
 
-  const timersRef = useRef([])
-
-  const clearTimers = () => {
-    timersRef.current.forEach(clearTimeout)
-    timersRef.current = []
-  }
-
-  const triggerSimulation = () => {
-    clearTimers()
-    setAlerts(ALL_MOCK_ALERTS.filter(a => a.delay === 0))
-
-    ALL_MOCK_ALERTS.forEach(alert => {
-      if (alert.delay > 0) {
-        const tId = setTimeout(() => {
-          setAlerts(prev => {
-            // Prevent duplicate entries in strict mode / duplicate runs
-            if (prev.some(a => a.id === alert.id)) return prev
-            return [alert, ...prev]
-          })
-        }, alert.delay)
-        timersRef.current.push(tId)
-      }
-    })
-  }
-
-  // Clear timers on unmount
-  useEffect(() => {
-    return clearTimers
-  }, [])
-
   const handleAcknowledge = (id) => {
-    setAlerts(prev =>
-      prev.map(alert => alert.id === id ? { ...alert, acknowledged: true } : alert)
-    )
+    dispatch({ type: 'ACKNOWLEDGE_ALERT', payload: id })
   }
 
   const handleClearAll = () => {
-    clearTimers()
-    setAlerts([])
-  }
-
-  const handleReset = () => {
-    triggerSimulation()
+    dispatch({ type: 'CLEAR_ALERTS' })
   }
 
   // Filter & Search alerts
@@ -138,19 +45,12 @@ export default function AlertLog() {
         </h2>
 
         <div className="flex gap-2">
-          {alerts.length > 0 ? (
+          {alerts.length > 0 && (
             <button
               onClick={handleClearAll}
               className="px-2 py-1 text-[10px] font-mono rounded border border-border bg-surface-alt hover:bg-red hover:text-white cursor-pointer transition-colors"
             >
               Clear Log
-            </button>
-          ) : (
-            <button
-              onClick={handleReset}
-              className="px-2 py-1 text-[10px] font-mono rounded border border-border bg-surface-alt hover:bg-blue hover:text-white cursor-pointer transition-colors"
-            >
-              Start Simulation
             </button>
           )}
         </div>

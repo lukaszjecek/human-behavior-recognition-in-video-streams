@@ -1,28 +1,309 @@
 import { useState, useEffect, useRef } from 'react'
-import mockCoordinates from './mockCoordinates.json'
 import { useSceneContext } from '../context/SceneContext'
+import { useWebSocket } from '../context/WebSocketContext'
+import { API_BASE_URL } from '../config'
 
 export default function VideoPlayer() {
   const { setBackendContext } = useSceneContext()
-  const [videoSrc, setVideoSrc] = useState('/sample.mp4')
-  const [fileName, setFileName] = useState('sample.mp4')
-  const [isPlaying, setIsPlaying] = useState(true)
+  const { state, dispatch } = useWebSocket()
+  
+  const [mode, setMode] = useState('webcam') // 'webcam' | 'mp4'
+  const [webcamActive, setWebcamActive] = useState(false)
+  const [videoSrc, setVideoSrc] = useState(null)
+  const [fileName, setFileName] = useState('')
+  const [isPlaying, setIsPlaying] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 })
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Inference Settings
+  const [serverVideoPath, setServerVideoPath] = useState('data/raw/smoke_sample.mp4')
+  const [checkpointPath, setCheckpointPath] = useState('data/logs/checkpoints/dummy_checkpoint.pth')
+  const [configPath, setConfigPath] = useState('configs/data_pipeline.yml')
+  const [device, setDevice] = useState('cpu')
+
+  // Offline Session state
+  const [sessionId, setSessionId] = useState(null)
+  const [sessionStatus, setSessionStatus] = useState('idle') // 'idle', 'pending', 'running', 'completed', 'failed', 'stopped'
+  const [statusMessage, setStatusMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const fileInputRef = useRef(null)
   const animationFrameId = useRef(null)
   const lastReportedContext = useRef({ scene_tag: '', confidence: -1 })
+  const webcamWsRef = useRef(null)
+  const sendIntervalRef = useRef(null)
 
-  // Revoke object URL on source change or unmount to avoid memory leaks
+  // Construct WebSocket URL for camera
+  function getCameraWsUrl() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/ws/camera`
+  }
+
+  // Webcam controls
+  function stopWebcam() {
+    if (sendIntervalRef.current) {
+      clearInterval(sendIntervalRef.current)
+      sendIntervalRef.current = null
+    }
+
+    if (webcamWsRef.current) {
+      if (webcamWsRef.current.readyState === WebSocket.OPEN) {
+        webcamWsRef.current.send('stop')
+        webcamWsRef.current.close()
+      }
+      webcamWsRef.current = null
+    }
+
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+      videoRef.current.srcObject = null
+    }
+
+    setWebcamActive(false)
+    dispatch({ type: 'RESET_DETECTION' })
+  }
+
+  function startFrameSending() {
+    if (sendIntervalRef.current) clearInterval(sendIntervalRef.current)
+
+    const scaleCanvas = document.createElement('canvas')
+    scaleCanvas.width = 224
+    scaleCanvas.height = 224
+    const scaleCtx = scaleCanvas.getContext('2d')
+
+    sendIntervalRef.current = setInterval(() => {
+      const video = videoRef.current
+      const ws = webcamWsRef.current
+      if (video && ws && ws.readyState === WebSocket.OPEN) {
+        scaleCtx.drawImage(video, 0, 0, scaleCanvas.width, scaleCanvas.height)
+        scaleCanvas.toBlob((blob) => {
+          if (blob && ws && ws.readyState === WebSocket.OPEN) {
+            blob.arrayBuffer().then((buf) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(buf)
+              }
+            })
+          }
+        }, 'image/jpeg', 0.8)
+      }
+    }, 200) // 5 FPS
+  }
+
+  async function startWebcam() {
+    setErrorMessage('')
+    setStatusMessage('Requesting camera access...')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
+      })
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(e => console.log('Playback failed:', e))
+      }
+
+      setStatusMessage('Connecting to backend camera socket...')
+      const wsUrl = getCameraWsUrl()
+      console.log(`Connecting to camera WS: ${wsUrl}`)
+      const ws = new WebSocket(wsUrl)
+      webcamWsRef.current = ws
+
+      ws.onopen = () => {
+        setStatusMessage('Initializing inference pipeline...')
+        ws.send(JSON.stringify({
+          checkpoint_path: checkpointPath,
+          config_path: configPath,
+          device: device
+        }))
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data)
+          if (payload.message_type === 'STATUS') {
+            setStatusMessage(`Backend: ${payload.message}`)
+            if (payload.status === 'initialized') {
+              setWebcamActive(true)
+              startFrameSending()
+            } else if (payload.status === 'initialization_failed' || payload.status === 'failed') {
+              setErrorMessage(payload.error || payload.message)
+              stopWebcam()
+            }
+          } else {
+            dispatch({ type: 'PROCESS_EVENT', payload })
+          }
+        } catch (err) {
+          console.error('Webcam WebSocket message error:', err)
+        }
+      }
+
+      ws.onclose = (e) => {
+        setStatusMessage('Camera WebSocket connection closed.')
+        if (e.code === 4000) {
+          setErrorMessage('Pipeline initialization failed. Verify paths and checkpoint validity.')
+        }
+        stopWebcam()
+      }
+
+      ws.onerror = (err) => {
+        console.error('Camera WebSocket error:', err)
+        setErrorMessage('Camera WebSocket encountered an error.')
+        stopWebcam()
+      }
+
+    } catch (err) {
+      console.error('Camera access failed:', err)
+      setErrorMessage(err.name === 'NotAllowedError' ? 'Webcam permission denied.' : err.message)
+      setStatusMessage('')
+    }
+  }
+
+  async function fetchSessionEvents(sId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/events/sessions/${sId}`)
+      if (response.ok) {
+        const data = await response.json()
+        dispatch({ type: 'SET_SESSION_EVENTS', payload: data })
+        setStatusMessage(`Loaded ${data.length} events for session.`)
+      }
+    } catch (err) {
+      console.error('Failed to load session events:', err)
+      setErrorMessage('Failed to fetch session event database records.')
+    }
+  }
+
+  // Offline MP4 Session controls
+  async function startOfflineSession() {
+    setErrorMessage('')
+    setSessionStatus('pending')
+    setStatusMessage('Spawning background inference session on server...')
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          video_path: serverVideoPath,
+          checkpoint_path: checkpointPath,
+          config_path: configPath,
+          device: device
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Server returned error status ${response.status}`)
+      }
+
+      const data = await response.json()
+      setSessionId(data.id)
+      setSessionStatus(data.status)
+      setStatusMessage(`Session started. ID: ${data.id}`)
+      
+      dispatch({ type: 'SET_SESSION_EVENTS', payload: [] })
+
+    } catch (err) {
+      console.error('Session create failed:', err)
+      setErrorMessage(err.message || 'Failed to trigger background video session.')
+      setSessionStatus('failed')
+    }
+  }
+
+  async function stopOfflineSession() {
+    if (!sessionId) return
+    setStatusMessage('Stopping background session...')
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/stop`, {
+        method: 'POST'
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Stop request failed.')
+      }
+      const data = await response.json()
+      setSessionStatus(data.status)
+      setStatusMessage('Session stopped by operator request.')
+    } catch (err) {
+      console.error('Session stop failed:', err)
+      setErrorMessage(err.message || 'Failed to stop session.')
+    }
+  }
+
+  // Mode change handler to clean state transitions cleanly without hook triggers
+  function handleModeChange(newMode) {
+    if (newMode === mode) return
+    setMode(newMode)
+    stopWebcam()
+    if (videoSrc && videoSrc.startsWith('blob:')) {
+      URL.revokeObjectURL(videoSrc)
+    }
+    setVideoSrc(null)
+    setFileName('')
+    setIsPlaying(false)
+    setSessionId(null)
+    setSessionStatus('idle')
+    setStatusMessage('')
+    setErrorMessage('')
+    dispatch({ type: 'CLEAR_ALERTS' })
+  }
+
+  // Cleanup on unmount or videoSrc change
   useEffect(() => {
+    const videoNode = videoRef.current
     return () => {
+      if (sendIntervalRef.current) {
+        clearInterval(sendIntervalRef.current)
+      }
+      if (webcamWsRef.current) {
+        if (webcamWsRef.current.readyState === WebSocket.OPEN) {
+          webcamWsRef.current.send('stop')
+        }
+        webcamWsRef.current.close()
+      }
+      if (videoNode && videoNode.srcObject) {
+        videoNode.srcObject.getTracks().forEach(track => track.stop())
+      }
       if (videoSrc && videoSrc.startsWith('blob:')) {
         URL.revokeObjectURL(videoSrc)
       }
     }
   }, [videoSrc])
+
+  // Poll running session status
+  useEffect(() => {
+    if (!sessionId || (sessionStatus !== 'pending' && sessionStatus !== 'running')) {
+      return
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`)
+        if (response.ok) {
+          const data = await response.json()
+          setSessionStatus(data.status)
+          
+          if (data.status === 'completed') {
+            setStatusMessage('Session completed successfully. Loading results...')
+            fetchSessionEvents(sessionId)
+            clearInterval(interval)
+          } else if (data.status === 'failed' || data.status === 'stopped') {
+            setStatusMessage(`Session terminated. Status: ${data.status}`)
+            if (data.error) setErrorMessage(data.error)
+            clearInterval(interval)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll session status:', err)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, sessionStatus])
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
@@ -45,9 +326,9 @@ export default function VideoPlayer() {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (video && canvas) {
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight })
+      canvas.width = video.videoWidth || video.width || 640
+      canvas.height = video.videoHeight || video.height || 480
+      setVideoDimensions({ width: canvas.width, height: canvas.height })
     }
   }
 
@@ -60,20 +341,109 @@ export default function VideoPlayer() {
       const b = parseInt(color.slice(5, 7), 16)
       return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
-    // Fallback based on default palette variables
     return variableName === '--color-red'
       ? `rgba(240, 83, 101, ${alpha})`
       : `rgba(91, 141, 249, ${alpha})`
+  }
+
+  const drawBboxes = (ctx, bboxes, W, H) => {
+    bboxes.forEach(bbox => {
+      let x, y, boxWidth, boxHeight
+
+      const isNormalized = bbox.coordinate_space === 'normalized' || !bbox.coordinate_space
+      if (isNormalized) {
+        x = bbox.x_min * W
+        y = bbox.y_min * H
+        boxWidth = (bbox.x_max - bbox.x_min) * W
+        boxHeight = (bbox.y_max - bbox.y_min) * H
+      } else {
+        const srcWidth = bbox.source_width || W
+        const srcHeight = bbox.source_height || H
+        const scaleX = W / srcWidth
+        const scaleY = H / srcHeight
+        x = bbox.x_min * scaleX
+        y = bbox.y_min * scaleY
+        boxWidth = (bbox.x_max - bbox.x_min) * scaleX
+        boxHeight = (bbox.y_max - bbox.y_min) * scaleY
+      }
+
+      const label = bbox.label || 'object'
+      const conf = bbox.confidence !== undefined ? bbox.confidence : 1.0
+      const themeColorVar = '--color-red'
+      const primaryColor = getThemeColorWithAlpha(themeColorVar, 1.0)
+      const semiTransColor = getThemeColorWithAlpha(themeColorVar, 0.12)
+      const borderTransColor = getThemeColorWithAlpha(themeColorVar, 0.4)
+
+      // 1. Draw Bounding Box semi-transparent fill and border
+      ctx.fillStyle = semiTransColor
+      ctx.fillRect(x, y, boxWidth, boxHeight)
+
+      ctx.strokeStyle = borderTransColor
+      ctx.lineWidth = 1.5
+      ctx.strokeRect(x, y, boxWidth, boxHeight)
+
+      // 2. Draw Corner Brackets
+      ctx.strokeStyle = primaryColor
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
+      const L = Math.min(boxWidth * 0.2, 24)
+
+      // Top Left Corner
+      ctx.beginPath()
+      ctx.moveTo(x + L, y)
+      ctx.lineTo(x, y)
+      ctx.lineTo(x, y + L)
+      ctx.stroke()
+
+      // Top Right Corner
+      ctx.beginPath()
+      ctx.moveTo(x + boxWidth - L, y)
+      ctx.lineTo(x + boxWidth, y)
+      ctx.lineTo(x + boxWidth, y + L)
+      ctx.stroke()
+
+      // Bottom Left Corner
+      ctx.beginPath()
+      ctx.moveTo(x + L, y + boxHeight)
+      ctx.lineTo(x, y + boxHeight)
+      ctx.lineTo(x, y + boxHeight - L)
+      ctx.stroke()
+
+      // Bottom Right Corner
+      ctx.beginPath()
+      ctx.moveTo(x + boxWidth - L, y + boxHeight)
+      ctx.lineTo(x + boxWidth, y + boxHeight)
+      ctx.lineTo(x + boxWidth, y + boxHeight - L)
+      ctx.stroke()
+
+      // 3. Draw Badge
+      const badgeLabel = `${label} [${(conf * 100).toFixed(1)}%]`
+      ctx.font = '500 11px "Fira Mono", ui-monospace, monospace'
+      const textMetrics = ctx.measureText(badgeLabel)
+      const badgeWidth = textMetrics.width + 12
+      const badgeHeight = 18
+
+      const badgeX = x
+      const badgeY = y - badgeHeight - 4
+      const finalBadgeY = badgeY < 4 ? y + 4 : badgeY
+
+      ctx.fillStyle = primaryColor
+      ctx.beginPath()
+      ctx.roundRect(badgeX, finalBadgeY, badgeWidth, badgeHeight, 3)
+      ctx.fill()
+
+      ctx.fillStyle = '#ffffff'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(badgeLabel, badgeX + 6, finalBadgeY + badgeHeight / 2 + 0.5)
+    })
   }
 
   useEffect(() => {
     const video = videoRef.current
     const canvas = canvasRef.current
 
-    if (!videoSrc || !video || !canvas) {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current)
-      }
+    if (!canvas) {
+      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current)
       return
     }
 
@@ -81,166 +451,79 @@ export default function VideoPlayer() {
     if (!ctx) return
 
     const renderLoop = () => {
-      if (!video || !canvas) return
-
       const W = canvas.width
       const H = canvas.height
 
       ctx.clearRect(0, 0, W, H)
 
-      let activeTag = 'unknown'
+      let activeEvents = []
+      let activeLabel = 'unknown'
       let activeConfidence = 0.0
+      let activeSceneTag = 'unknown'
+      let activeSceneConfidence = 0.0
 
-      if (W > 0 && H > 0 && fileName === 'sample.mp4') {
-        const fps = 30
-        const frameIndex = Math.floor(video.currentTime * fps)
-
-        // Determine context tag and confidence score based on simulated timeline
-        if (frameIndex < 20) {
-          activeTag = 'unknown'
-          activeConfidence = 0.0
-        } else if (frameIndex < 90) {
-          activeTag = 'vehicle_setting'
-          activeConfidence = 0.92 + Math.sin(frameIndex * 0.15) * 0.015
-        } else if (frameIndex < 160) {
-          activeTag = 'outdoor'
-          activeConfidence = 0.88 + Math.cos(frameIndex * 0.1) * 0.01
-        } else if (frameIndex < 220) {
-          activeTag = 'outdoor'
-          activeConfidence = 0.95 + Math.sin(frameIndex * 0.05) * 0.008
-        } else {
-          activeTag = 'outdoor'
-          activeConfidence = 0.91 + Math.cos(frameIndex * 0.08) * 0.02
-        }
-      }
-
-      // Throttle React state updates to avoid rendering bottleneck
-      const roundedConf = Math.round(activeConfidence * 1000) / 1000
-      if (
-        lastReportedContext.current.scene_tag !== activeTag ||
-        Math.abs(lastReportedContext.current.confidence - roundedConf) > 0.005
-      ) {
-        lastReportedContext.current = { scene_tag: activeTag, confidence: roundedConf }
-        setTimeout(() => {
-          setBackendContext({ scene_tag: activeTag, confidence: roundedConf })
-        }, 0)
-      }
-
-      if (W > 0 && H > 0 && fileName === 'sample.mp4') {
-        const fps = 30
-        const frameIndex = Math.floor(video.currentTime * fps)
-
-        if (frameIndex >= 20) {
-          let x, y, boxWidth, boxHeight
-          let actionLabel = 'Standing'
-          let confidence = 97.4
-          let themeColorVar = '--color-red'
-
-
-          if (mockCoordinates && mockCoordinates.length > 0) {
-            const safeFrameIndex = Math.min(Math.max(0, frameIndex), mockCoordinates.length - 1)
-            const frameData = mockCoordinates[safeFrameIndex]
-
-            const rawBox = frameData.box
-
-            // Scale coordinates to the current canvas dimensions dynamically
-            const scaleX = W / 512.0
-            const scaleY = H / 512.0
-
-            x = rawBox[0] * scaleX
-            y = rawBox[1] * scaleY
-            boxWidth = rawBox[2] * scaleX
-            boxHeight = rawBox[3] * scaleY
-
-            // Determine action label and theme color dynamically based on video timeline
-            if (safeFrameIndex > 220) {
-              actionLabel = 'Closes car door'
-              confidence = 96.8 + Math.sin(safeFrameIndex * 0.05) * 1.2
-              // themeColorVar = '--color-red'
-            } else if (safeFrameIndex > 160) {
-              actionLabel = 'Standing'
-              confidence = 96.8 + Math.sin(safeFrameIndex * 0.05) * 1.2
-              // themeColorVar = '--color-red'
-            } else if (safeFrameIndex > 90) {
-              actionLabel = 'Exiting Car'
-              confidence = 93.5 + Math.cos(safeFrameIndex * 0.1) * 1.8
-              // themeColorVar = '--color-amber'
-            } else {
-              actionLabel = 'Sitting'
-              confidence = 97.8 + Math.sin(safeFrameIndex * 0.15) * 0.8
-              // themeColorVar = '--color-blue'
-            }
+      if (mode === 'mp4' && video) {
+        // Find events corresponding to current playing timestamp
+        const time = video.currentTime
+        activeEvents = state.sessionEvents.filter(event => {
+          if (event.start_timestamp !== undefined && event.end_timestamp !== undefined) {
+            return time >= event.start_timestamp && time <= event.end_timestamp
           }
-          const primaryColor = getThemeColorWithAlpha(themeColorVar, 1.0)
-          const semiTransColor = getThemeColorWithAlpha(themeColorVar, 0.12)
-          const borderTransColor = getThemeColorWithAlpha(themeColorVar, 0.4)
+          const fps = 30
+          const frameIndex = Math.floor(time * fps)
+          return frameIndex >= event.start_frame_index && frameIndex <= event.end_frame_index
+        })
 
-          // 1. Draw Bounding Box semi-transparent fill and light border
-          ctx.fillStyle = semiTransColor
-          ctx.fillRect(x, y, boxWidth, boxHeight)
-
-          ctx.strokeStyle = borderTransColor
-          ctx.lineWidth = 1.5
-          ctx.strokeRect(x, y, boxWidth, boxHeight)
-
-          // 2. Draw Thick Corner Brackets
-          ctx.strokeStyle = primaryColor
-          ctx.lineWidth = 4
-          ctx.lineCap = 'round'
-          const L = Math.min(boxWidth * 0.2, 24) // Length of corner indicators
-
-          // Top Left Corner
-          ctx.beginPath()
-          ctx.moveTo(x + L, y)
-          ctx.lineTo(x, y)
-          ctx.lineTo(x, y + L)
-          ctx.stroke()
-
-          // Top Right Corner
-          ctx.beginPath()
-          ctx.moveTo(x + boxWidth - L, y)
-          ctx.lineTo(x + boxWidth, y)
-          ctx.lineTo(x + boxWidth, y + L)
-          ctx.stroke()
-
-          // Bottom Left Corner
-          ctx.beginPath()
-          ctx.moveTo(x + L, y + boxHeight)
-          ctx.lineTo(x, y + boxHeight)
-          ctx.lineTo(x, y + boxHeight - L)
-          ctx.stroke()
-
-          // Bottom Right Corner
-          ctx.beginPath()
-          ctx.moveTo(x + boxWidth - L, y + boxHeight)
-          ctx.lineTo(x + boxWidth, y + boxHeight)
-          ctx.lineTo(x + boxWidth, y + boxHeight - L)
-          ctx.stroke()
-
-          // 3. Draw Labeled Badge above the bounding box
-          const badgeLabel = `${actionLabel} [${confidence.toFixed(1)}%]`
-          ctx.font = '500 12px "Fira Mono", ui-monospace, monospace'
-          const textMetrics = ctx.measureText(badgeLabel)
-          const badgeWidth = textMetrics.width + 16
-          const badgeHeight = 22
-
-          const badgeX = x
-          const badgeY = y - badgeHeight - 6
-
-          // Ensure badge stays visible inside screen boundaries
-          const finalBadgeY = badgeY < 6 ? y + 6 : badgeY
-
-          // Draw Badge Background with subtle rounded corners
-          ctx.fillStyle = primaryColor
-          ctx.beginPath()
-          ctx.roundRect(badgeX, finalBadgeY, badgeWidth, badgeHeight, 4)
-          ctx.fill()
-
-          // Draw Badge text
-          ctx.fillStyle = '#ffffff'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(badgeLabel, badgeX + 8, finalBadgeY + badgeHeight / 2 + 0.5)
+        if (activeEvents.length > 0) {
+          activeEvents.sort((a, b) => b.confidence - a.confidence)
+          activeLabel = activeEvents[0].label
+          activeConfidence = activeEvents[0].confidence
+          if (activeEvents[0].context) {
+            activeSceneTag = activeEvents[0].context.scene_tag || 'unknown'
+            activeSceneConfidence = activeEvents[0].context.confidence || 0.0
+          }
         }
+      } else if (mode === 'webcam') {
+        activeLabel = state.currentDetection.label
+        activeConfidence = state.currentDetection.confidence
+        activeSceneTag = state.currentDetection.scene_tag
+        activeSceneConfidence = state.currentDetection.scene_confidence
+      }
+
+      // Sync SceneContext
+      if (
+        lastReportedContext.current.scene_tag !== activeSceneTag ||
+        Math.abs(lastReportedContext.current.confidence - activeSceneConfidence) > 0.01
+      ) {
+        lastReportedContext.current = { scene_tag: activeSceneTag, confidence: activeSceneConfidence }
+        setBackendContext({ scene_tag: activeSceneTag, confidence: activeSceneConfidence })
+      }
+
+      // Draw bounding boxes
+      if (W > 0 && H > 0) {
+        if (mode === 'mp4') {
+          const bboxes = activeEvents.flatMap(e => e.bboxes || [])
+          drawBboxes(ctx, bboxes, W, H)
+        } else if (mode === 'webcam' && webcamActive) {
+          const bboxes = state.currentDetection.bboxes || []
+          drawBboxes(ctx, bboxes, W, H)
+        }
+      }
+
+      // Draw overall Action Label header overlay on canvas
+      if (activeLabel && activeLabel !== 'unknown') {
+        const bannerText = `DETECTED ACTION: ${activeLabel} [${(activeConfidence * 100).toFixed(1)}%]`
+        ctx.font = 'bold 12px "Fira Mono", ui-monospace, monospace'
+        const textWidth = ctx.measureText(bannerText).width
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+        ctx.beginPath()
+        ctx.roundRect(W / 2 - textWidth / 2 - 10, 10, textWidth + 20, 22, 4)
+        ctx.fill()
+
+        ctx.fillStyle = '#f05365'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(bannerText, W / 2 - textWidth / 2, 21)
       }
 
       animationFrameId.current = requestAnimationFrame(renderLoop)
@@ -253,53 +536,107 @@ export default function VideoPlayer() {
         cancelAnimationFrame(animationFrameId.current)
       }
     }
-  }, [videoSrc, fileName, setBackendContext])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoSrc, mode, webcamActive, state.sessionEvents, state.currentDetection])
 
   return (
     <section className="panel flex flex-col" id="video-player">
-      <div className="panel-header flex items-center justify-between">
+      <div className="panel-header flex items-center justify-between border-b border-border">
         <h2 className="font-mono flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green animate-pulse" />
-          Camera Feed {fileName && `— ${fileName}`}
+          <span className={`w-2 h-2 rounded-full ${webcamActive || sessionStatus === 'running' ? 'bg-green animate-pulse' : 'bg-text-dim'}`} />
+          {mode === 'webcam' ? 'Live Camera Feed' : 'MP4 Session Feed'} {fileName && `— ${fileName}`}
         </h2>
 
         <div className="flex gap-2">
-          {videoSrc && (
-            <button
-              onClick={() => {
-                const video = videoRef.current
-                if (video) {
-                  if (isPlaying) {
-                    video.pause()
-                    setIsPlaying(false)
-                  } else {
-                    video.play().catch(err => console.log('Playback failed:', err))
-                    setIsPlaying(true)
-                  }
-                }
-              }}
-              className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors flex items-center gap-1"
-            >
-              {isPlaying ? (
-                <>
-                  <span className="w-1.5 h-3 border-l-2 border-r-2 border-text inline-block" /> Pause
-                </>
-              ) : (
-                <>
-                  <span className="w-0 h-0 border-y-4 border-y-transparent border-l-6 border-l-text inline-block" /> Play
-                </>
-              )}
-            </button>
-          )}
+          {/* Mode Selector */}
+          <button
+            onClick={() => handleModeChange('webcam')}
+            className={`px-2 py-0.5 text-[11px] font-mono rounded border ${
+              mode === 'webcam'
+                ? 'border-border bg-surface text-text font-bold'
+                : 'border-transparent text-text-dim hover:bg-surface-alt/50'
+            } cursor-pointer transition-all`}
+          >
+            Webcam
+          </button>
+          <button
+            onClick={() => handleModeChange('mp4')}
+            className={`px-2 py-0.5 text-[11px] font-mono rounded border ${
+              mode === 'mp4'
+                ? 'border-border bg-surface text-text font-bold'
+                : 'border-transparent text-text-dim hover:bg-surface-alt/50'
+            } cursor-pointer transition-all`}
+          >
+            MP4 Session
+          </button>
 
           <button
-            onClick={triggerFileInput}
-            className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors"
+            onClick={() => setShowSettings(!showSettings)}
+            className={`px-2 py-0.5 text-[11px] font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors flex items-center gap-1 ${showSettings ? 'bg-border' : ''}`}
           >
-            {videoSrc ? 'Change Stream' : 'Load Stream'}
+            <svg className="w-3 h-3 text-text-dim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Inference Paths
           </button>
         </div>
       </div>
+
+      {/* Collapsible config settings */}
+      {showSettings && (
+        <div className="p-3 border-b border-border bg-surface-alt/40 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-text-dim">Model Checkpoint Path</label>
+            <input
+              type="text"
+              value={checkpointPath}
+              onChange={(e) => setCheckpointPath(e.target.value)}
+              className="bg-surface border border-border rounded px-2 py-1 text-text text-xs focus:outline-none focus:border-text-dim"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-text-dim">Pipeline YAML Path</label>
+            <input
+              type="text"
+              value={configPath}
+              onChange={(e) => setConfigPath(e.target.value)}
+              className="bg-surface border border-border rounded px-2 py-1 text-text text-xs focus:outline-none focus:border-text-dim"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-text-dim">Hardware Device</label>
+            <select
+              value={device}
+              onChange={(e) => setDevice(e.target.value)}
+              className="bg-surface border border-border rounded px-2 py-0.5 text-text text-xs focus:outline-none focus:border-text-dim"
+            >
+              <option value="cpu">cpu</option>
+              <option value="cuda">cuda</option>
+              <option value="auto">auto</option>
+            </select>
+          </div>
+          {mode === 'mp4' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-text-dim">Server Video Path</label>
+              <input
+                type="text"
+                value={serverVideoPath}
+                onChange={(e) => setServerVideoPath(e.target.value)}
+                className="bg-surface border border-border rounded px-2 py-1 text-text text-xs focus:outline-none focus:border-text-dim"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Control bar / status message log */}
+      {(statusMessage || errorMessage) && (
+        <div className="px-4 py-2 border-b border-border text-xs font-mono flex flex-col gap-1">
+          {statusMessage && <div className="text-text-dim">Status: {statusMessage}</div>}
+          {errorMessage && <div className="text-red font-semibold bg-red/10 border border-red/25 px-2 py-1 rounded">Error: {errorMessage}</div>}
+        </div>
+      )}
 
       <input
         type="file"
@@ -309,48 +646,154 @@ export default function VideoPlayer() {
         className="hidden"
       />
 
-      <div className="panel-body flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-[300px]">
-        {videoSrc ? (
-          <div className="relative w-full h-full flex items-center justify-center">
+      <div className="panel-body flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-[350px]">
+        {/* WEBCAM FLOW ACTIVE VIEW */}
+        {mode === 'webcam' && (
+          <div className="w-full h-full relative flex items-center justify-center">
             <video
               ref={videoRef}
-              src={videoSrc}
               onLoadedMetadata={handleLoadedMetadata}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              className="w-full h-full object-contain"
-              loop
+              className={`w-full h-full object-contain ${webcamActive ? 'block' : 'hidden'}`}
               muted
               playsInline
-              autoPlay
             />
             <canvas
               ref={canvasRef}
-              className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none"
+              className={`absolute top-0 left-0 w-full h-full object-contain pointer-events-none ${webcamActive ? 'block' : 'hidden'}`}
             />
-            {videoDimensions.width > 0 && (
-              <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-mono text-text-dim pointer-events-none select-none">
-                {videoDimensions.width}×{videoDimensions.height} px
+            
+            {!webcamActive && (
+              <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-surface-alt border border-border flex items-center justify-center mb-4 text-text-dim">
+                  <svg className="w-6 h-6 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-semibold text-text mb-1 font-mono">Live Camera Streaming</h3>
+                <p className="text-xs text-text-dim mb-4 leading-relaxed">
+                  Start the browser camera stream to send live video frames to the backend for behavior detection.
+                </p>
+                <button
+                  onClick={startWebcam}
+                  className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
+                >
+                  Start Webcam
+                </button>
               </div>
             )}
+
+            {webcamActive && (
+              <button
+                onClick={stopWebcam}
+                className="absolute bottom-4 right-4 px-3 py-1.5 text-xs font-mono rounded-lg border border-red/45 bg-red/10 hover:bg-red text-white cursor-pointer shadow transition-all"
+              >
+                Stop Webcam
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
-            <div className="w-14 h-14 rounded-2xl bg-surface-alt border border-border flex items-center justify-center mb-4 text-text-dim animate-bounce duration-3000">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-            </div>
-            <h3 className="text-sm font-semibold text-text mb-1 font-mono">No Video Stream Active</h3>
-            <p className="text-xs text-text-dim mb-4 leading-relaxed">
-              Load a local video file from your disk to begin simulated HBR tracking overlays and behaviour recognition analysis.
-            </p>
-            <button
-              onClick={triggerFileInput}
-              className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
-            >
-              Select Video File
-            </button>
+        )}
+
+        {/* MP4 SESSION ACTIVE VIEW */}
+        {mode === 'mp4' && (
+          <div className="w-full h-full relative flex items-center justify-center">
+            {videoSrc ? (
+              <div className="w-full h-full relative flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  src={videoSrc}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  className="w-full h-full object-contain"
+                  loop
+                  muted
+                  playsInline
+                  autoPlay
+                />
+                <canvas
+                  ref={canvasRef}
+                  className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none"
+                />
+                
+                {videoDimensions.width > 0 && (
+                  <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-mono text-text-dim pointer-events-none select-none">
+                    {videoDimensions.width}×{videoDimensions.height} px
+                  </div>
+                )}
+
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      const video = videoRef.current
+                      if (video) {
+                        if (isPlaying) {
+                          video.pause()
+                          setIsPlaying(false)
+                        } else {
+                          video.play().catch(err => console.log('Playback failed:', err))
+                          setIsPlaying(true)
+                        }
+                      }
+                    }}
+                    className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors flex items-center gap-1"
+                  >
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                  <button
+                    onClick={triggerFileInput}
+                    className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors"
+                  >
+                    Change Local File
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-surface-alt border border-border flex items-center justify-center mb-4 text-text-dim">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-7.5M2.25 18.75V6.75A2.25 2.25 0 014.5 4.5h15a2.25 2.25 0 012.25 2.25v12m-18 0A2.25 2.25 0 004.5 21h15a2.25 2.25 0 002.25-2.25m-18 0v-3.75a2.25 2.25 0 012.25-2.25h13.5a2.25 2.25 0 012.25 2.25v3.75m-16.5-7.5h15" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-semibold text-text mb-1 font-mono">Backend MP4 Video Session</h3>
+                <p className="text-xs text-text-dim mb-4 leading-relaxed">
+                  Trigger an offline inference session on the server, load the corresponding local video to see overlays, or watch events populate.
+                </p>
+
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2 justify-center">
+                    {(sessionStatus === 'idle' || sessionStatus === 'completed' || sessionStatus === 'failed' || sessionStatus === 'stopped') ? (
+                      <button
+                        onClick={startOfflineSession}
+                        className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
+                      >
+                        Start Session on Server
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopOfflineSession}
+                        className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-red/45 bg-red/10 hover:bg-red text-white cursor-pointer shadow transition-all animate-pulse"
+                      >
+                        Stop Running Session
+                      </button>
+                    )}
+
+                    <button
+                      onClick={triggerFileInput}
+                      className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
+                    >
+                      Load Local Video File
+                    </button>
+                  </div>
+
+                  {sessionId && (
+                    <div className="text-[10px] font-mono text-text-dim mt-2 bg-surface-alt p-2 rounded border border-border">
+                      <div>Session ID: {sessionId}</div>
+                      <div>Status: <span className="font-bold text-text uppercase">{sessionStatus}</span></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
