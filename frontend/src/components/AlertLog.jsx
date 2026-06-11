@@ -4,7 +4,6 @@ import { useWebSocket } from '../context/WebSocketContext'
 export default function AlertLog() {
   const { state, dispatch } = useWebSocket()
   const alerts = state.alerts
-  const [filter, setFilter] = useState('all') // 'all', 'danger', 'warning', 'normal'
   const [searchQuery, setSearchQuery] = useState('')
 
   const handleAcknowledge = (id) => {
@@ -15,27 +14,19 @@ export default function AlertLog() {
     dispatch({ type: 'CLEAR_ALERTS' })
   }
 
-  // Filter & Search alerts
+  // Search alerts
   const filteredAlerts = alerts.filter(alert => {
-    const matchesFilter = filter === 'all' || alert.severity === filter
-    const matchesSearch = alert.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          alert.camera.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesFilter && matchesSearch
+    return alert.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           alert.camera.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
-  // Group counts for severity badge bubbles
-  const getCountBySeverity = (severity) => {
-    return alerts.filter(a => a.severity === severity && !a.acknowledged).length
-  }
-
-  const activeDangerCount = getCountBySeverity('danger')
   const activeAlertsCount = alerts.filter(a => !a.acknowledged).length
 
   return (
     <section className="panel flex flex-col" id="alert-log">
       <div className="panel-header flex items-center justify-between border-b border-border px-4 py-2.5">
         <h2 className="font-mono flex items-center gap-2 text-sm font-semibold">
-          <span className={`w-2 h-2 rounded-full ${activeDangerCount > 0 ? 'bg-red animate-pulse' : 'bg-text-dim'}`} />
+          <span className={`w-2 h-2 rounded-full ${activeAlertsCount > 0 ? 'bg-red animate-pulse' : 'bg-text-dim'}`} />
           Event Log
           {activeAlertsCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-surface-alt border border-border text-text">
@@ -56,7 +47,7 @@ export default function AlertLog() {
         </div>
       </div>
 
-      {/* Control Area: Filtering Tabs & Search Input */}
+      {/* Control Area: Search Input */}
       <div className="p-3 border-b border-border bg-surface-alt/30 flex flex-col gap-2.5">
         <div className="flex items-center bg-surface-alt/75 border border-border rounded-lg px-2 py-1">
           <svg className="w-3.5 h-3.5 text-text-dim mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -79,36 +70,6 @@ export default function AlertLog() {
             </button>
           )}
         </div>
-
-        <div className="flex gap-1">
-          {['all', 'danger', 'warning', 'normal'].map((tab) => {
-            const count = tab === 'all' ? activeAlertsCount : getCountBySeverity(tab)
-            const isActive = filter === tab
-            return (
-              <button
-                key={tab}
-                onClick={() => setFilter(tab)}
-                className={`flex-1 py-1 text-[10px] font-mono rounded border transition-all cursor-pointer text-center capitalize ${
-                  isActive
-                    ? 'border-border bg-surface-alt text-text font-semibold shadow-sm'
-                    : 'border-transparent text-text-dim hover:text-text hover:bg-surface-alt/30'
-                }`}
-              >
-                {tab === 'normal' ? 'info' : tab}
-                {count > 0 && (
-                  <span className={`ml-1 px-1 rounded-full text-[9px] ${
-                    tab === 'danger' ? 'bg-red/20 text-red border border-red/35' :
-                    tab === 'warning' ? 'bg-amber/20 text-amber border border-amber/35' :
-                    tab === 'normal' ? 'bg-blue/20 text-blue border border-blue/35' :
-                    'bg-surface border border-border text-text-dim'
-                  }`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       {/* Main Alert List */}
@@ -116,37 +77,24 @@ export default function AlertLog() {
         {filteredAlerts.length > 0 ? (
           <div className="flex flex-col divide-y divide-border/60">
             {filteredAlerts.map((alert) => {
-              const isDanger = alert.severity === 'danger'
-              const isWarning = alert.severity === 'warning'
-
               return (
                 <div
                   key={alert.id}
                   className={`flex flex-col gap-1.5 p-3.5 transition-all group ${
                     alert.acknowledged
                       ? 'opacity-40 bg-surface'
-                      : isDanger
-                      ? 'bg-red/3 hover:bg-red/6 border-l-3 border-red'
-                      : isWarning
-                      ? 'bg-amber/3 hover:bg-amber/6 border-l-3 border-amber'
-                      : 'bg-blue/3 hover:bg-blue/6 border-l-3 border-blue'
+                      : 'bg-red/3 hover:bg-red/6 border-l-3 border-red'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       {/* Pulsing indicator for active warnings */}
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        alert.acknowledged ? 'bg-text-faint' :
-                        isDanger ? 'bg-red animate-pulse shadow-[0_0_8px_rgba(240,83,101,0.6)]' :
-                        isWarning ? 'bg-amber' : 'bg-blue'
+                        alert.acknowledged ? 'bg-text-faint' : 'bg-red animate-pulse shadow-[0_0_8px_rgba(240,83,101,0.6)]'
                       }`} />
 
-                      <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1 py-0.2 rounded border ${
-                        isDanger ? 'text-red bg-red/10 border-red/20' :
-                        isWarning ? 'text-amber bg-amber/10 border-amber/20' :
-                        'text-blue bg-blue/10 border-blue/20'
-                      }`}>
-                        {alert.severity === 'normal' ? 'info' : alert.severity}
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1 py-0.2 rounded border text-red bg-red/10 border-red/20">
+                        ALERT
                       </span>
 
                       <span className="text-[10px] font-mono text-text-dim">

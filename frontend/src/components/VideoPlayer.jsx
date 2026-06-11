@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config'
 export default function VideoPlayer() {
   const { setBackendContext } = useSceneContext()
   const { state, dispatch } = useWebSocket()
-  
+
   const [mode, setMode] = useState('webcam') // 'webcam' | 'mp4'
   const [webcamActive, setWebcamActive] = useState(false)
   const [videoSrc, setVideoSrc] = useState(null)
@@ -32,6 +32,40 @@ export default function VideoPlayer() {
   const fileInputRef = useRef(null)
   const animationFrameId = useRef(null)
   const lastReportedContext = useRef({ scene_tag: '', confidence: -1 })
+  const lastTimeRef = useRef(-1)
+  const autoPlayTriggeredRef = useRef(null)
+
+  // Pre-indexed events and FPS for fast O(1) lookup
+  const [eventsMap, setEventsMap] = useState(new Map())
+  const [videoFps, setVideoFps] = useState(30)
+
+  // Pre-index session events by frame index when events list changes
+  useEffect(() => {
+    const map = new Map()
+    state.sessionEvents.forEach(event => {
+      const start = event.start_frame_index || 0
+      const end = event.end_frame_index || 0
+      for (let f = start; f <= end; f++) {
+        if (!map.has(f)) {
+          map.set(f, [])
+        }
+        map.get(f).push(event)
+      }
+    })
+    setEventsMap(map)
+  }, [state.sessionEvents])
+
+  // Calculate actual video FPS dynamically when events or video source changes
+  useEffect(() => {
+    if (state.sessionEvents.length > 0 && videoRef.current?.duration) {
+      const maxFrame = Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
+      if (maxFrame > 0) {
+        setVideoFps(maxFrame / videoRef.current.duration)
+      }
+    } else {
+      setVideoFps(30)
+    }
+  }, [state.sessionEvents, videoSrc])
   const webcamWsRef = useRef(null)
   const sendIntervalRef = useRef(null)
 
@@ -77,6 +111,12 @@ export default function VideoPlayer() {
       const video = videoRef.current
       const ws = webcamWsRef.current
       if (video && ws && ws.readyState === WebSocket.OPEN) {
+        // Skip frame if the websocket outbound queue has backed up (prevents disconnections & latency lag)
+        if (ws.bufferedAmount > 0) {
+          console.warn('Webcam socket buffer backup detected, skipping frame to maintain realtime sync.');
+          return;
+        }
+
         scaleCtx.drawImage(video, 0, 0, scaleCanvas.width, scaleCanvas.height)
         scaleCanvas.toBlob((blob) => {
           if (blob && ws && ws.readyState === WebSocket.OPEN) {
@@ -88,7 +128,7 @@ export default function VideoPlayer() {
           }
         }, 'image/jpeg', 0.8)
       }
-    }, 200) // 5 FPS
+    }, 250) // 4 FPS, slightly more conservative to prevent backpressure on CPU inference
   }
 
   async function startWebcam() {
@@ -98,7 +138,7 @@ export default function VideoPlayer() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 }
       })
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.play().catch(e => console.log('Playback failed:', e))
@@ -140,7 +180,8 @@ export default function VideoPlayer() {
       }
 
       ws.onclose = (e) => {
-        setStatusMessage('Camera WebSocket connection closed.')
+        console.log(`Camera WebSocket closed. Code: ${e.code}, Reason: ${e.reason || 'None'}`)
+        setStatusMessage(`Camera WebSocket connection closed (Code: ${e.code}).`)
         if (e.code === 4000) {
           setErrorMessage('Pipeline initialization failed. Verify paths and checkpoint validity.')
         }
@@ -175,11 +216,13 @@ export default function VideoPlayer() {
   }
 
   // Offline MP4 Session controls
-  async function startOfflineSession() {
+  async function startOfflineSession(videoPathOverride) {
     setErrorMessage('')
     setSessionStatus('pending')
     setStatusMessage('Spawning background inference session on server...')
-    
+
+    const targetVideoPath = (typeof videoPathOverride === 'string') ? videoPathOverride : serverVideoPath
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
         method: 'POST',
@@ -187,7 +230,7 @@ export default function VideoPlayer() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          video_path: serverVideoPath,
+          video_path: targetVideoPath,
           checkpoint_path: checkpointPath,
           config_path: configPath,
           device: device
@@ -203,7 +246,7 @@ export default function VideoPlayer() {
       setSessionId(data.id)
       setSessionStatus(data.status)
       setStatusMessage(`Session started. ID: ${data.id}`)
-      
+
       dispatch({ type: 'SET_SESSION_EVENTS', payload: [] })
 
     } catch (err) {
@@ -285,7 +328,7 @@ export default function VideoPlayer() {
         if (response.ok) {
           const data = await response.json()
           setSessionStatus(data.status)
-          
+
           if (data.status === 'completed') {
             setStatusMessage('Session completed successfully. Loading results...')
             fetchSessionEvents(sessionId)
@@ -305,6 +348,29 @@ export default function VideoPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, sessionStatus])
 
+  // Reset auto-play trigger ref when session ID changes
+  useEffect(() => {
+    autoPlayTriggeredRef.current = null
+  }, [sessionId])
+
+  // Intelligently auto-play the video as soon as the first detection/alert event for the current session is received from the backend
+  useEffect(() => {
+    if (mode === 'mp4' && sessionId && videoRef.current) {
+      const hasEventsForSession = state.sessionEvents.some(
+        event => event.session_id === sessionId
+      )
+
+      if (hasEventsForSession && autoPlayTriggeredRef.current !== sessionId) {
+        autoPlayTriggeredRef.current = sessionId
+        console.log(`Backend session ${sessionId} is ready (received events). Starting video playback.`);
+        videoRef.current.play().catch(err => {
+          console.warn('Auto-playback failed or was blocked by browser:', err)
+        })
+        setIsPlaying(true)
+      }
+    }
+  }, [state.sessionEvents, sessionId, mode])
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -314,8 +380,11 @@ export default function VideoPlayer() {
       const objectURL = URL.createObjectURL(file)
       setVideoSrc(objectURL)
       setFileName(file.name)
-      setServerVideoPath(`data/raw/${file.name}`)
+      const targetPath = `data/raw/${file.name}`
+      setServerVideoPath(targetPath)
       setIsPlaying(false)
+      // Auto-start background inference session on the server for this video file
+      startOfflineSession(targetPath)
     }
   }
 
@@ -451,11 +520,12 @@ export default function VideoPlayer() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Reset last time to force a redraw on new dependencies
+    lastTimeRef.current = -1
+
     const renderLoop = () => {
       const W = canvas.width
       const H = canvas.height
-
-      ctx.clearRect(0, 0, W, H)
 
       let activeEvents = []
       let activeLabel = 'unknown'
@@ -466,25 +536,15 @@ export default function VideoPlayer() {
       if (mode === 'mp4' && video) {
         // Find events corresponding to current playing timestamp
         const time = video.currentTime
-        activeEvents = state.sessionEvents.filter(event => {
-          const hasRelativeTimestamps = 
-            event.start_timestamp !== undefined && 
-            event.end_timestamp !== undefined && 
-            event.start_timestamp < 100000;
+        if (time === lastTimeRef.current) {
+          // Playback time has not progressed, skip recalculations and canvas clears
+          animationFrameId.current = requestAnimationFrame(renderLoop)
+          return
+        }
+        lastTimeRef.current = time
 
-          if (hasRelativeTimestamps) {
-            return time >= event.start_timestamp && time <= event.end_timestamp
-          }
-          let fps = 30
-          if (state.sessionEvents.length > 0 && video.duration) {
-            const maxFrame = Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
-            if (maxFrame > 0) {
-              fps = maxFrame / video.duration
-            }
-          }
-          const frameIndex = Math.floor(time * fps)
-          return frameIndex >= event.start_frame_index && frameIndex <= event.end_frame_index
-        })
+        const frameIndex = Math.floor(time * videoFps)
+        activeEvents = eventsMap.get(frameIndex) || []
 
         if (activeEvents.length > 0) {
           activeEvents.sort((a, b) => b.confidence - a.confidence)
@@ -502,6 +562,8 @@ export default function VideoPlayer() {
         activeSceneConfidence = state.currentDetection.scene_confidence
       }
 
+      ctx.clearRect(0, 0, W, H)
+
       // Sync SceneContext
       if (
         lastReportedContext.current.scene_tag !== activeSceneTag ||
@@ -511,7 +573,8 @@ export default function VideoPlayer() {
         setBackendContext({ scene_tag: activeSceneTag, confidence: activeSceneConfidence })
       }
 
-      // Draw bounding boxes
+      // Draw bounding boxes (commented out to save thread cycles as backend doesn't output coordinates yet)
+      /*
       if (W > 0 && H > 0) {
         if (mode === 'mp4') {
           const bboxes = activeEvents.flatMap(e => e.bboxes || [])
@@ -521,13 +584,14 @@ export default function VideoPlayer() {
           drawBboxes(ctx, bboxes, W, H)
         }
       }
+      */
 
       // Draw overall Action Label header overlay on canvas
       if (activeLabel && activeLabel !== 'unknown') {
         const bannerText = `DETECTED ACTION: ${activeLabel} [${(activeConfidence * 100).toFixed(1)}%]`
         ctx.font = 'bold 12px "Fira Mono", ui-monospace, monospace'
         const textWidth = ctx.measureText(bannerText).width
-        
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
         ctx.beginPath()
         ctx.roundRect(W / 2 - textWidth / 2 - 10, 10, textWidth + 20, 22, 4)
@@ -549,7 +613,7 @@ export default function VideoPlayer() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoSrc, mode, webcamActive, state.sessionEvents, state.currentDetection])
+  }, [videoSrc, mode, webcamActive, state.sessionEvents, state.currentDetection, eventsMap, videoFps])
 
   return (
     <section className="panel flex flex-col" id="video-player">
@@ -616,18 +680,7 @@ export default function VideoPlayer() {
               className="bg-surface border border-border rounded px-2 py-1 text-text text-xs focus:outline-none focus:border-text-dim"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-text-dim">Hardware Device</label>
-            <select
-              value={device}
-              onChange={(e) => setDevice(e.target.value)}
-              className="bg-surface border border-border rounded px-2 py-0.5 text-text text-xs focus:outline-none focus:border-text-dim"
-            >
-              <option value="cpu">cpu</option>
-              <option value="cuda">cuda</option>
-              <option value="auto">auto</option>
-            </select>
-          </div>
+
           {mode === 'mp4' && (
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-text-dim">Server Video Path</label>
@@ -673,7 +726,7 @@ export default function VideoPlayer() {
               ref={canvasRef}
               className={`absolute top-0 left-0 w-full h-full object-contain pointer-events-none ${webcamActive ? 'block' : 'hidden'}`}
             />
-            
+
             {!webcamActive && (
               <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
                 <div className="w-14 h-14 rounded-2xl bg-surface-alt border border-border flex items-center justify-center mb-4 text-text-dim">
@@ -720,13 +773,12 @@ export default function VideoPlayer() {
                   loop
                   muted
                   playsInline
-                  autoPlay
                 />
                 <canvas
                   ref={canvasRef}
                   className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none"
                 />
-                
+
                 {videoDimensions.width > 0 && (
                   <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-mono text-text-dim pointer-events-none select-none">
                     {videoDimensions.width}×{videoDimensions.height} px

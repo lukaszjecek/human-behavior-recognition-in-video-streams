@@ -17,6 +17,13 @@ const initialState = {
   }
 }
 
+const mapSeverity = (severity) => {
+  const s = (severity || 'normal').toLowerCase();
+  if (s === 'high' || s === 'critical' || s === 'danger') return 'danger';
+  if (s === 'medium' || s === 'warn' || s === 'warning') return 'warning';
+  return 'normal';
+}
+
 const eventReducer = (state, action) => {
   switch (action.type) {
     case 'PROCESS_EVENT': {
@@ -33,7 +40,7 @@ const eventReducer = (state, action) => {
           id: payload.event_id,
           timestamp: payload.timestamp,
           time: new Date(payload.timestamp).toLocaleTimeString('en-GB'),
-          severity: alertData?.severity ? alertData.severity.toLowerCase() : 'normal',
+          severity: mapSeverity(alertData?.severity),
           message: alertData?.message || 'Unknown event',
           camera: payload.camera_id || 'CAM',
           acknowledged: false,
@@ -64,6 +71,7 @@ const eventReducer = (state, action) => {
             const sessEvent = {
               event_id: payload.event_id,
               event_type: 'ALERT',
+              session_id: payload.session_id,
               ...ae
             }
             if (!newSessionEvents.some(e => e.event_id === sessEvent.event_id)) {
@@ -90,6 +98,7 @@ const eventReducer = (state, action) => {
           const sessEvent = {
             event_id: payload.event_id,
             event_type: 'DETECTION',
+            session_id: payload.session_id,
             ...detectionData
           }
           if (!newSessionEvents.some(e => e.event_id === sessEvent.event_id)) {
@@ -141,12 +150,14 @@ const eventReducer = (state, action) => {
           return {
             event_id: payload.event_id,
             event_type: 'ALERT',
+            session_id: payload.session_id,
             ...payload.data?.action_event
           }
         } else if (payload.event_type === 'DETECTION') {
           return {
             event_id: payload.event_id,
             event_type: 'DETECTION',
+            session_id: payload.session_id,
             ...payload.data
           }
         }
@@ -206,7 +217,7 @@ export function WebSocketProvider({ children }) {
           id: payload.event_id,
           timestamp: payload.timestamp,
           time: new Date(payload.timestamp).toLocaleTimeString('en-GB'),
-          severity: payload.data?.severity ? payload.data.severity.toLowerCase() : 'normal',
+          severity: mapSeverity(payload.data?.severity),
           message: payload.data?.message || 'Unknown event',
           camera: payload.camera_id || 'CAM',
           acknowledged: false,
