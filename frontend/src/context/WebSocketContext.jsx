@@ -1,17 +1,184 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL, getWsUrl } from '../config'
 import { useSceneContext } from './SceneContext'
 
 const WebSocketContext = createContext(null)
 
+const initialState = {
+  alerts: [],
+  sessionEvents: [], // accumulated events for active MP4 session
+  currentDetection: {
+    label: 'unknown',
+    confidence: 0.0,
+    scene_tag: 'unknown',
+    scene_confidence: 0.0,
+    bboxes: []
+  }
+}
+
+const eventReducer = (state, action) => {
+  switch (action.type) {
+    case 'PROCESS_EVENT': {
+      const payload = action.payload
+      if (!payload || !payload.event_type) return state
+
+      let nextDetection = { ...state.currentDetection }
+      let newAlerts = [...state.alerts]
+      let newSessionEvents = [...state.sessionEvents]
+
+      if (payload.event_type === 'ALERT') {
+        const alertData = payload.data
+        const newAlert = {
+          id: payload.event_id,
+          timestamp: payload.timestamp,
+          time: new Date(payload.timestamp).toLocaleTimeString('en-GB'),
+          severity: alertData?.severity ? alertData.severity.toLowerCase() : 'normal',
+          message: alertData?.message || 'Unknown event',
+          camera: payload.camera_id || 'CAM',
+          acknowledged: false,
+          session_id: payload.session_id || null,
+        }
+
+        if (!newAlerts.some(a => a.id === newAlert.id)) {
+          newAlerts = [newAlert, ...newAlerts]
+          newAlerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        }
+
+        if (alertData?.action_event) {
+          const ae = alertData.action_event
+          nextDetection = {
+            label: ae.label || 'unknown',
+            confidence: ae.confidence || 0.0,
+            scene_tag: ae.context?.scene_tag || 'unknown',
+            scene_confidence: ae.context?.confidence || 0.0,
+            bboxes: ae.bboxes || [],
+            timestamp: payload.timestamp,
+            start_timestamp: ae.start_timestamp,
+            end_timestamp: ae.end_timestamp,
+            start_frame_index: ae.start_frame_index,
+            end_frame_index: ae.end_frame_index,
+          }
+
+          if (payload.session_id) {
+            const sessEvent = {
+              event_id: payload.event_id,
+              event_type: 'ALERT',
+              ...ae
+            }
+            if (!newSessionEvents.some(e => e.event_id === sessEvent.event_id)) {
+              newSessionEvents = [...newSessionEvents, sessEvent]
+            }
+          }
+        }
+      } else if (payload.event_type === 'DETECTION') {
+        const detectionData = payload.data
+        nextDetection = {
+          label: detectionData?.label || 'unknown',
+          confidence: detectionData?.confidence || 0.0,
+          scene_tag: detectionData?.context?.scene_tag || 'unknown',
+          scene_confidence: detectionData?.context?.confidence || 0.0,
+          bboxes: detectionData?.bboxes || [],
+          timestamp: payload.timestamp,
+          start_timestamp: detectionData?.start_timestamp,
+          end_timestamp: detectionData?.end_timestamp,
+          start_frame_index: detectionData?.start_frame_index,
+          end_frame_index: detectionData?.end_frame_index,
+        }
+
+        if (payload.session_id) {
+          const sessEvent = {
+            event_id: payload.event_id,
+            event_type: 'DETECTION',
+            ...detectionData
+          }
+          if (!newSessionEvents.some(e => e.event_id === sessEvent.event_id)) {
+            newSessionEvents = [...newSessionEvents, sessEvent]
+          }
+        }
+      }
+
+      return {
+        ...state,
+        alerts: newAlerts,
+        sessionEvents: newSessionEvents,
+        currentDetection: nextDetection,
+      }
+    }
+
+    case 'SET_ALERTS': {
+      return {
+        ...state,
+        alerts: action.payload,
+      }
+    }
+
+    case 'ACKNOWLEDGE_ALERT': {
+      return {
+        ...state,
+        alerts: state.alerts.map(a => a.id === action.payload ? { ...a, acknowledged: true } : a),
+      }
+    }
+
+    case 'CLEAR_ALERTS': {
+      return {
+        ...state,
+        alerts: [],
+        sessionEvents: [],
+        currentDetection: {
+          label: 'unknown',
+          confidence: 0.0,
+          scene_tag: 'unknown',
+          scene_confidence: 0.0,
+          bboxes: []
+        }
+      }
+    }
+
+    case 'SET_SESSION_EVENTS': {
+      return {
+        ...state,
+        sessionEvents: action.payload,
+      }
+    }
+
+    case 'RESET_DETECTION': {
+      return {
+        ...state,
+        currentDetection: {
+          label: 'unknown',
+          confidence: 0.0,
+          scene_tag: 'unknown',
+          scene_confidence: 0.0,
+          bboxes: []
+        }
+      }
+    }
+
+    default:
+      return state
+  }
+}
+
 export function WebSocketProvider({ children }) {
   const { setBackendContext } = useSceneContext()
   const [connectionStatus, setConnectionStatus] = useState('disconnected') // 'connected' | 'connecting' | 'disconnected'
-  const [alerts, setAlerts] = useState([])
+  const [state, dispatch] = useReducer(eventReducer, initialState)
   const socketRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
-  const reconnectDelayRef = useRef(1000) // Start reconnect delay at 1 second
+  const reconnectDelayRef = useRef(1000)
+
+  // Sync SceneContext with latest currentDetection scene tag & confidence
+  const currentSceneTag = state.currentDetection.scene_tag
+  const currentSceneConfidence = state.currentDetection.scene_confidence
+  useEffect(() => {
+    if (currentSceneTag) {
+      setBackendContext({
+        scene_tag: currentSceneTag,
+        confidence: currentSceneConfidence,
+      })
+    }
+  }, [currentSceneTag, currentSceneConfidence, setBackendContext])
 
   // Fetch initial event/alert history from REST API
   const fetchHistory = async () => {
@@ -19,31 +186,19 @@ export function WebSocketProvider({ children }) {
       const response = await fetch(`${API_BASE_URL}/api/events/?event_type=ALERT&limit=100`)
       if (response.ok) {
         const data = await response.json()
-        // Map backend EventPayload format to UI alert object format
         const mappedAlerts = data.map(payload => ({
           id: payload.event_id,
-          timestamp: payload.timestamp, // Store original ISO timestamp string
+          timestamp: payload.timestamp,
           time: new Date(payload.timestamp).toLocaleTimeString('en-GB'),
           severity: payload.data?.severity ? payload.data.severity.toLowerCase() : 'normal',
           message: payload.data?.message || 'Unknown event',
           camera: payload.camera_id || 'CAM',
           acknowledged: false,
+          session_id: payload.session_id || null,
         }))
         
-        // Merge with existing state, deduplicate, and sort by timestamp descending
-        setAlerts(prev => {
-          const combined = [...prev, ...mappedAlerts]
-          const unique = []
-          const seen = new Set()
-          for (const alert of combined) {
-            if (!seen.has(alert.id)) {
-              seen.add(alert.id)
-              unique.push(alert)
-            }
-          }
-          unique.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-          return unique
-        })
+        mappedAlerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        dispatch({ type: 'SET_ALERTS', payload: mappedAlerts })
       }
     } catch (err) {
       console.error('Failed to fetch historical alerts:', err)
@@ -51,7 +206,6 @@ export function WebSocketProvider({ children }) {
   }
 
   const connect = () => {
-    // Clear any existing connection and reconnect timers
     if (socketRef.current) {
       socketRef.current.onclose = null
       socketRef.current.onerror = null
@@ -73,50 +227,14 @@ export function WebSocketProvider({ children }) {
       ws.onopen = () => {
         console.log('WebSocket connection established')
         setConnectionStatus('connected')
-        reconnectDelayRef.current = 1000 // Reset reconnection delay on successful connection
-        fetchHistory() // Fetch history upon successful connection
+        reconnectDelayRef.current = 1000
+        fetchHistory()
       }
 
       ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data)
-          
-          // 1. Handle ALERT events
-          if (payload.event_type === 'ALERT') {
-            const newAlert = {
-              id: payload.event_id,
-              timestamp: payload.timestamp, // Store original ISO timestamp string
-              time: new Date(payload.timestamp).toLocaleTimeString('en-GB'),
-              severity: payload.data?.severity ? payload.data.severity.toLowerCase() : 'normal',
-              message: payload.data?.message || 'Unknown event',
-              camera: payload.camera_id || 'CAM',
-              acknowledged: false,
-            }
-            // Add and deduplicate
-            setAlerts(prev => {
-              if (prev.some(a => a.id === newAlert.id)) return prev
-              const combined = [newAlert, ...prev]
-              combined.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-              return combined
-            })
-
-            // Update Scene Context if alert payload contains context
-            if (payload.data?.action_event?.context) {
-              setBackendContext({
-                scene_tag: payload.data.action_event.context.scene_tag,
-                confidence: payload.data.action_event.context.confidence,
-              })
-            }
-          }
-          // 2. Handle DETECTION events
-          else if (payload.event_type === 'DETECTION') {
-            if (payload.data?.context) {
-              setBackendContext({
-                scene_tag: payload.data.context.scene_tag,
-                confidence: payload.data.context.confidence,
-              })
-            }
-          }
+          dispatch({ type: 'PROCESS_EVENT', payload })
         } catch (err) {
           console.error('Error parsing WebSocket message data:', err)
         }
@@ -127,9 +245,8 @@ export function WebSocketProvider({ children }) {
         setConnectionStatus('disconnected')
         socketRef.current = null
         
-        // Trigger auto-reconnect with exponential backoff
         const delay = reconnectDelayRef.current
-        reconnectDelayRef.current = Math.min(delay * 2, 30000) // Cap at 30 seconds
+        reconnectDelayRef.current = Math.min(delay * 2, 30000)
         
         console.log(`Reconnecting to WebSocket in ${delay}ms...`)
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -139,13 +256,12 @@ export function WebSocketProvider({ children }) {
 
       ws.onerror = (err) => {
         console.error('WebSocket encountered an error:', err)
-        ws.close() // Close triggers the onclose logic
+        ws.close()
       }
     } catch (err) {
       console.error('Failed to create WebSocket client:', err)
       setConnectionStatus('disconnected')
       
-      // Retry connection
       const delay = reconnectDelayRef.current
       reconnectDelayRef.current = Math.min(delay * 2, 30000)
       reconnectTimeoutRef.current = setTimeout(() => {
@@ -174,9 +290,11 @@ export function WebSocketProvider({ children }) {
 
   const value = {
     connectionStatus,
-    alerts,
-    setAlerts,
+    state,
+    dispatch,
     reconnect: connect,
+    alerts: state.alerts,
+    setAlerts: (payload) => dispatch({ type: 'SET_ALERTS', payload }),
   }
 
   return (
@@ -193,3 +311,4 @@ export function useWebSocket() {
   }
   return context
 }
+
