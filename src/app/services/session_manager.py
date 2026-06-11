@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Event
 from uuid import UUID, uuid4
 
@@ -19,6 +20,23 @@ from src.inference.runtime_logging import (
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_video_path(path: Path) -> Path:
+    """Resolve video path by checking if it exists directly or searching subdirectories."""
+    if path.is_file():
+        return path
+
+    # Check recursively in data/raw or data folders inside container
+    filename = path.name
+    search_roots = [Path("data/raw"), Path("data"), Path("/app/data/raw"), Path("/app/data")]
+    for root in search_roots:
+        if root.is_dir():
+            for found_path in root.rglob(filename):
+                if found_path.is_file():
+                    return found_path.resolve()
+
+    return path
 
 
 class SessionData:
@@ -62,6 +80,12 @@ class InferenceSessionManager:
 
     def create_session(self, request: SessionStartRequest) -> SessionResponse:
         """Create and start a new inference session."""
+        # Resolve the video path recursively if it doesn't exist at the given path
+        resolved_path = _resolve_video_path(request.video_path)
+        if not resolved_path.is_file():
+            raise ValueError(f"Video file not found: {request.video_path}")
+        request.video_path = resolved_path
+
         # Check for duplicates
         for existing_session in self._sessions.values():
             if existing_session.status in (SessionStatus.PENDING, SessionStatus.RUNNING):

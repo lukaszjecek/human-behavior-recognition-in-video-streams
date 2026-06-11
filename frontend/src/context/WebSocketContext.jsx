@@ -136,9 +136,25 @@ const eventReducer = (state, action) => {
     }
 
     case 'SET_SESSION_EVENTS': {
+      const flattened = (action.payload || []).map(payload => {
+        if (payload.event_type === 'ALERT') {
+          return {
+            event_id: payload.event_id,
+            event_type: 'ALERT',
+            ...payload.data?.action_event
+          }
+        } else if (payload.event_type === 'DETECTION') {
+          return {
+            event_id: payload.event_id,
+            event_type: 'DETECTION',
+            ...payload.data
+          }
+        }
+        return payload
+      })
       return {
         ...state,
-        sessionEvents: action.payload,
+        sessionEvents: flattened,
       }
     }
 

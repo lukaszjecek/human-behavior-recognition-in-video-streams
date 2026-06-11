@@ -17,7 +17,7 @@ export default function VideoPlayer() {
 
   // Inference Settings
   const [serverVideoPath, setServerVideoPath] = useState('data/raw/smoke_sample.mp4')
-  const [checkpointPath, setCheckpointPath] = useState('data/logs/checkpoints/dummy_checkpoint.pth')
+  const [checkpointPath, setCheckpointPath] = useState('data/logs/checkpoints/baseline_epoch_50.pth')
   const [configPath, setConfigPath] = useState('configs/data_pipeline.yml')
   const [device, setDevice] = useState('cpu')
 
@@ -314,6 +314,7 @@ export default function VideoPlayer() {
       const objectURL = URL.createObjectURL(file)
       setVideoSrc(objectURL)
       setFileName(file.name)
+      setServerVideoPath(`data/raw/${file.name}`)
       setIsPlaying(false)
     }
   }
@@ -466,10 +467,21 @@ export default function VideoPlayer() {
         // Find events corresponding to current playing timestamp
         const time = video.currentTime
         activeEvents = state.sessionEvents.filter(event => {
-          if (event.start_timestamp !== undefined && event.end_timestamp !== undefined) {
+          const hasRelativeTimestamps = 
+            event.start_timestamp !== undefined && 
+            event.end_timestamp !== undefined && 
+            event.start_timestamp < 100000;
+
+          if (hasRelativeTimestamps) {
             return time >= event.start_timestamp && time <= event.end_timestamp
           }
-          const fps = 30
+          let fps = 30
+          if (state.sessionEvents.length > 0 && video.duration) {
+            const maxFrame = Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
+            if (maxFrame > 0) {
+              fps = maxFrame / video.duration
+            }
+          }
           const frameIndex = Math.floor(time * fps)
           return frameIndex >= event.start_frame_index && frameIndex <= event.end_frame_index
         })
@@ -722,6 +734,21 @@ export default function VideoPlayer() {
                 )}
 
                 <div className="absolute bottom-3 right-3 flex gap-2">
+                  {(sessionStatus === 'idle' || sessionStatus === 'completed' || sessionStatus === 'failed' || sessionStatus === 'stopped') ? (
+                    <button
+                      onClick={startOfflineSession}
+                      className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors"
+                    >
+                      Start Session on Server
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopOfflineSession}
+                      className="px-2.5 py-1 text-xs font-mono rounded border border-red/45 bg-red/10 hover:bg-red text-white cursor-pointer transition-all animate-pulse"
+                    >
+                      Stop Running Session
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       const video = videoRef.current

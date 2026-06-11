@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
+from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, FilePath
 
 
@@ -20,7 +21,7 @@ class SessionStatus(str, Enum):
 class SessionStartRequest(BaseModel):
     """Payload for starting a new inference session."""
 
-    video_path: FilePath = Field(
+    video_path: Path = Field(
         ..., description="Absolute path to the input .mp4 video file."
     )
     checkpoint_path: FilePath = Field(
