@@ -163,6 +163,8 @@ const eventReducer = (state, action) => {
         }
         return payload
       })
+      // Sort chronologically by start_frame_index
+      flattened.sort((a, b) => (a.start_frame_index || 0) - (b.start_frame_index || 0))
       return {
         ...state,
         sessionEvents: flattened,
