@@ -12,7 +12,7 @@ export default function VideoPlayer() {
   // Inference Settings (Shared between players via props)
   const [checkpointPath, setCheckpointPath] = useState('data/logs/checkpoints/baseline_epoch_50.pth')
   const [configPath, setConfigPath] = useState('configs/data_pipeline.yml')
-  const [device, setDevice] = useState('auto')
+  const device = 'auto'
   const [serverVideoPath, setServerVideoPath] = useState('data/raw/smoke_sample.mp4')
 
   // Mode change handler to clean state transitions cleanly

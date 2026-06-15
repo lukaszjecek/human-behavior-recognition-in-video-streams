@@ -4,10 +4,8 @@ import { createContext, useContext, useState, useMemo } from 'react'
 const SceneContext = createContext(null)
 
 /**
- * SceneContextProvider maintains the global state for:
- * 1. Backend-provided context (simulated during video playback)
- * 2. Local manual overrides for demonstration/prototyping
- * 3. Unified effective context that active widgets should display
+ * SceneContextProvider maintains the global state for the
+ * backend-provided scene context telemetry.
  */
 export function SceneContextProvider({ children }) {
   const [backendContext, setBackendContext] = useState({
@@ -15,37 +13,10 @@ export function SceneContextProvider({ children }) {
     confidence: 0.0
   })
 
-  const [isOverrideEnabled, setIsOverrideEnabled] = useState(false)
-  const [overrideTag, setOverrideTag] = useState('indoor')
-  const [overrideConfidence, setOverrideConfidence] = useState(0.85)
-
-  // Resolve active state dynamically
-  const effectiveContext = useMemo(() => {
-    if (isOverrideEnabled) {
-      return {
-        scene_tag: overrideTag,
-        confidence: overrideConfidence,
-        isOverride: true
-      }
-    }
-    return {
-      scene_tag: backendContext.scene_tag,
-      confidence: backendContext.confidence,
-      isOverride: false
-    }
-  }, [isOverrideEnabled, overrideTag, overrideConfidence, backendContext])
-
   const value = useMemo(() => ({
     backendContext,
-    setBackendContext,
-    isOverrideEnabled,
-    setIsOverrideEnabled,
-    overrideTag,
-    setOverrideTag,
-    overrideConfidence,
-    setOverrideConfidence,
-    effectiveContext
-  }), [backendContext, isOverrideEnabled, overrideTag, overrideConfidence, effectiveContext])
+    setBackendContext
+  }), [backendContext])
 
   return (
     <SceneContext.Provider value={value}>

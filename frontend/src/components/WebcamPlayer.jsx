@@ -161,6 +161,7 @@ export default function WebcamPlayer({ checkpointPath, configPath, device }) {
 
   // Cleanup on unmount
   useEffect(() => {
+    const videoNode = videoRef.current
     return () => {
       if (sendIntervalRef.current) {
         clearInterval(sendIntervalRef.current)
@@ -171,8 +172,8 @@ export default function WebcamPlayer({ checkpointPath, configPath, device }) {
         }
         webcamWsRef.current.close()
       }
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+      if (videoNode && videoNode.srcObject) {
+        videoNode.srcObject.getTracks().forEach(track => track.stop())
       }
     }
   }, [])

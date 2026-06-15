@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSceneContext } from '../context/SceneContext'
 import { useWebSocket } from '../context/WebSocketContext'
 import { API_BASE_URL } from '../config'
@@ -14,9 +14,9 @@ export default function FilePlayer({
   const { state, dispatch } = useWebSocket()
 
   const [videoSrc, setVideoSrc] = useState(null)
-  const [fileName, setFileName] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 })
+  const [videoDuration, setVideoDuration] = useState(0)
 
   // Offline Session state
   const [sessionId, setSessionId] = useState(null)
@@ -32,12 +32,8 @@ export default function FilePlayer({
   const lastTimeRef = useRef(-1)
   const autoPlayTriggeredRef = useRef(null)
 
-  // Pre-indexed events and FPS for fast O(1) lookup
-  const [eventsMap, setEventsMap] = useState(new Map())
-  const [videoFps, setVideoFps] = useState(30)
-
-  // Pre-index session events by frame index when events list changes
-  useEffect(() => {
+  // Pre-index session events by frame index when events list changes using useMemo for fast O(1) lookup
+  const eventsMap = useMemo(() => {
     const map = new Map()
     state.sessionEvents.forEach(event => {
       const start = event.start_frame_index || 0
@@ -49,20 +45,19 @@ export default function FilePlayer({
         map.get(f).push(event)
       }
     })
-    setEventsMap(map)
+    return map
   }, [state.sessionEvents])
 
-  // Calculate actual video FPS dynamically when events or video source changes
-  useEffect(() => {
-    if (sessionStatus === 'completed' && state.sessionEvents.length > 0 && videoRef.current?.duration) {
+  // Calculate actual video FPS dynamically when events or video source changes using useMemo
+  const videoFps = useMemo(() => {
+    if (sessionStatus === 'completed' && state.sessionEvents.length > 0 && videoDuration > 0) {
       const maxFrame = Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
       if (maxFrame > 0) {
-        setVideoFps(maxFrame / videoRef.current.duration)
+        return maxFrame / videoDuration
       }
-    } else {
-      setVideoFps(30)
     }
-  }, [state.sessionEvents, videoSrc, sessionStatus])
+    return 30
+  }, [state.sessionEvents, sessionStatus, videoDuration])
 
   async function fetchSessionEvents(sId) {
     try {
@@ -208,7 +203,7 @@ export default function FilePlayer({
       }
       const objectURL = URL.createObjectURL(file)
       setVideoSrc(objectURL)
-      setFileName(file.name)
+      setVideoDuration(0)
       const targetPath = `data/raw/${file.name}`
       setServerVideoPath(targetPath)
       setIsPlaying(false)
@@ -228,6 +223,7 @@ export default function FilePlayer({
       canvas.width = video.videoWidth || video.width || 640
       canvas.height = video.videoHeight || video.height || 480
       setVideoDimensions({ width: canvas.width, height: canvas.height })
+      setVideoDuration(video.duration || 0)
     }
   }
 
@@ -251,7 +247,6 @@ export default function FilePlayer({
       const W = canvas.width
       const H = canvas.height
 
-      let activeEvents = []
       let activeLabel = 'unknown'
       let activeConfidence = 0.0
       let activeSceneTag = 'unknown'
@@ -268,7 +263,7 @@ export default function FilePlayer({
         lastTimeRef.current = time
 
         const frameIndex = Math.floor(time * videoFps)
-        activeEvents = eventsMap.get(frameIndex) || []
+        const activeEvents = eventsMap.get(frameIndex) || []
 
         if (activeEvents.length > 0) {
           activeEvents.sort((a, b) => b.confidence - a.confidence)
@@ -324,7 +319,7 @@ export default function FilePlayer({
   const maxFrameProcessed = state.sessionEvents.length > 0
     ? Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
     : 0
-  const totalFrames = videoRef.current?.duration ? Math.round(videoRef.current.duration * videoFps) : 0
+  const totalFrames = videoDuration ? Math.round(videoDuration * videoFps) : 0
   const progressPercent = totalFrames > 0 ? Math.min(Math.round((maxFrameProcessed / totalFrames) * 100), 100) : 0
 
   // Scrub video to show the latest processed frame in real-time
