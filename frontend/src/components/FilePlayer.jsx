@@ -392,14 +392,7 @@ export default function FilePlayer({
             )}
 
             <div className="absolute bottom-3 right-3 flex gap-2">
-              {(sessionStatus === 'idle' || sessionStatus === 'completed' || sessionStatus === 'failed' || sessionStatus === 'stopped') ? (
-                <button
-                  onClick={startOfflineSession}
-                  className="px-2.5 py-1 text-xs font-mono rounded border border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors"
-                >
-                  Start Session on Server
-                </button>
-              ) : (
+              {(sessionStatus === 'running' || sessionStatus === 'pending') && (
                 <button
                   onClick={stopOfflineSession}
                   className="px-2.5 py-1 text-xs font-mono rounded border border-red/45 bg-red/10 hover:bg-red text-white cursor-pointer transition-all animate-pulse"
@@ -438,7 +431,7 @@ export default function FilePlayer({
                     : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors'
                 }`}
               >
-                Change Local File
+                Wybierz video
               </button>
             </div>
           </div>
@@ -456,14 +449,7 @@ export default function FilePlayer({
 
             <div className="flex flex-col gap-2 w-full">
               <div className="flex gap-2 justify-center">
-                {(sessionStatus === 'idle' || sessionStatus === 'completed' || sessionStatus === 'failed' || sessionStatus === 'stopped') ? (
-                  <button
-                    onClick={startOfflineSession}
-                    className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
-                  >
-                    Start Session on Server
-                  </button>
-                ) : (
+                {(sessionStatus === 'running' || sessionStatus === 'pending') && (
                   <button
                     onClick={stopOfflineSession}
                     className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-red/45 bg-red/10 hover:bg-red text-white cursor-pointer shadow transition-all animate-pulse"
@@ -476,7 +462,7 @@ export default function FilePlayer({
                   onClick={triggerFileInput}
                   className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
                 >
-                  Load Local Video File
+                  Wybierz video
                 </button>
               </div>
 

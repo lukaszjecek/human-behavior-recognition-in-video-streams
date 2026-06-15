@@ -19,7 +19,7 @@ export default function VideoPlayer() {
   function handleModeChange(newMode) {
     if (newMode === mode) return
     setMode(newMode)
-    dispatch({ type: 'CLEAR_ALERTS' })
+    dispatch({ type: 'RESET_DETECTION' })
   }
 
   return (

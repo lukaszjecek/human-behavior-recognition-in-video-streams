@@ -33,9 +33,9 @@ export default function ContextSettings({ isModal = false, open = false, onClose
 
   // Render the core scene context status
   const renderBody = () => (
-    <div className="panel-body flex flex-col p-4 gap-4 overflow-y-auto">
-      {/* 1. CURRENT ACTIVE STATUS SUMMARY CARD */}
-      <div className="p-4 rounded-xl border transition-all duration-300 flex flex-col gap-2 bg-green/5 border-green/25 shadow-[0_0_12px_rgba(52,211,153,0.06)]">
+    <div className="panel-body flex flex-col p-3 overflow-y-auto">
+      {/* CURRENT ACTIVE STATUS SUMMARY CARD */}
+      <div className="p-3 rounded-xl border transition-all duration-300 flex flex-col gap-2 bg-green/5 border-green/25 shadow-[0_0_12px_rgba(52,211,153,0.06)]">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-mono tracking-wider text-text-dim uppercase">
             Effective Scene Context
@@ -45,44 +45,23 @@ export default function ContextSettings({ isModal = false, open = false, onClose
           </span>
         </div>
 
-        <div className="flex items-center gap-3 mt-1.5">
-          <div className="flex flex-col min-w-0">
-            <h3 className="text-sm font-semibold text-text font-mono truncate leading-none">
-              {getContextLabel(backendContext.scene_tag)}
-            </h3>
-            <span className="text-xs text-text-dim font-mono mt-1">
-              Confidence: {(backendContext.confidence * 100).toFixed(1)}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. SYSTEM INFERENCE (SOURCE OF TRUTH) */}
-      <div className="p-3.5 rounded-xl border border-border bg-surface-alt/45 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono font-semibold tracking-wider text-text-dim uppercase flex items-center gap-1.5">
-            System Context Inference
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-semibold text-text">
-              {backendContext.scene_tag}
-            </span>
-          </div>
-          <span className="text-xs font-mono text-text-dim font-bold">
-            {(backendContext.confidence * 100).toFixed(1)}%
-          </span>
-        </div>
-
-        {/* Confidence progress bar */}
-        <div className="flex flex-col gap-1.5">
-          <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green rounded-full transition-all duration-300"
-              style={{ width: `${backendContext.confidence * 100}%` }}
-            />
+        <div className="flex items-center gap-3 mt-1">
+          <div className="flex flex-col min-w-0 w-full">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text font-mono truncate leading-none">
+                {getContextLabel(backendContext.scene_tag)}
+              </h3>
+              <span className="text-xs text-text-dim font-mono font-bold">
+                {(backendContext.confidence * 100).toFixed(1)}%
+              </span>
+            </div>
+            {/* Confidence progress bar */}
+            <div className="h-1.5 w-full bg-border rounded-full overflow-hidden mt-2">
+              <div
+                className="h-full bg-green rounded-full transition-all duration-300"
+                style={{ width: `${backendContext.confidence * 100}%` }}
+              />
+            </div>
           </div>
         </div>
       </div>

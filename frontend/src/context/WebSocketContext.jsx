@@ -144,6 +144,30 @@ const eventReducer = (state, action) => {
       }
     }
 
+    case 'CLEAR_TAB_ALERTS': {
+      const activeTab = action.payload // 'webcam' | 'file'
+      const remainingAlerts = state.alerts.filter(alert => {
+        const isWebcam = alert.camera === 'browser_camera'
+        return activeTab === 'webcam' ? !isWebcam : isWebcam
+      })
+      
+      const newSessionEvents = activeTab === 'file' ? [] : state.sessionEvents
+      const nextDetection = activeTab === 'webcam' ? {
+        label: 'unknown',
+        confidence: 0.0,
+        scene_tag: 'unknown',
+        scene_confidence: 0.0,
+        bboxes: []
+      } : state.currentDetection
+
+      return {
+        ...state,
+        alerts: remainingAlerts,
+        sessionEvents: newSessionEvents,
+        currentDetection: nextDetection,
+      }
+    }
+
     case 'SET_SESSION_EVENTS': {
       const flattened = (action.payload || []).map(payload => {
         if (payload.event_type === 'ALERT') {

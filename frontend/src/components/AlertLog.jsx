@@ -5,38 +5,47 @@ export default function AlertLog() {
   const { state, dispatch } = useWebSocket()
   const alerts = state.alerts
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('webcam') // 'webcam' | 'file'
 
   const handleAcknowledge = (id) => {
     dispatch({ type: 'ACKNOWLEDGE_ALERT', payload: id })
   }
 
   const handleClearAll = () => {
-    dispatch({ type: 'CLEAR_ALERTS' })
+    dispatch({ type: 'CLEAR_TAB_ALERTS', payload: activeTab })
   }
 
-  // Search alerts
-  const filteredAlerts = alerts.filter(alert => {
+  // Filter alerts by tab source
+  const tabAlerts = alerts.filter(alert => {
+    const isWebcam = alert.camera === 'browser_camera'
+    return activeTab === 'webcam' ? isWebcam : !isWebcam
+  })
+
+  // Search within tab alerts
+  const filteredAlerts = tabAlerts.filter(alert => {
     return alert.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
            alert.camera.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
-  const activeAlertsCount = alerts.filter(a => !a.acknowledged).length
+  const activeWebcamCount = alerts.filter(a => a.camera === 'browser_camera' && !a.acknowledged).length
+  const activeFileCount = alerts.filter(a => a.camera !== 'browser_camera' && !a.acknowledged).length
+  const currentTabActiveCount = activeTab === 'webcam' ? activeWebcamCount : activeFileCount
 
   return (
     <section className="panel flex flex-col" id="alert-log">
       <div className="panel-header flex items-center justify-between border-b border-border px-4 py-2.5">
         <h2 className="font-mono flex items-center gap-2 text-sm font-semibold">
-          <span className={`w-2 h-2 rounded-full ${activeAlertsCount > 0 ? 'bg-red animate-pulse' : 'bg-text-dim'}`} />
+          <span className={`w-2 h-2 rounded-full ${currentTabActiveCount > 0 ? 'bg-red animate-pulse' : 'bg-text-dim'}`} />
           Event Log
-          {activeAlertsCount > 0 && (
+          {currentTabActiveCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-surface-alt border border-border text-text">
-              {activeAlertsCount} active
+              {currentTabActiveCount} active
             </span>
           )}
         </h2>
 
         <div className="flex gap-2">
-          {alerts.length > 0 && (
+          {tabAlerts.length > 0 && (
             <button
               onClick={handleClearAll}
               className="px-2 py-1 text-[10px] font-mono rounded border border-border bg-surface-alt hover:bg-red hover:text-white cursor-pointer transition-colors"
@@ -45,6 +54,40 @@ export default function AlertLog() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Source Tab Selector */}
+      <div className="flex border-b border-border bg-surface-alt/10">
+        <button
+          onClick={() => setActiveTab('webcam')}
+          className={`flex-1 py-2 text-xs font-mono font-medium border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeTab === 'webcam'
+              ? 'border-red text-text bg-surface-alt/20 font-bold'
+              : 'border-transparent text-text-dim hover:text-text hover:bg-surface-alt/10'
+          }`}
+        >
+          Kamera Live
+          {activeWebcamCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded bg-red text-white text-[9px] font-bold font-mono animate-pulse">
+              {activeWebcamCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('file')}
+          className={`flex-1 py-2 text-xs font-mono font-medium border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeTab === 'file'
+              ? 'border-red text-text bg-surface-alt/20 font-bold'
+              : 'border-transparent text-text-dim hover:text-text hover:bg-surface-alt/10'
+          }`}
+        >
+          Pliki wideo
+          {activeFileCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded bg-red text-white text-[9px] font-bold font-mono animate-pulse">
+              {activeFileCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Control Area: Search Input */}
@@ -56,7 +99,7 @@ export default function AlertLog() {
           </svg>
           <input
             type="text"
-            placeholder="Search alerts or cameras..."
+            placeholder="Search alerts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -103,8 +146,8 @@ export default function AlertLog() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono px-1 py-0.2 bg-surface-alt border border-border rounded text-text-dim uppercase">
-                        {alert.camera}
+                      <span className="text-[9px] font-mono px-1 py-0.2 bg-surface-alt border border-border rounded text-text-dim uppercase max-w-[120px] truncate" title={alert.camera}>
+                        {alert.camera === 'browser_camera' ? 'Webcam' : alert.camera}
                       </span>
 
                       {!alert.acknowledged && (

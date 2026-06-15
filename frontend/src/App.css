@@ -67,7 +67,7 @@
 /* Right column: stack alert log + context settings */
 .sidebar {
   display: grid;
-  grid-template-rows: 1.3fr 1fr;
+  grid-template-rows: 1fr auto;
   gap: 12px;
   min-height: 0;
 }
