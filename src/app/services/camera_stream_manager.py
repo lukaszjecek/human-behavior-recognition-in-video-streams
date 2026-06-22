@@ -191,11 +191,28 @@ class CameraStreamSession:
                 "ContextModule failed to initialize for browser_camera session: %s", exc
             )
 
+        self.bbox_hook = None
+        if self.settings.bbox_enabled:
+            try:
+                from src.inference.bbox_detector import get_or_create_bbox_enricher
+
+                self.bbox_hook = get_or_create_bbox_enricher(
+                    model_name=self.settings.bbox_model_name,
+                    confidence_threshold=self.settings.bbox_confidence_threshold,
+                    weights_dir=self.settings.bbox_weights_dir,
+                    frame_selector=self.settings.bbox_frame_selector,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "BBoxEnricher failed to initialize for browser_camera session: %s", exc
+                )
+
         self.pipeline = InferenceEventPipeline(
             engine=self.engine,
             writer=self.writer,
             alert_processor=self.alert_sm,
             context_module=context_module,
+            bbox_hook=self.bbox_hook,
             camera_id="browser_camera",
             session_id=self.session_id,
             track_id=self.settings.default_track_id,

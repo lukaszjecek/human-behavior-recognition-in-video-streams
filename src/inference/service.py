@@ -149,6 +149,20 @@ def run_inference(
     except Exception as exc:
         logger.warning("ContextModule failed to initialize in run_inference: %s", exc)
 
+    bbox_hook = None
+    if settings.bbox_enabled:
+        try:
+            from src.inference.bbox_detector import get_or_create_bbox_enricher
+
+            bbox_hook = get_or_create_bbox_enricher(
+                model_name=settings.bbox_model_name,
+                confidence_threshold=settings.bbox_confidence_threshold,
+                weights_dir=settings.bbox_weights_dir,
+                frame_selector=settings.bbox_frame_selector,
+            )
+        except Exception as exc:
+            logger.warning("BBoxEnricher failed to initialize in run_inference: %s", exc)
+
     camera_id = None
     if request.video_path is not None:
         camera_id = str(request.video_path.name)
@@ -160,6 +174,7 @@ def run_inference(
         writer=writer,
         alert_processor=alert_sm,
         context_module=context_module,
+        bbox_hook=bbox_hook,
         camera_id=camera_id,
         session_id=uuid_session_id,
         track_id=settings.default_track_id,
