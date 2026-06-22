@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,7 +12,6 @@ from src.app.services.camera_stream_manager import CameraStreamSession
 from src.inference.pipeline import InferenceEventPipeline
 from src.inference.runtime import InferenceRuntimeSettings
 from src.models.dummy import DummyBehaviorModel
-
 
 # ---------------------------------------------------------------------------
 # Helpers & fixtures
@@ -44,7 +42,11 @@ def _make_dummy_model() -> torch.nn.Module:
 def camera_session_setup(monkeypatch, tmp_path):
     """Provide dummy file paths and patch infrastructure so CameraStreamSession can init."""
     config_path = tmp_path / "config.yml"
-    config_path.write_text(yaml.safe_dump({"pipeline": {"target_resolution": [64, 64], "temporal_window": 4}}))
+    config_path.write_text(
+        yaml.safe_dump(
+            {"pipeline": {"target_resolution": [64, 64], "temporal_window": 4}}
+            )
+    )
     checkpoint_path = tmp_path / "model.pth"
     checkpoint_path.write_bytes(b"dummy")
 
