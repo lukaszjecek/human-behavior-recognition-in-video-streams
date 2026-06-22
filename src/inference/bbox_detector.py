@@ -16,7 +16,9 @@ Conceptual flow::
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Protocol
 
 import numpy as np
@@ -75,16 +77,25 @@ class YoloObjectDetector:
         self,
         model_name: str = "yolov8n.pt",
         confidence_threshold: float = 0.4,
+        weights_dir: Optional[str] = None,
     ) -> None:
         """Initialize the YOLO detector.
 
         Args:
-            model_name: YOLO model identifier or path to a local weights file.
+            model_name: YOLO model identifier or filename of a local weights file.
             confidence_threshold: Minimum confidence score for a detection to be
                 included in results.  Must be in ``[0.0, 1.0]``.
+            weights_dir: Local directory containing pretrained weights.  When
+                provided, the detector loads ``{weights_dir}/{model_name}`` from
+                disk instead of allowing ultralytics to download weights at
+                runtime.  Use this for reproducible, network-independent
+                deployments.  When ``None``, falls back to ultralytics' default
+                resolution (local cache or download).
 
         Raises:
             ValueError: If ``confidence_threshold`` is outside ``[0.0, 1.0]``.
+            FileNotFoundError: If ``weights_dir`` is provided but the resolved
+                weights file does not exist.
             RuntimeError: If the ``ultralytics`` package is not installed.
         """
         if not 0.0 <= confidence_threshold <= 1.0:
@@ -100,11 +111,21 @@ class YoloObjectDetector:
                 "Install it with: pip install ultralytics"
             ) from exc
 
-        self._model = YOLO(model_name)
+        resolved_model: str = model_name
+        if weights_dir is not None:
+            weights_path = Path(weights_dir) / model_name
+            if not weights_path.exists():
+                raise FileNotFoundError(
+                    f"YOLO weights not found at {weights_path}. "
+                    f"Provide a valid weights_dir or omit it to allow download."
+                )
+            resolved_model = str(weights_path)
+
+        self._model = YOLO(resolved_model)
         self._confidence_threshold = float(confidence_threshold)
         logger.debug(
             "YoloObjectDetector initialised (model=%r confidence_threshold=%.2f)",
-            model_name,
+            resolved_model,
             self._confidence_threshold,
         )
 
@@ -269,10 +290,52 @@ class BBoxEnricher:
         return event.model_copy(update={"bboxes": bboxes})
 
 
+_bbox_enricher_cache: dict[tuple[str, float, Optional[str]], BBoxEnricher] = {}
+_bbox_enricher_cache_lock = threading.Lock()
+
+
+def get_or_create_bbox_enricher(
+    model_name: str = "yolov8n.pt",
+    confidence_threshold: float = 0.4,
+    weights_dir: Optional[str] = None,
+    frame_selector: str = "middle",
+) -> BBoxEnricher:
+    """Return a cached BBoxEnricher, creating one if not already cached.
+
+    Thread-safe.  Avoids reloading YOLO weights on every pipeline construction
+    (e.g. on every camera reconnect or new offline session).
+
+    Args:
+        model_name: YOLO model identifier or local weights filename.
+        confidence_threshold: Minimum detection confidence in ``[0.0, 1.0]``.
+        weights_dir: Local directory containing pretrained weights.  When
+            provided, weights are loaded from disk without network access.
+        frame_selector: Which frame from the inference window to run detection
+            on.  One of ``"first"``, ``"middle"``, or ``"last"``.
+
+    Returns:
+        A shared ``BBoxEnricher`` instance for the given configuration key.
+    """
+    key = (model_name, confidence_threshold, weights_dir)
+    with _bbox_enricher_cache_lock:
+        if key not in _bbox_enricher_cache:
+            detector = YoloObjectDetector(
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                weights_dir=weights_dir,
+            )
+            _bbox_enricher_cache[key] = BBoxEnricher(
+                detector=detector,
+                frame_selector=frame_selector,
+            )
+        return _bbox_enricher_cache[key]
+
+
 __all__ = [
     "ACTION_LABEL_TO_OBJECT_CLASSES",
     "BBoxEnricher",
     "ObjectDetector",
     "RawDetection",
     "YoloObjectDetector",
+    "get_or_create_bbox_enricher",
 ]

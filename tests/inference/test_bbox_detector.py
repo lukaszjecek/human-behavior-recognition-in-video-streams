@@ -10,6 +10,10 @@ Covers:
 - Integration: BBoxEnricher as bbox_hook= in InferenceEventPipeline
 - YoloObjectDetector: missing ultralytics raises RuntimeError
 - YoloObjectDetector: invalid confidence_threshold raises ValueError
+- YoloObjectDetector: weights_dir missing file raises FileNotFoundError
+- YoloObjectDetector: weights_dir=None falls back to default resolution (mocked)
+- get_or_create_bbox_enricher: caching (same key → same instance)
+- get_or_create_bbox_enricher: different keys → different instances
 """
 
 from __future__ import annotations
@@ -350,3 +354,81 @@ def test_yolo_detector_invalid_confidence_threshold_raises():
 
     with pytest.raises(ValueError, match="confidence_threshold"):
         YoloObjectDetector(confidence_threshold=-0.1)
+
+
+def test_yolo_detector_weights_dir_missing_file_raises(tmp_path):
+    with pytest.raises(FileNotFoundError, match="YOLO weights not found"):
+        YoloObjectDetector(
+            model_name="yolov8n.pt",
+            weights_dir=str(tmp_path),
+        )
+
+
+def test_yolo_detector_weights_dir_none_uses_default_resolution(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _FakeYOLO:
+        def __init__(self, name: str) -> None:
+            captured["name"] = name
+
+    import types
+
+    fake_mod = types.ModuleType("ultralytics")
+    fake_mod.YOLO = _FakeYOLO  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_mod)
+
+    detector = YoloObjectDetector(model_name="yolov8n.pt", weights_dir=None)
+    assert captured["name"] == "yolov8n.pt"
+    assert detector is not None
+
+
+# ---------------------------------------------------------------------------
+# get_or_create_bbox_enricher — caching
+# ---------------------------------------------------------------------------
+
+
+def test_get_or_create_bbox_enricher_returns_same_instance_for_same_key(monkeypatch):
+    import types
+
+    from src.inference import bbox_detector as _mod
+
+    fake_mod = types.ModuleType("ultralytics")
+
+    class _FakeYOLO:
+        def __init__(self, _name: str) -> None:
+            pass
+
+    fake_mod.YOLO = _FakeYOLO  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_mod)
+
+    # Reset the module-level cache so previous test runs don't interfere
+    monkeypatch.setattr(_mod, "_bbox_enricher_cache", {})
+
+    from src.inference.bbox_detector import get_or_create_bbox_enricher
+
+    a = get_or_create_bbox_enricher(model_name="yolov8n.pt", confidence_threshold=0.4)
+    b = get_or_create_bbox_enricher(model_name="yolov8n.pt", confidence_threshold=0.4)
+    assert a is b
+
+
+def test_get_or_create_bbox_enricher_different_keys_different_instances(monkeypatch):
+    import types
+
+    from src.inference import bbox_detector as _mod
+
+    fake_mod = types.ModuleType("ultralytics")
+
+    class _FakeYOLO:
+        def __init__(self, _name: str) -> None:
+            pass
+
+    fake_mod.YOLO = _FakeYOLO  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_mod)
+
+    monkeypatch.setattr(_mod, "_bbox_enricher_cache", {})
+
+    from src.inference.bbox_detector import get_or_create_bbox_enricher
+
+    a = get_or_create_bbox_enricher(model_name="yolov8n.pt", confidence_threshold=0.4)
+    b = get_or_create_bbox_enricher(model_name="yolov8s.pt", confidence_threshold=0.4)
+    assert a is not b
