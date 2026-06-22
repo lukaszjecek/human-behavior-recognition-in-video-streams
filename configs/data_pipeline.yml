@@ -24,3 +24,10 @@ splits:
   train: 0.7
   val: 0.15
   test: 0.15
+
+bbox:
+  enabled: false
+  model_name: yolov8n.pt
+  confidence_threshold: 0.4
+  weights_dir: null
+  frame_selector: middle
