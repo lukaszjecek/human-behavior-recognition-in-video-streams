@@ -251,6 +251,7 @@ export default function FilePlayer({
       let activeConfidence = 0.0
       let activeSceneTag = 'unknown'
       let activeSceneConfidence = 0.0
+      let activeBboxes = []
 
       if (video) {
         // Find events corresponding to current playing timestamp
@@ -269,6 +270,7 @@ export default function FilePlayer({
           activeEvents.sort((a, b) => b.confidence - a.confidence)
           activeLabel = activeEvents[0].label
           activeConfidence = activeEvents[0].confidence
+          activeBboxes = activeEvents[0].bboxes || []
           if (activeEvents[0].context) {
             activeSceneTag = activeEvents[0].context.scene_tag || 'unknown'
             activeSceneConfidence = activeEvents[0].context.confidence || 0.0
@@ -301,6 +303,103 @@ export default function FilePlayer({
         ctx.fillStyle = '#f05365'
         ctx.textBaseline = 'middle'
         ctx.fillText(bannerText, W / 2 - textWidth / 2, 21)
+      }
+
+      // Draw bounding boxes if present in payload
+      if (activeBboxes.length > 0) {
+        activeBboxes.forEach(box => {
+          let xMin = box.x_min
+          let yMin = box.y_min
+          let xMax = box.x_max
+          let yMax = box.y_max
+
+          if (xMin === undefined || yMin === undefined || xMax === undefined || yMax === undefined) {
+            return
+          }
+
+          const isNormalized = box.coordinate_space === 'normalized' ||
+            (!box.coordinate_space && xMin <= 1.0 && yMin <= 1.0 && xMax <= 1.0 && yMax <= 1.0)
+
+          if (isNormalized) {
+            xMin *= W
+            yMin *= H
+            xMax *= W
+            yMax *= H
+          } else {
+            const sw = box.source_width || 640
+            const sh = box.source_height || 480
+            xMin *= (W / sw)
+            yMin *= (H / sh)
+            xMax *= (W / sw)
+            yMax *= (H / sh)
+          }
+
+          // Draw translucent box fill
+          ctx.fillStyle = 'rgba(240, 83, 101, 0.08)'
+          ctx.fillRect(xMin, yMin, xMax - xMin, yMax - yMin)
+
+          // Draw thin box border
+          ctx.strokeStyle = 'rgba(240, 83, 101, 0.4)'
+          ctx.lineWidth = 1
+          ctx.strokeRect(xMin, yMin, xMax - xMin, yMax - yMin)
+
+          // Draw premium high-fidelity corner brackets
+          ctx.strokeStyle = '#f05365'
+          ctx.lineWidth = 2.5
+          const cornerLen = Math.min(12, (xMax - xMin) / 4, (yMax - yMin) / 4)
+
+          // Top-Left corner
+          ctx.beginPath()
+          ctx.moveTo(xMin + cornerLen, yMin)
+          ctx.lineTo(xMin, yMin)
+          ctx.lineTo(xMin, yMin + cornerLen)
+          ctx.stroke()
+
+          // Top-Right corner
+          ctx.beginPath()
+          ctx.moveTo(xMax - cornerLen, yMin)
+          ctx.lineTo(xMax, yMin)
+          ctx.lineTo(xMax, yMin + cornerLen)
+          ctx.stroke()
+
+          // Bottom-Left corner
+          ctx.beginPath()
+          ctx.moveTo(xMin + cornerLen, yMax)
+          ctx.lineTo(xMin, yMax)
+          ctx.lineTo(xMin, yMax - cornerLen)
+          ctx.stroke()
+
+          // Bottom-Right corner
+          ctx.beginPath()
+          ctx.moveTo(xMax - cornerLen, yMax)
+          ctx.lineTo(xMax, yMax)
+          ctx.lineTo(xMax, yMax - cornerLen)
+          ctx.stroke()
+
+          // Draw label badge on top-left of the bounding box
+          if (box.label) {
+            const confText = box.confidence !== undefined ? ` ${(box.confidence * 100).toFixed(0)}%` : ''
+            const labelText = `${box.label}${confText}`.toUpperCase()
+            
+            ctx.font = 'bold 9px "Fira Mono", ui-monospace, monospace'
+            const textMetrics = ctx.measureText(labelText)
+            const badgeW = textMetrics.width + 8
+            const badgeH = 14
+
+            // Position badge above box, or inside box top-left if there is no space above
+            const badgeX = xMin
+            const badgeY = yMin - badgeH >= 0 ? yMin - badgeH : yMin
+
+            ctx.fillStyle = 'rgba(240, 83, 101, 0.85)'
+            ctx.beginPath()
+            ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 2)
+            ctx.fill()
+
+            ctx.fillStyle = '#ffffff'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(labelText, badgeX + 4, badgeY + badgeH / 2)
+          }
+        })
       }
 
       animationFrameId.current = requestAnimationFrame(renderLoop)
