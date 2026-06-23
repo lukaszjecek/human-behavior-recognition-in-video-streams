@@ -35,9 +35,29 @@ export default function FilePlayer({
   // Pre-index session events by frame index when events list changes using useMemo for fast O(1) lookup
   const eventsMap = useMemo(() => {
     const map = new Map()
-    state.sessionEvents.forEach(event => {
-      const start = event.start_frame_index || 0
-      const end = event.end_frame_index || 0
+    const events = [...state.sessionEvents]
+    
+    // Sort events by start_frame_index to ensure chronological ordering
+    events.sort((a, b) => (a.start_frame_index || 0) - (b.start_frame_index || 0))
+
+    events.forEach((event, index) => {
+      let start = event.start_frame_index || 0
+      // Extend the very first event's start to 0 to avoid a brief blink at the beginning of the video
+      if (index === 0) {
+        start = 0
+      }
+      
+      let end = event.end_frame_index || 0
+      
+      // Look ahead to the next event to extend the current event's range and fill the stride gap
+      const nextEvent = events[index + 1]
+      if (nextEvent && typeof nextEvent.start_frame_index === 'number') {
+        end = Math.max(end, nextEvent.start_frame_index - 1)
+      } else {
+        // For the last event, extend by a default stride buffer (e.g. 32 frames)
+        end = end + 32
+      }
+
       for (let f = start; f <= end; f++) {
         if (!map.has(f)) {
           map.set(f, [])
