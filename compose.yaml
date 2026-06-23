@@ -119,13 +119,7 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+
 
 
 volumes:
