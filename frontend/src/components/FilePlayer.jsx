@@ -49,16 +49,26 @@ export default function FilePlayer({
     return map
   }, [state.sessionEvents])
 
-  // Calculate actual video FPS dynamically when events or video source changes using useMemo
-  const videoFps = useMemo(() => {
-    if (sessionStatus === 'completed' && state.sessionEvents.length > 0 && videoDuration > 0) {
-      const maxFrame = Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
-      if (maxFrame > 0) {
-        return maxFrame / videoDuration
+  // Calculate maxFrameProcessed safely using useMemo (avoiding spread operator call stack limits)
+  const maxFrameProcessed = useMemo(() => {
+    let max = 0
+    for (let i = 0; i < state.sessionEvents.length; i++) {
+      const end = state.sessionEvents[i].end_frame_index || 0
+      if (end > max) {
+        max = end
       }
     }
+    return max
+  }, [state.sessionEvents])
+
+  // Calculate actual video FPS dynamically when events or video source changes using useMemo
+  const videoFps = useMemo(() => {
+    if (sessionStatus === 'completed' && maxFrameProcessed > 0 && videoDuration > 0) {
+      return maxFrameProcessed / videoDuration
+    }
     return 30
-  }, [state.sessionEvents, sessionStatus, videoDuration])
+  }, [maxFrameProcessed, sessionStatus, videoDuration])
+
 
   async function fetchSessionEvents(sId) {
     try {
@@ -422,11 +432,13 @@ export default function FilePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoSrc, state.sessionEvents, eventsMap, videoFps, sessionStatus])
 
-  const maxFrameProcessed = state.sessionEvents.length > 0
-    ? Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
-    : 0
-  const totalFrames = videoDuration ? Math.round(videoDuration * videoFps) : 0
-  const progressPercent = totalFrames > 0 ? Math.min(Math.round((maxFrameProcessed / totalFrames) * 100), 100) : 0
+  const totalFrames = useMemo(() => {
+    return videoDuration ? Math.round(videoDuration * videoFps) : 0
+  }, [videoDuration, videoFps])
+
+  const progressPercent = useMemo(() => {
+    return totalFrames > 0 ? Math.min(Math.round((maxFrameProcessed / totalFrames) * 100), 100) : 0
+  }, [maxFrameProcessed, totalFrames])
 
   // Scrub video during analysis has been disabled to prevent browser OOM and decoder freezing on long videos.
 

@@ -69,11 +69,7 @@ export default function WebcamPlayer({ checkpointPath, configPath, device }) {
         scaleCtx.drawImage(video, 0, 0, scaleCanvas.width, scaleCanvas.height)
         scaleCanvas.toBlob((blob) => {
           if (blob && ws && ws.readyState === WebSocket.OPEN) {
-            blob.arrayBuffer().then((buf) => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(buf)
-              }
-            })
+            ws.send(blob)
           }
         }, 'image/jpeg', 0.8)
       }
