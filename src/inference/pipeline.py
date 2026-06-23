@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 _UNKNOWN_CONTEXT: ContextData | None = None
 
 # Type alias for the optional bbox enrichment hook supplied by issue #119.
-BBoxHook = Callable[[ActionEvent], ActionEvent]
+BBoxHook = Callable[[ActionEvent, InferenceResult], ActionEvent]
 
 # Protocols for injected components.
 class AlertProcessor(Protocol):
@@ -96,9 +96,11 @@ class InferenceEventPipeline:
     ----------------------------
     Pass a callable as ``bbox_hook`` to attach bounding boxes before an event
     is forwarded to the alert processor.  The hook receives the :class:`ActionEvent`
-    (with context already attached) and must return an :class:`ActionEvent`
-    (usually the same object with ``bboxes`` populated).  Issue #119 will
-    implement a concrete provider; this parameter is the stable integration point.
+    (with context already attached) **and** the :class:`~src.inference.engine.InferenceResult`
+    (providing raw video frames as ``result.window``) and must return an
+    :class:`ActionEvent` (usually the same object with ``bboxes`` populated).
+    :class:`~src.inference.bbox_detector.BBoxEnricher` is the concrete implementation
+    delivered by issue #119; this parameter is the stable integration point.
 
     Parameters
     ----------
@@ -119,8 +121,8 @@ class InferenceEventPipeline:
         How many inference windows to skip between context evaluations.
         Must be >= 1.  Defaults to ``5``.
     bbox_hook:
-        Optional callable ``(ActionEvent) -> ActionEvent`` invoked after context
-        enrichment and before alert processing.  Intended for issue #119.
+        Optional callable ``(ActionEvent, InferenceResult) -> ActionEvent`` invoked
+        after context enrichment and before alert processing.  Intended for issue #119.
     camera_id:
         Forwarded verbatim into every emitted ``EventPayload.camera_id``.
     session_id:
@@ -330,7 +332,7 @@ class InferenceEventPipeline:
         action_event = self._enrich_context(action_event, result)
 
         # ---- BBox hook (integration point for issue #119) ----
-        action_event = self._run_bbox_hook(action_event)
+        action_event = self._run_bbox_hook(action_event, result)
 
         # Save to writer's log for session accumulation
         self._writer.get_log().add_event(action_event)
@@ -480,7 +482,7 @@ class InferenceEventPipeline:
             )
             return _UNKNOWN_CONTEXT
 
-    def _run_bbox_hook(self, event: ActionEvent) -> ActionEvent:
+    def _run_bbox_hook(self, event: ActionEvent, result: InferenceResult) -> ActionEvent:
         """Run the optional bounding-box enrichment hook.
 
         This is the stable integration point for issue #119.  When no hook is
@@ -490,6 +492,9 @@ class InferenceEventPipeline:
         ----------
         event:
             ``ActionEvent`` to enrich with bounding boxes.
+        result:
+            ``InferenceResult`` passed through to the hook so it can access raw
+            video frames (``result.window``) for object detection.
 
         Returns:
         -------
@@ -500,7 +505,7 @@ class InferenceEventPipeline:
             return event
 
         try:
-            enriched = self._bbox_hook(event)
+            enriched = self._bbox_hook(event, result)
             if not isinstance(enriched, ActionEvent):
                 logger.warning(
                     "InferenceEventPipeline: bbox_hook returned %r instead of ActionEvent; "

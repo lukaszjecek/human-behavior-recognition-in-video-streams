@@ -26,6 +26,11 @@ class InferenceRuntimeSettings:
     persistence_threshold: int = 3
     resolve_threshold: int = 1
     danger_labels: Optional[list[str]] = None
+    bbox_enabled: bool = False
+    bbox_model_name: str = "yolov8n.pt"
+    bbox_confidence_threshold: float = 0.4
+    bbox_weights_dir: Optional[str] = None
+    bbox_frame_selector: str = "middle"
 
 
 class WindowModelAdapter:
@@ -99,6 +104,7 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
     inference_cfg = _ensure_mapping(raw_config.get("inference", {}), "inference")
     tracking_cfg = _ensure_mapping(raw_config.get("tracking", {}), "tracking")
     alert_cfg = _ensure_mapping(raw_config.get("alert", {}), "alert")
+    bbox_cfg = _ensure_mapping(raw_config.get("bbox", {}), "bbox")
 
     target_resolution = _parse_target_resolution(
         pipeline_cfg.get("target_resolution", (224, 224)),
@@ -131,6 +137,18 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
             if not isinstance(label, str) or not label.strip():
                 raise ValueError("alert.danger_labels must contain only non-empty strings")
 
+    bbox_enabled = _parse_bool(bbox_cfg.get("enabled", False), "bbox.enabled")
+    bbox_model_name = _parse_nonempty_str(
+        bbox_cfg.get("model_name", "yolov8n.pt"), "bbox.model_name"
+    )
+    bbox_confidence_threshold = _parse_unit_float(
+        bbox_cfg.get("confidence_threshold", 0.4), "bbox.confidence_threshold"
+    )
+    bbox_weights_dir = _parse_optional_str(bbox_cfg.get("weights_dir", None), "bbox.weights_dir")
+    bbox_frame_selector = _parse_frame_selector(
+        bbox_cfg.get("frame_selector", "middle"), "bbox.frame_selector"
+    )
+
     return InferenceRuntimeSettings(
         target_resolution=target_resolution,
         window_size=window_size,
@@ -141,6 +159,11 @@ def load_runtime_settings(config_path: Path) -> InferenceRuntimeSettings:
         persistence_threshold=persistence_threshold,
         resolve_threshold=resolve_threshold,
         danger_labels=danger_labels,
+        bbox_enabled=bbox_enabled,
+        bbox_model_name=bbox_model_name,
+        bbox_confidence_threshold=bbox_confidence_threshold,
+        bbox_weights_dir=bbox_weights_dir,
+        bbox_frame_selector=bbox_frame_selector,
     )
 
 
@@ -406,6 +429,50 @@ def _build_model(model_name: str, num_classes: int) -> torch.nn.Module:
     if model_name == "dummy":
         return DummyBehaviorModel(num_classes=num_classes)
     raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def _parse_bool(value: object, field_name: str) -> bool:
+    """Parse a boolean value, rejecting non-boolean types."""
+    if not isinstance(value, bool):
+        raise TypeError(f"{field_name} must be a boolean")
+    return value
+
+
+def _parse_nonempty_str(value: object, field_name: str) -> str:
+    """Parse a non-empty string value."""
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if not value.strip():
+        raise ValueError(f"{field_name} must not be empty")
+    return value
+
+
+def _parse_unit_float(value: object, field_name: str) -> float:
+    """Parse a float in [0.0, 1.0]."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise TypeError(f"{field_name} must be a number")
+    fval = float(value)
+    if not 0.0 <= fval <= 1.0:
+        raise ValueError(f"{field_name} must be in [0.0, 1.0], got {fval}")
+    return fval
+
+
+def _parse_optional_str(value: object, field_name: str) -> Optional[str]:
+    """Parse an optional string (None allowed)."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string or null")
+    return value
+
+
+def _parse_frame_selector(value: object, field_name: str) -> str:
+    """Parse frame selector — must be one of 'first', 'middle', 'last'."""
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if value not in {"first", "middle", "last"}:
+        raise ValueError(f"{field_name} must be one of: first, middle, last")
+    return value
 
 
 __all__ = [

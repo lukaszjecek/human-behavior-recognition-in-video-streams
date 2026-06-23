@@ -320,7 +320,7 @@ class TestBBoxHook:
         """Hook that returns the event with a bboxes list of length 1."""
         from src.app.schemas.action_event import BoundingBox
 
-        def hook(event: ActionEvent) -> ActionEvent:
+        def hook(event: ActionEvent, result) -> ActionEvent:
             bbox = BoundingBox(label=bbox_label, confidence=0.95)
             return event.model_copy(update={"bboxes": [bbox]})
 
@@ -339,7 +339,7 @@ class TestBBoxHook:
     def test_bbox_hook_exception_swallowed(self):
         """A crashing bbox_hook must not prevent DETECTION from being emitted."""
 
-        def bad_hook(event: ActionEvent) -> ActionEvent:
+        def bad_hook(event: ActionEvent, result) -> ActionEvent:
             raise RuntimeError("bbox model unavailable")
 
         pipeline = _make_pipeline(bbox_hook=bad_hook)
@@ -354,7 +354,7 @@ class TestBBoxHook:
     def test_bbox_hook_bad_return_type_ignored(self):
         """Hook returning non-ActionEvent must be silently ignored."""
 
-        def bad_hook(_event: ActionEvent):
+        def bad_hook(_event: ActionEvent, _result) -> object:
             return "not-an-action-event"
 
         pipeline = _make_pipeline(bbox_hook=bad_hook)
