@@ -9,7 +9,7 @@ pipeline:
   temporal_window: 16              
 
 inference:
-  stride: 1
+  stride: 16
   class_labels:
     - car_drops_off_person
     - car_makes_u_turn
@@ -26,8 +26,8 @@ splits:
   test: 0.15
 
 bbox:
-  enabled: false
+  enabled: true
   model_name: yolov8n.pt
-  confidence_threshold: 0.4
+  confidence_threshold: 0.1
   weights_dir: null
   frame_selector: middle

@@ -31,33 +31,14 @@ export default function FilePlayer({
   const lastReportedContext = useRef({ scene_tag: '', confidence: -1 })
   const lastTimeRef = useRef(-1)
   const autoPlayTriggeredRef = useRef(null)
+  const lastSeekTimeRef = useRef(0)
 
   // Pre-index session events by frame index when events list changes using useMemo for fast O(1) lookup
   const eventsMap = useMemo(() => {
     const map = new Map()
-    const events = [...state.sessionEvents]
-    
-    // Sort events by start_frame_index to ensure chronological ordering
-    events.sort((a, b) => (a.start_frame_index || 0) - (b.start_frame_index || 0))
-
-    events.forEach((event, index) => {
-      let start = event.start_frame_index || 0
-      // Extend the very first event's start to 0 to avoid a brief blink at the beginning of the video
-      if (index === 0) {
-        start = 0
-      }
-      
-      let end = event.end_frame_index || 0
-      
-      // Look ahead to the next event to extend the current event's range and fill the stride gap
-      const nextEvent = events[index + 1]
-      if (nextEvent && typeof nextEvent.start_frame_index === 'number') {
-        end = Math.max(end, nextEvent.start_frame_index - 1)
-      } else {
-        // For the last event, extend by a default stride buffer (e.g. 32 frames)
-        end = end + 32
-      }
-
+    state.sessionEvents.forEach(event => {
+      const start = event.start_frame_index || 0
+      const end = event.end_frame_index || 0
       for (let f = start; f <= end; f++) {
         if (!map.has(f)) {
           map.set(f, [])
@@ -267,6 +248,12 @@ export default function FilePlayer({
       const W = canvas.width
       const H = canvas.height
 
+      if (sessionStatus === 'running' || sessionStatus === 'pending') {
+        ctx.clearRect(0, 0, W, H)
+        animationFrameId.current = requestAnimationFrame(renderLoop)
+        return
+      }
+
       let activeLabel = 'unknown'
       let activeConfidence = 0.0
       let activeSceneTag = 'unknown'
@@ -400,7 +387,7 @@ export default function FilePlayer({
           if (box.label) {
             const confText = box.confidence !== undefined ? ` ${(box.confidence * 100).toFixed(0)}%` : ''
             const labelText = `${box.label}${confText}`.toUpperCase()
-            
+
             ctx.font = 'bold 9px "Fira Mono", ui-monospace, monospace'
             const textMetrics = ctx.measureText(labelText)
             const badgeW = textMetrics.width + 8
@@ -433,7 +420,7 @@ export default function FilePlayer({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoSrc, state.sessionEvents, eventsMap, videoFps])
+  }, [videoSrc, state.sessionEvents, eventsMap, videoFps, sessionStatus])
 
   const maxFrameProcessed = state.sessionEvents.length > 0
     ? Math.max(...state.sessionEvents.map(e => e.end_frame_index || 0))
@@ -441,12 +428,7 @@ export default function FilePlayer({
   const totalFrames = videoDuration ? Math.round(videoDuration * videoFps) : 0
   const progressPercent = totalFrames > 0 ? Math.min(Math.round((maxFrameProcessed / totalFrames) * 100), 100) : 0
 
-  // Scrub video to show the latest processed frame in real-time
-  useEffect(() => {
-    if ((sessionStatus === 'running' || sessionStatus === 'pending') && videoRef.current && videoFps > 0 && maxFrameProcessed > 0) {
-      videoRef.current.currentTime = maxFrameProcessed / videoFps
-    }
-  }, [maxFrameProcessed, sessionStatus, videoFps])
+  // Scrub video during analysis has been disabled to prevent browser OOM and decoder freezing on long videos.
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -533,22 +515,20 @@ export default function FilePlayer({
                     }
                   }
                 }}
-                className={`px-2.5 py-1 text-xs font-mono rounded border ${
-                  sessionStatus === 'running' || sessionStatus === 'pending'
-                    ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
-                    : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text flex items-center gap-1'
-                } transition-colors`}
+                className={`px-2.5 py-1 text-xs font-mono rounded border ${sessionStatus === 'running' || sessionStatus === 'pending'
+                  ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
+                  : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text flex items-center gap-1'
+                  } transition-colors`}
               >
                 {isPlaying ? 'Pause' : 'Play'}
               </button>
               <button
                 disabled={sessionStatus === 'running' || sessionStatus === 'pending'}
                 onClick={triggerFileInput}
-                className={`px-2.5 py-1 text-xs font-mono rounded border ${
-                  sessionStatus === 'running' || sessionStatus === 'pending'
-                    ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
-                    : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors'
-                }`}
+                className={`px-2.5 py-1 text-xs font-mono rounded border ${sessionStatus === 'running' || sessionStatus === 'pending'
+                  ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
+                  : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors'
+                  }`}
               >
                 Wybierz video
               </button>
