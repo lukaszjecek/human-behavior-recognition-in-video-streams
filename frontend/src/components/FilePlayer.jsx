@@ -31,7 +31,6 @@ export default function FilePlayer({
   const lastReportedContext = useRef({ scene_tag: '', confidence: -1 })
   const lastTimeRef = useRef(-1)
   const autoPlayTriggeredRef = useRef(null)
-  const lastSeekTimeRef = useRef(0)
 
   // Pre-index session events by frame index when events list changes using useMemo for fast O(1) lookup
   const eventsMap = useMemo(() => {
