@@ -169,7 +169,6 @@ class CameraStreamSession:
         )
 
         # 3. Create prediction pipeline engine
-        # Override stride to 1 for live camera stream to ensure real-time updates (updates on every received frame, 4 FPS -> co 250ms)
         self.engine = InferenceEngine(
             window_size=self.settings.window_size,
             stride=1,
