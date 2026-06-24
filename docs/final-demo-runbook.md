@@ -95,7 +95,7 @@ This verifies:
 - session creation through the REST API
 - in-process inference using a dummy checkpoint
 - WebSocket event streaming at `/ws/live`
-- event and alert persistence in PostgreSQL
+- event persistence in PostgreSQL
 - generated backend, inference, and audit logs under `data\logs`
 
 The dummy smoke path requires session completion, at least one persisted `DETECTION` event, and WebSocket event reception. `ALERT` events are optional for this path: the script prints a warning when no alert is produced, because alert generation depends on danger-label configuration and state-machine persistence.
