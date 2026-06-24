@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
+from src.app.core.settings import Settings
 from src.app.core.settings import settings
 from src.app.db.models import Base
 from src.app.db.repository import get_distinct_session_ids, get_event_by_id, get_events, save_event
@@ -45,9 +46,15 @@ def fixture_test_db():
 
 
 @pytest.fixture(name="client")
-def fixture_client(test_db):
+def fixture_client(test_db, tmp_path):
     """Provides a TestClient with overridden get_db dependency."""
-    app = create_app()
+    app = create_app(
+        Settings(
+            data_dir=tmp_path,
+            upload_dir=tmp_path / "uploads",
+            database_url="sqlite:///:memory:",
+        )
+    )
 
     def override_get_db():
         try:

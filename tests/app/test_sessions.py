@@ -8,13 +8,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
+from src.app.core.settings import Settings
 from src.app.schemas.session import SessionStatus
+from src.app.services.session_manager import manager
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     """Provides a TestClient with the configured FastAPI app."""
-    app = create_app()
+    manager._sessions.clear()
+    app = create_app(
+        Settings(
+            data_dir=tmp_path,
+            upload_dir=tmp_path / "uploads",
+            database_url="sqlite:///:memory:",
+        )
+    )
     return TestClient(app)
 
 

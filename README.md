@@ -17,6 +17,14 @@ Start all services (API, database, and inference):
 docker compose up --build
 ```
 
+For local inference with an NVIDIA GPU, use the optional Compose override:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up --build
+```
+
+CI uses only `compose.yaml`, so the default stack remains CPU-safe and does not require GPU access.
+
 On Windows PowerShell, create the folders manually if they do not already exist:
 
 ```powershell

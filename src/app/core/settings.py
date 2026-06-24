@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
 
     data_dir: Path = Field(Path("/app/data/raw"))
+    upload_dir: Path = Field(Path("/app/data/uploads"))
     log_dir: Path = Field(Path("/app/data/logs"))
 
     # Database configuration

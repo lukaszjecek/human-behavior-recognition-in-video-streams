@@ -20,7 +20,7 @@ export default function FilePlayer({
 
   // Offline Session state
   const [sessionId, setSessionId] = useState(null)
-  const [sessionStatus, setSessionStatus] = useState('idle') // 'idle', 'pending', 'running', 'completed', 'failed', 'stopped'
+  const [sessionStatus, setSessionStatus] = useState('idle') // 'idle', 'uploading', 'pending', 'running', 'completed', 'failed', 'stopped'
   const [statusMessage, setStatusMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -84,12 +84,49 @@ export default function FilePlayer({
   }
 
   // Offline MP4 Session controls
-  async function startOfflineSession(videoPathOverride) {
+  const isSessionBusy = sessionStatus === 'uploading' || sessionStatus === 'pending' || sessionStatus === 'running'
+
+  async function uploadVideoFile(file) {
+    if (!file.name.toLowerCase().endsWith('.mp4')) {
+      throw new Error('Only .mp4 files are supported for upload.')
+    }
+
+    setSessionStatus('uploading')
+    setStatusMessage('Uploading MP4 to backend...')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/api/videos/upload`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Upload failed with status ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async function startOfflineSession(videoSourceOverride) {
     setErrorMessage('')
     setSessionStatus('pending')
     setStatusMessage('Spawning background inference session on server...')
 
-    const targetVideoPath = (typeof videoPathOverride === 'string') ? videoPathOverride : serverVideoPath
+    const payload = {
+      checkpoint_path: checkpointPath,
+      config_path: configPath,
+      device: device
+    }
+
+    if (videoSourceOverride?.videoId) {
+      payload.video_id = videoSourceOverride.videoId
+    } else {
+      const targetVideoPath = (typeof videoSourceOverride === 'string') ? videoSourceOverride : serverVideoPath
+      payload.video_path = targetVideoPath
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
@@ -97,12 +134,7 @@ export default function FilePlayer({
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          video_path: targetVideoPath,
-          checkpoint_path: checkpointPath,
-          config_path: configPath,
-          device: device
-        })
+        body: JSON.stringify(payload)
       })
 
       if (!response.ok) {
@@ -205,20 +237,39 @@ export default function FilePlayer({
     }
   }, [sessionStatus, sessionId])
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
+      setErrorMessage('')
+      setStatusMessage('')
+
+      if (!file.name.toLowerCase().endsWith('.mp4')) {
+        setErrorMessage('Only .mp4 files are supported.')
+        setSessionStatus('failed')
+        e.target.value = ''
+        return
+      }
+
       if (videoSrc && videoSrc.startsWith('blob:')) {
         URL.revokeObjectURL(videoSrc)
       }
       const objectURL = URL.createObjectURL(file)
       setVideoSrc(objectURL)
       setVideoDuration(0)
-      const targetPath = `data/raw/${file.name}`
-      setServerVideoPath(targetPath)
       setIsPlaying(false)
-      // Auto-start background inference session on the server for this video file
-      startOfflineSession(targetPath)
+
+      try {
+        const upload = await uploadVideoFile(file)
+        setServerVideoPath(`uploaded:${upload.video_id}`)
+        setStatusMessage(`Upload complete. Starting session for ${upload.original_filename}.`)
+        await startOfflineSession({ videoId: upload.video_id })
+      } catch (err) {
+        console.error('Video upload/session start failed:', err)
+        setErrorMessage(err.message || 'Failed to upload and start video session.')
+        setSessionStatus('failed')
+      } finally {
+        e.target.value = ''
+      }
     }
   }
 
@@ -257,7 +308,7 @@ export default function FilePlayer({
       const W = canvas.width
       const H = canvas.height
 
-      if (sessionStatus === 'running' || sessionStatus === 'pending') {
+      if (sessionStatus === 'uploading' || sessionStatus === 'running' || sessionStatus === 'pending') {
         ctx.clearRect(0, 0, W, H)
         animationFrameId.current = requestAnimationFrame(renderLoop)
         return
@@ -455,7 +506,7 @@ export default function FilePlayer({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept="video/*"
+        accept="video/mp4,.mp4"
         className="hidden"
       />
 
@@ -479,19 +530,21 @@ export default function FilePlayer({
             />
 
             {/* SCI-FI SCANNING OVERLAY */}
-            {(sessionStatus === 'running' || sessionStatus === 'pending') && (
+            {isSessionBusy && (
               <div className="absolute inset-0 bg-black/65 backdrop-blur-xs flex flex-col items-center justify-center p-6 z-10 select-none">
                 <div className="w-10 h-10 rounded-full border-2 border-red border-t-transparent animate-spin mb-4" />
                 <h3 className="text-sm font-semibold text-text mb-1 font-mono tracking-wide uppercase">
-                  Analyzing Video...
+                  {sessionStatus === 'uploading' ? 'Uploading Video...' : 'Analyzing Video...'}
                 </h3>
                 <p className="text-xs text-text-dim mb-3 font-mono">
-                  Processed {maxFrameProcessed} / {totalFrames} frames ({progressPercent}%)
+                  {sessionStatus === 'uploading'
+                    ? 'Copying MP4 into backend storage'
+                    : `Processed ${maxFrameProcessed} / ${totalFrames} frames (${progressPercent}%)`}
                 </p>
                 <div className="w-64 h-1.5 bg-surface-alt border border-border rounded-full overflow-hidden">
                   <div
                     className="h-full bg-red transition-all duration-300"
-                    style={{ width: `${progressPercent}%` }}
+                    style={{ width: `${sessionStatus === 'uploading' ? 25 : progressPercent}%` }}
                   />
                 </div>
               </div>
@@ -513,7 +566,7 @@ export default function FilePlayer({
                 </button>
               )}
               <button
-                disabled={sessionStatus === 'running' || sessionStatus === 'pending'}
+                disabled={isSessionBusy}
                 onClick={() => {
                   const video = videoRef.current
                   if (video) {
@@ -526,7 +579,7 @@ export default function FilePlayer({
                     }
                   }
                 }}
-                className={`px-2.5 py-1 text-xs font-mono rounded border ${sessionStatus === 'running' || sessionStatus === 'pending'
+                className={`px-2.5 py-1 text-xs font-mono rounded border ${isSessionBusy
                   ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
                   : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text flex items-center gap-1'
                   } transition-colors`}
@@ -534,9 +587,9 @@ export default function FilePlayer({
                 {isPlaying ? 'Pause' : 'Play'}
               </button>
               <button
-                disabled={sessionStatus === 'running' || sessionStatus === 'pending'}
+                disabled={isSessionBusy}
                 onClick={triggerFileInput}
-                className={`px-2.5 py-1 text-xs font-mono rounded border ${sessionStatus === 'running' || sessionStatus === 'pending'
+                className={`px-2.5 py-1 text-xs font-mono rounded border ${isSessionBusy
                   ? 'border-border/40 bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
                   : 'border-border bg-surface-alt hover:bg-border cursor-pointer text-text transition-colors'
                   }`}
@@ -569,8 +622,13 @@ export default function FilePlayer({
                 )}
 
                 <button
+                  disabled={isSessionBusy}
                   onClick={triggerFileInput}
-                  className="px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border bg-surface-alt hover:bg-border cursor-pointer text-text shadow-sm hover:shadow transition-all"
+                  className={`px-4 py-2 text-xs font-mono font-medium rounded-lg border border-border shadow-sm hover:shadow transition-all ${
+                    isSessionBusy
+                      ? 'bg-surface-alt/40 text-text-dim/40 cursor-not-allowed'
+                      : 'bg-surface-alt hover:bg-border cursor-pointer text-text'
+                  }`}
                 >
                   Wybierz video
                 </button>

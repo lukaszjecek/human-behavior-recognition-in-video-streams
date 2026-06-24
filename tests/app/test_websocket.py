@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
+from src.app.core.settings import Settings
 from src.app.schemas.action_event import (
     ActionEvent,
     AlertData,
@@ -225,7 +226,13 @@ def test_websocket_end_to_end_integration(tmp_path) -> None:
     torch.save(checkpoint, checkpoint_path)
 
     # 4. Start the FastAPI app and test client
-    app = create_app()
+    app = create_app(
+        Settings(
+            data_dir=tmp_path,
+            upload_dir=tmp_path / "uploads",
+            database_url="sqlite:///:memory:",
+        )
+    )
     client = TestClient(app)
 
     # 5. Connect to the WebSocket stream

@@ -30,15 +30,17 @@ This is the primary demonstration path. It captures frames from the browser oper
 *   **Response Handling:** Detections (bounding boxes, classifications, scene context) are received on the same socket and updated inside the `WebSocketContext` state immediately for rendering.
 
 ### 2.2 MP4 Session Mode (`FilePlayer.jsx`)
-This is the secondary/fallback demonstration path. It runs an offline batch inference session on a server-visible video file and plays it back with synchronized bounding boxes.
+This is the secondary/fallback demonstration path. It uploads an operator-selected MP4 to backend storage, runs an offline batch inference session on that backend-visible copy, and plays the browser-local preview with synchronized bounding boxes.
 
-*   **Demo Videos Path:** Operates on files mounted to the backend container under `/app/data/demo_videos/` (physically located in `./data/demo_videos/` on the host).
+*   **Uploaded Videos Path:** Operator-selected MP4 files are sent to `POST /api/videos/upload` as multipart form data. The backend stores them under `/app/data/uploads/` using a generated UUID filename and returns a stable `video_id`.
+*   **Demo/Raw Videos Path:** Existing backend-visible demo or raw files can still be started by server path when they are mounted under the configured backend data directories.
 *   **Lifecycle API Integration:**
-    1.  Operator selects a file from the list or uploads one. The frontend resolves the safe name (e.g., `data/raw/sample.mp4`).
-    2.  Frontend triggers a session on the backend: `POST /api/sessions/` with paths to the video, checkpoint, and YAML configuration.
-    3.  Frontend displays a blurred scanning screen and progress bar (`Processed X / Y frames`) while polling `GET /api/sessions/{id}` at a 1-second interval.
-    4.  If the session is running or pending, video scrubbing, seeking, and drawing are disabled to protect the browser decoder from crashing.
-    5.  Upon successful completion (`completed`), the frontend triggers synchronized video playback from the beginning and fetches the generated events database entries: `GET /api/events/sessions/{id}`.
+    1.  Operator selects an `.mp4` file from their device. The frontend creates a browser object URL only for local preview.
+    2.  Frontend uploads the MP4 to `POST /api/videos/upload` using multipart field `file`.
+    3.  After upload succeeds, frontend triggers a session on the backend: `POST /api/sessions/` with the returned `video_id`, checkpoint path, and YAML configuration path.
+    4.  Frontend displays a blurred scanning screen and progress bar (`Processed X / Y frames`) while polling `GET /api/sessions/{id}` at a 1-second interval.
+    5.  If the session is running or pending, video scrubbing, seeking, and drawing are disabled to protect the browser decoder from crashing.
+    6.  Upon successful completion (`completed`), the frontend triggers synchronized video playback from the beginning and fetches the generated events database entries: `GET /api/events/sessions/{id}`.
 *   **Synchronized Overlay Render Loop:**
     *   To prevent flickering and $O(N)$ lookup delays on every frame render tick (which is extremely slow for long videos), the session events are pre-indexed into a `Map` using `useMemo`:
         $$\text{Frame Index} \rightarrow \text{Array of active ActionEvents}$$
@@ -131,12 +133,12 @@ Vite dev server proxies traffic to avoid CORS issues. This is configured in `vit
 ### 7.3 Running Offline Video Inference (MP4 Session)
 1. Select the **MP4 Session** tab in the main player view.
 2. Click **Wybierz video** and select an `.mp4` file from your device.
-   *   *Note:* The selected file must be located in/copied to the server's input directory (by default `./data/raw/` on the host, mapped to `/app/data/raw/` in the container) with the matching filename.
-3. The dashboard will automatically trigger a background analysis session on the backend.
-4. A scanning overlay will appear displaying `Analyzing Video...` along with a progress bar and the current frame count status.
-5. You can abort the processing at any time by clicking **Stop Running Session**.
-6. When the server completes the analysis, the overlay clears, and the wideo starts playing automatically from the beginning.
-7. Bounding boxes and behavior labels will display in real-time sync with the video timeline. You can use the **Play/Pause** button to control playback.
+3. The dashboard uploads the selected MP4 to the backend first. Browser-local file paths are not sent to the backend and are not expected to be readable by the backend container.
+4. After the upload succeeds, the dashboard automatically starts a background analysis session using the returned `video_id`.
+5. A scanning overlay will appear displaying `Analyzing Video...` along with a progress bar and the current frame count status.
+6. You can abort the processing at any time by clicking **Stop Running Session**.
+7. When the server completes the analysis, the overlay clears, and the video starts playing automatically from the beginning.
+8. Bounding boxes and behavior labels will display in real-time sync with the video timeline. You can use the **Play/Pause** button to control playback.
 
 ### 7.4 Handling Alarms & Scene Context
 *   **Acknowledge Alarms:** Review generated events in the **Live Event Log** sidebar. Click the **ACK** button on any critical alert to mark it as read and acknowledge the event.

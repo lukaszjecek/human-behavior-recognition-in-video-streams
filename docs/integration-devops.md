@@ -202,6 +202,16 @@ docker compose up --build
 docker compose up -d --build
 ```
 
+#### Optional NVIDIA GPU Override
+
+For local inference on an NVIDIA GPU, layer the GPU override on top of the CPU-safe base Compose file:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up --build
+```
+
+The override sets `INFERENCE_DEVICE=cuda`, NVIDIA runtime environment variables, and Docker Compose GPU device reservations for the inference-capable services. CI continues to use only `compose.yaml`, so no GPU is required for automated checks.
+
 #### Development Workflow
 
 ```bash

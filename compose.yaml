@@ -47,6 +47,7 @@ services:
     volumes:
       - ./:/app
       - ./data/raw:/app/data/raw
+      - ./data/uploads:/app/data/uploads
       - ./data/logs:/app/data/logs
     ports:
       - "${PORT:-8000}:${PORT:-8000}"
