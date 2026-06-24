@@ -118,6 +118,20 @@ docker compose exec api python scripts/integration_smoke_test.py
 
 This script will dynamically create all necessary dummy weights and videos, run the inference session, listen via WebSockets for events, and confirm database persistence. For more details, see [Integration and DevOps](docs/integration-devops.md#sprint-3-integration-smoke-path).
 
+## Final Demo Runbook
+
+For final demo setup, infrastructure smoke verification, and MP4 fallback inference, see the [Final Demo Runbook](docs/final-demo-runbook.md).
+
+```powershell
+.\scripts\final_demo_smoke.ps1
+
+.\scripts\run_mp4_inference.ps1 `
+  -Input data\raw\<video>.mp4 `
+  -Checkpoint data\logs\checkpoints\<checkpoint>.pth
+```
+
+The smoke helper uses the existing dummy checkpoint path to verify the stack. Repeat MP4 inference with the final checkpoint after issue #130 publishes it.
+
 ### Configuration
 
 Backend configuration is managed through environment variables in `src/app/core/settings.py`:
@@ -175,6 +189,7 @@ Inference mode requires `--input` and `--checkpoint` together. Without these arg
 - [Backend](docs/backend.md)
 - [Frontend](docs/frontend.md)
 - [Integration and DevOps](docs/integration-devops.md)
+- [Final Demo Runbook](docs/final-demo-runbook.md)
 - [Contributing](docs/contributing.md)
 - [CI Workflows](docs/ci-workflows.md)
 
