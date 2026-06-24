@@ -286,3 +286,83 @@ def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_vid
     # Since tracking config has default_track_id: 1, both should have it properly attached.
     assert mp4_action_event.track_id == 1
     assert camera_action_event.track_id == 1
+
+
+def test_context_fallback_behavior_unknown(client, pipeline_assets, dummy_video, tmp_path):
+    """
+    Step 3: Test context fallback behavior.
+    Verifies that when context is unavailable (no explicit integration), both 
+    MP4 and Camera pipelines fallback correctly to 'unknown' scene tag.
+    """
+    ckpt_path, config_path = pipeline_assets
+    session_id = uuid.uuid4()
+    
+    # --- Check MP4 ---
+    output_path = tmp_path / "actions.json"
+    request = InferenceCliRequest(
+        input_path=dummy_video,
+        checkpoint_path=ckpt_path,
+        config_path=config_path,
+        output_path=output_path,
+        device="cpu"
+    )
+    run_mp4_to_json_action_inference(request)
+    mp4_data = json.loads(output_path.read_text(encoding="utf-8"))
+    mp4_event = ActionEvent(**mp4_data["events"][0])
+    
+    assert mp4_event.context is not None, "Context should be attached to MP4 events"
+    assert mp4_event.context.scene_tag == "unknown", "MP4 Context should fallback to 'unknown'"
+    assert mp4_event.context.confidence == 0.0
+
+    # --- Check Camera ---
+    with client.websocket_connect("/api/websocket/camera") as ws:
+        init_payload = {
+            "checkpoint_path": str(ckpt_path),
+            "config_path": str(config_path),
+            "session_id": str(session_id),
+        }
+        ws.send_json(init_payload)
+        ws.receive_json()
+
+        frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        _, jpeg_bytes = cv2.imencode(".jpg", frame)
+        raw_bytes = jpeg_bytes.tobytes()
+
+        for _ in range(4):
+            ws.send_bytes(raw_bytes)
+
+        det_msg = ws.receive_json()
+        camera_event = ActionEvent(**det_msg["data"])
+        
+        ws.send_text("stop")
+        ws.receive_json()
+
+    assert camera_event.context is not None, "Context should be attached to Camera events"
+    assert camera_event.context.scene_tag == "unknown", "Camera Context should fallback to 'unknown'"
+    assert camera_event.context.confidence == 0.0
+
+
+def test_bounding_boxes_presence(client, pipeline_assets, dummy_video, tmp_path):
+    """
+    Step 4: Test bounding boxes field presence.
+    Verifies that the bboxes field complies with the ActionEvent contract.
+    It should either be None or a valid list of BoundingBox objects, 
+    even when using a dummy model that doesn't explicitly emit spatial data.
+    """
+    ckpt_path, config_path = pipeline_assets
+    
+    output_path = tmp_path / "actions.json"
+    request = InferenceCliRequest(
+        input_path=dummy_video,
+        checkpoint_path=ckpt_path,
+        config_path=config_path,
+        output_path=output_path,
+        device="cpu"
+    )
+    run_mp4_to_json_action_inference(request)
+    mp4_data = json.loads(output_path.read_text(encoding="utf-8"))
+    mp4_event = ActionEvent(**mp4_data["events"][0])
+    
+    # We verify that bboxes is handled correctly according to schema.
+    # It must be None or a list.
+    assert mp4_event.bboxes is None or isinstance(mp4_event.bboxes, list), "bboxes field must match ActionEvent schema"

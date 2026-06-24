@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 # Sentinel returned by ContextModule.get_context() when context is unavailable.
-_UNKNOWN_CONTEXT: ContextData | None = None
+_UNKNOWN_CONTEXT: ContextData | None = ContextData(scene_tag="unknown", confidence=0.0)
 
 # Type alias for the optional bbox enrichment hook supplied by issue #119.
 BBoxHook = Callable[[ActionEvent, InferenceResult], ActionEvent]
