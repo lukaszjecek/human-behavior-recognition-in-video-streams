@@ -91,8 +91,8 @@ All three runs used the same MP4 input: `data/raw/car_makes_u_turn/0A2BF1E8-55E5
 
 | Run | Device/path | Frames | Inference windows | Events | Wall-clock duration | Approx processed FPS | Approx inference windows/s | Avg time/window | Notes |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Docker CPU smoke | CPU in Docker, default Compose | `369` | `23` | `23` | `35.728842 s` | `10.327791` | `0.643738` | `1.553428 s` | Includes current Docker/container initialization behavior, including MobileNet weight download during startup. This is not a final steady-state claim. |
-| Local Python CPU smoke | CPU in local `.venv` | `369` | `23` | `23` | `27.426661 s` | `13.454062` | `0.8386` | Not recorded | Not directly comparable with Docker because local Python used BBoxEnricher fallback behavior without `ultralytics` installed. |
-| Docker GPU smoke | CUDA in Docker with `compose.gpu.yaml` | `369` | `23` | `23` | `8.536578 s` | `43.225751` | `2.694288` | Not recorded | Use `43.225751` FPS as the main benchmark-script value. The internal runtime log showed about `3.612 s`, but runtime-only FPS is not the main result. |
+| Docker CPU smoke | CPU in Docker, default Compose | `369` | `23` | `23` | `35.162069 s` | `10.494263` | `0.654114` | `1.528786 s` | Non-final smoke measurement using `baseline_epoch_50.pth`. Includes Docker/container initialization and model startup behavior. |
+| Local Python CPU smoke | CPU in local `.venv` | `369` | `23` | `23` | `26.020006 s` | `14.181396` | `0.883935` | `1.131305 s` | Not directly comparable with Docker because local Python used BBoxEnricher fallback behavior without `ultralytics` installed. |
+| Docker GPU smoke | CUDA in Docker with `compose.gpu.yaml` | `369` | `23` | `23` | `11.127545 s` | `33.160954` | `2.066943` | `0.483806 s` | Non-final smoke measurement using `baseline_epoch_50.pth`. Confirms the Docker CUDA path works, but final performance must be re-measured after #130. |
 
 Final performance must be re-measured after issue #130 publishes the final checkpoint. Do not use these smoke measurements to claim that the project meets 15 FPS or <= 2 s end-to-end latency.
