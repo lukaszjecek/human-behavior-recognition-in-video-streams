@@ -11,11 +11,27 @@ pipeline:
 inference:
   stride: 1
   class_labels:
-    - car_drops_off_person
-    - car_makes_u_turn
-    - motorcycle_makes_u_turn
-    - motorcycle_turns_right
+    - hand_interacts_with_person_highfive
+    - person_holds_hand
+    - person_shakes_hand
+    - person_embraces_person
+    - person_abandons_package
+    - person_carries_heavy_object
+    - person_opens_facility_door
+    - person_closes_facility_door
     - person_sits_down
+    - person_stands_up
+    - person_picks_up_object
+    - person_puts_down_object
+    - person_enters_car
+    - person_exits_car
+    - person_steals_object
+    - person_steals_object_from_person
+    - person_talks_on_phone
+    - person_talks_to_person
+    - person_texts_on_phone
+    - person_interacts_with_laptop
+    - person_reads_document
 
 tracking:
   default_track_id: null
