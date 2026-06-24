@@ -1,19 +1,20 @@
+import json
 import uuid
+from unittest.mock import patch
+
 import cv2
 import numpy as np
 import pytest
 import torch
 import yaml
-import json
 from fastapi.testclient import TestClient
-
-from src.app.schemas.action_event import ActionEvent
-from src.inference.mp4_cli import InferenceCliRequest, run_mp4_to_json_action_inference
 
 from src.app.app import create_app
 from src.app.core.settings import settings
 from src.app.db.models import Base
 from src.app.db.session import get_db
+from src.app.schemas.action_event import ActionEvent
+from src.inference.mp4_cli import InferenceCliRequest, run_mp4_to_json_action_inference
 
 
 @pytest.fixture(name="test_db")
@@ -199,12 +200,12 @@ def test_streaming_sudden_disconnect(client, pipeline_assets):
         for _ in range(4):
             ws.send_bytes(raw_bytes)
             
-    # If the backend crashed due to disconnect, the next client request or app state might be compromised.
+    # If the backend crashed due to disconnect, the next request might be compromised.
     # We can verify the app is still alive by starting a new WS connection.
     with client.websocket_connect("/api/websocket/camera") as ws2:
         ws2.send_json(init_payload)
         status = ws2.receive_json()
-        assert status["status"] == "initialized", "Backend survived disconnect and allows new connections"
+        assert status["status"] == "initialized", "Backend survived and allows new connections"
 
 
 def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_video, tmp_path):
@@ -274,7 +275,7 @@ def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_vid
     
     required_keys = {"label", "confidence", "start_frame_index", "end_frame_index"}
     assert required_keys.issubset(mp4_keys), f"MP4 missing keys: {required_keys - mp4_keys}"
-    assert required_keys.issubset(camera_keys), f"Camera missing keys: {required_keys - camera_keys}"
+    assert required_keys.issubset(camera_keys), f"Cam missing keys: {required_keys - camera_keys}"
     
     # Additional assertions to ensure fields are of correct type and meaning
     assert isinstance(mp4_action_event.label, str)
@@ -338,7 +339,7 @@ def test_context_fallback_behavior_unknown(client, pipeline_assets, dummy_video,
         ws.receive_json()
 
     assert camera_event.context is not None, "Context should be attached to Camera events"
-    assert camera_event.context.scene_tag == "unknown", "Camera Context should fallback to 'unknown'"
+    assert camera_event.context.scene_tag == "unknown", "Camera Context falls back to 'unknown'"
     assert camera_event.context.confidence == 0.0
 
 
@@ -365,7 +366,7 @@ def test_bounding_boxes_presence(client, pipeline_assets, dummy_video, tmp_path)
     
     # We verify that bboxes is handled correctly according to schema.
     # It must be None or a list.
-    assert mp4_event.bboxes is None or isinstance(mp4_event.bboxes, list), "bboxes field must match ActionEvent schema"
+    assert mp4_event.bboxes is None or isinstance(mp4_event.bboxes, list), "must match schema"
 
 
 def test_mp4_double_inference_idempotency(pipeline_assets, dummy_video, tmp_path):
@@ -398,8 +399,6 @@ def test_mp4_double_inference_idempotency(pipeline_assets, dummy_video, tmp_path
     assert count1 == count2, "Event counts should be identical across independent runs"
     assert count1 > 0
 
-
-from unittest.mock import patch
 
 def test_context_fallback_on_module_exception(client, pipeline_assets):
     """

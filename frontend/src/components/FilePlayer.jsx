@@ -36,6 +36,7 @@ export default function FilePlayer({
   const eventsMap = useMemo(() => {
     const map = new Map()
     state.sessionEvents.forEach(event => {
+      if (sessionId && event.session_id && event.session_id !== sessionId) return;
       const start = event.start_frame_index || 0
       const end = event.end_frame_index || 0
       for (let f = start; f <= end; f++) {
@@ -46,19 +47,20 @@ export default function FilePlayer({
       }
     })
     return map
-  }, [state.sessionEvents])
+  }, [state.sessionEvents, sessionId])
 
   // Calculate maxFrameProcessed safely using useMemo (avoiding spread operator call stack limits)
   const maxFrameProcessed = useMemo(() => {
     let max = 0
     for (let i = 0; i < state.sessionEvents.length; i++) {
+      if (sessionId && state.sessionEvents[i].session_id && state.sessionEvents[i].session_id !== sessionId) continue;
       const end = state.sessionEvents[i].end_frame_index || 0
       if (end > max) {
         max = end
       }
     }
     return max
-  }, [state.sessionEvents])
+  }, [state.sessionEvents, sessionId])
 
   // Calculate actual video FPS dynamically when events or video source changes using useMemo
   const videoFps = useMemo(() => {

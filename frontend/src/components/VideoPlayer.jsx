@@ -104,13 +104,16 @@ export default function VideoPlayer() {
 
       {/* Render Subcomponents based on active mode */}
       <div className="flex-1 flex flex-col min-h-0">
-        {mode === 'webcam' ? (
+        {mode === 'webcam' && (
           <WebcamPlayer
             checkpointPath={checkpointPath}
             configPath={configPath}
             device={device}
           />
-        ) : (
+        )}
+        
+        {/* We keep FilePlayer mounted in the DOM to preserve its local state (upload progress, video url, etc) */}
+        <div className={`flex-1 flex-col min-h-0 ${mode === 'mp4' ? 'flex' : 'hidden'}`}>
           <FilePlayer
             checkpointPath={checkpointPath}
             configPath={configPath}
@@ -118,7 +121,7 @@ export default function VideoPlayer() {
             serverVideoPath={serverVideoPath}
             setServerVideoPath={setServerVideoPath}
           />
-        )}
+        </div>
       </div>
     </section>
   )
