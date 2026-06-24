@@ -132,6 +132,15 @@ For final demo setup, infrastructure smoke verification, and MP4 fallback infere
 
 The smoke helper uses the existing dummy checkpoint path to verify the stack. Repeat MP4 inference with the final checkpoint after issue #130 publishes it.
 
+## Performance Measurement
+
+For repeatable MP4 inference latency/FPS measurements, run the benchmark documented in [Performance Benchmark](docs/performance-benchmark.md). Re-run it with the final checkpoint after issue #130 publishes that checkpoint.
+
+```powershell
+.\scripts\benchmark_mp4_inference.ps1 -Input data\raw\<video>.mp4 -Checkpoint data\logs\checkpoints\<checkpoint>.pth -Device auto
+.\scripts\benchmark_mp4_inference.ps1 -Input data\raw\<video>.mp4 -Checkpoint data\logs\checkpoints\<checkpoint>.pth -Device cuda -Gpu
+```
+
 ### Configuration
 
 Backend configuration is managed through environment variables in `src/app/core/settings.py`:
@@ -190,6 +199,7 @@ Inference mode requires `--input` and `--checkpoint` together. Without these arg
 - [Frontend](docs/frontend.md)
 - [Integration and DevOps](docs/integration-devops.md)
 - [Final Demo Runbook](docs/final-demo-runbook.md)
+- [Performance Benchmark](docs/performance-benchmark.md)
 - [Contributing](docs/contributing.md)
 - [CI Workflows](docs/ci-workflows.md)
 
