@@ -84,9 +84,9 @@ def fixture_pipeline_assets(tmp_path):
 
 def test_streaming_emits_before_stop(client, pipeline_assets):
     """
-    Krok 1: Test braku oczekiwania na EOF.
-    Udowadnia, że kamera na żywo emituje zdarzenia (w tym alerty) w trakcie
-    aktywnego streamu, zanim klient wyśle 'stop' i zakończy połączenie.
+    Step 1: Test no expectation of EOF.
+    Proves that live camera emits events (including alerts) during an active stream,
+    before the client sends 'stop' and closes the connection.
     """
     ckpt_path, config_path = pipeline_assets
     session_id = uuid.uuid4()
@@ -138,17 +138,86 @@ def test_streaming_emits_before_stop(client, pipeline_assets):
         assert stop_resp["status"] == "stopped", "Stream should gracefully stop when instructed"
 
 
+def test_streaming_false_positive_prevention(client, pipeline_assets):
+    """
+    Step 1 Extension: Ensure that sending fewer frames than the temporal_window
+    does not prematurely trigger a DETECTION event.
+    """
+    ckpt_path, config_path = pipeline_assets
+    session_id = uuid.uuid4()
+
+    with client.websocket_connect("/api/websocket/camera") as ws:
+        init_payload = {
+            "checkpoint_path": str(ckpt_path),
+            "config_path": str(config_path),
+            "session_id": str(session_id),
+        }
+        ws.send_json(init_payload)
+        ws.receive_json()  # STATUS initialized
+
+        frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        _, jpeg_bytes = cv2.imencode(".jpg", frame)
+        raw_bytes = jpeg_bytes.tobytes()
+
+        # Send only 3 frames (window_size is 4)
+        for _ in range(3):
+            ws.send_bytes(raw_bytes)
+
+        # Send stop immediately
+        ws.send_text("stop")
+        
+        # The next message MUST be 'stopped' status. If we got a DETECTION here,
+        # it means it was emitted prematurely without waiting for full temporal window.
+        resp = ws.receive_json()
+        assert resp.get("message_type") == "STATUS", "Should be STATUS, not DETECTION"
+        assert resp.get("status") == "stopped"
+
+
+def test_streaming_sudden_disconnect(client, pipeline_assets):
+    """
+    Step 1 Extension: Ensure the backend handles a sudden client disconnect
+    gracefully without crashing.
+    """
+    ckpt_path, config_path = pipeline_assets
+    session_id = uuid.uuid4()
+
+    # Context manager handles the websocket lifecycle
+    with client.websocket_connect("/api/websocket/camera") as ws:
+        init_payload = {
+            "checkpoint_path": str(ckpt_path),
+            "config_path": str(config_path),
+            "session_id": str(session_id),
+        }
+        ws.send_json(init_payload)
+        ws.receive_json()  # STATUS initialized
+
+        frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        _, jpeg_bytes = cv2.imencode(".jpg", frame)
+        raw_bytes = jpeg_bytes.tobytes()
+
+        # Send frames but immediately disconnect (exit context manager)
+        for _ in range(4):
+            ws.send_bytes(raw_bytes)
+            
+    # If the backend crashed due to disconnect, the next client request or app state might be compromised.
+    # We can verify the app is still alive by starting a new WS connection.
+    with client.websocket_connect("/api/websocket/camera") as ws2:
+        ws2.send_json(init_payload)
+        status = ws2.receive_json()
+        assert status["status"] == "initialized", "Backend survived disconnect and allows new connections"
+
+
 def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_video, tmp_path):
     """
-    Krok 2: Test zgodności kontraktów MP4 i WebSockets.
-    Uruchamia inferencję na MP4 (z CLI) oraz przez kamerę na żywo (WebSockets).
-    Wyciąga payloady wygenerowanych zdarzeń i weryfikuje czy obydwa w pełni
-    używają tej samej struktury zadeklarowanej w ActionEvent.
+    Step 2: MP4 and WebSockets contract compatibility test.
+    Runs inference on MP4 (via CLI) and via live camera (WebSockets).
+    Extracts the generated event payloads and verifies that both fully
+    utilize the same structure declared in ActionEvent.
     """
     ckpt_path, config_path = pipeline_assets
     session_id = uuid.uuid4()
     
-    # --- ŚCIEŻKA 1: MP4 CLI ---
+    # --- PATH 1: MP4 CLI ---
     output_path = tmp_path / "actions.json"
     request = InferenceCliRequest(
         input_path=dummy_video,
@@ -164,12 +233,12 @@ def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_vid
     assert mp4_data["event_count"] > 0
     mp4_event_raw = mp4_data["events"][0]
     
-    # Weryfikacja kontraktu po stronie MP4
+    # Contract verification on MP4 side
     # Parse to ActionEvent to ensure schema compliance
     mp4_action_event = ActionEvent(**mp4_event_raw)
 
 
-    # --- ŚCIEŻKA 2: CAMERA WEBSOCKET ---
+    # --- PATH 2: CAMERA WEBSOCKET ---
     with client.websocket_connect("/api/websocket/camera") as ws:
         init_payload = {
             "checkpoint_path": str(ckpt_path),
@@ -191,15 +260,15 @@ def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_vid
         assert det_msg.get("event_type") == "DETECTION"
         camera_event_raw = det_msg["data"]
         
-        # Weryfikacja kontraktu po stronie Camery
+        # Contract verification on Camera side
         camera_action_event = ActionEvent(**camera_event_raw)
         
         ws.send_text("stop")
         ws.receive_json() # status stopped
 
-    # --- PORÓWNANIE KONTRAKTÓW ---
-    # Obie ścieżki (MP4 i Websocket) udało się zdeserializować do ActionEvent.
-    # Weryfikujemy, czy payloady JSON zawierają niezbędne, wspólne klucze bazowe.
+    # --- CONTRACT COMPARISON ---
+    # Both paths (MP4 and Websocket) were successfully deserialized into ActionEvent.
+    # We verify that JSON payloads contain necessary, shared baseline keys.
     mp4_keys = set(mp4_event_raw.keys())
     camera_keys = set(camera_event_raw.keys())
     
@@ -207,8 +276,13 @@ def test_mp4_and_camera_payload_compatibility(client, pipeline_assets, dummy_vid
     assert required_keys.issubset(mp4_keys), f"MP4 missing keys: {required_keys - mp4_keys}"
     assert required_keys.issubset(camera_keys), f"Camera missing keys: {required_keys - camera_keys}"
     
-    # Dodatkowe asercje dla pewności, że pola są poprawnego typu i znaczenia
+    # Additional assertions to ensure fields are of correct type and meaning
     assert isinstance(mp4_action_event.label, str)
     assert isinstance(camera_action_event.label, str)
     assert 0.0 <= mp4_action_event.confidence <= 1.0
     assert 0.0 <= camera_action_event.confidence <= 1.0
+
+    # Extended Checks: Tracking IDs
+    # Since tracking config has default_track_id: 1, both should have it properly attached.
+    assert mp4_action_event.track_id == 1
+    assert camera_action_event.track_id == 1
