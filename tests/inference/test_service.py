@@ -1,10 +1,12 @@
 from threading import Event
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 import torch
 import yaml
 
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.service import (
     InferenceServiceRequest,
     _build_request_source_adapter,
@@ -269,3 +271,102 @@ def test_run_offline_mp4_inference_animated_webp(monkeypatch, tmp_path):
     assert result.inference_count == 1
 
 
+# ---------------------------------------------------------------------------
+# bbox_hook wiring in run_inference()
+# ---------------------------------------------------------------------------
+
+
+def _write_inference_config_with_bbox(config_path, *, bbox_enabled: bool) -> None:
+    config = {
+        "pipeline": {"target_resolution": [64, 64], "temporal_window": 4},
+        "inference": {"stride": 2, "class_labels": ["idle", "moving"]},
+        "tracking": {"default_track_id": 1},
+        "bbox": {
+            "enabled": bbox_enabled,
+            "model_name": "yolov8n.pt",
+            "confidence_threshold": 0.4,
+            "frame_selector": "middle",
+        },
+    }
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+
+def _spy_pipeline_init(captured: dict):
+    """Return a patched InferenceEventPipeline.__init__ that records bbox_hook."""
+    _real_init = InferenceEventPipeline.__init__
+
+    def _patched(self, *args, **kwargs):
+        captured["bbox_hook"] = kwargs.get("bbox_hook")
+        _real_init(self, *args, **kwargs)
+
+    return _patched
+
+
+def test_run_inference_bbox_disabled_by_default(monkeypatch, dummy_video, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config(config_path)  # no bbox section → bbox_enabled defaults to False
+
+    captured: dict = {}
+    monkeypatch.setattr(InferenceEventPipeline, "__init__", _spy_pipeline_init(captured))
+
+    request = InferenceServiceRequest(
+        video_path=dummy_video,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+    run_inference(request)
+
+    assert captured.get("bbox_hook") is None
+
+
+def test_run_inference_bbox_enabled_wires_hook(monkeypatch, dummy_video, tmp_path):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config_with_bbox(config_path, bbox_enabled=True)
+
+    fake_enricher = MagicMock()
+    monkeypatch.setattr(
+        "src.inference.bbox_detector.get_or_create_bbox_enricher",
+        lambda **_kw: fake_enricher,
+    )
+
+    captured: dict = {}
+    monkeypatch.setattr(InferenceEventPipeline, "__init__", _spy_pipeline_init(captured))
+
+    request = InferenceServiceRequest(
+        video_path=dummy_video,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+    run_inference(request)
+
+    assert captured.get("bbox_hook") is fake_enricher
+
+
+def test_run_inference_bbox_initialization_failure_falls_back_to_none(
+    monkeypatch, dummy_video, tmp_path
+):
+    checkpoint_path = tmp_path / "dummy_checkpoint.pth"
+    config_path = tmp_path / "inference.yml"
+    _write_dummy_checkpoint(checkpoint_path)
+    _write_inference_config_with_bbox(config_path, bbox_enabled=True)
+
+    def _raise(**_kw):
+        raise RuntimeError("ultralytics not available")
+
+    monkeypatch.setattr("src.inference.bbox_detector.get_or_create_bbox_enricher", _raise)
+
+    captured: dict = {}
+    monkeypatch.setattr(InferenceEventPipeline, "__init__", _spy_pipeline_init(captured))
+
+    request = InferenceServiceRequest(
+        video_path=dummy_video,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+    run_inference(request)  # must not raise
+
+    assert captured.get("bbox_hook") is None

@@ -14,14 +14,14 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from src.app.db.repository import save_event
 from src.app.db.session import SessionLocal
-from src.app.schemas.action_event import AlertData, EventPayload, EventType
+from src.app.schemas.action_event import EventPayload
 from src.app.services.websocket_manager import websocket_manager
 from src.inference.alert_state_machine import AlertStateMachine
 from src.inference.engine import InferenceEngine
 from src.inference.json_writer import ActionEventWriter
+from src.inference.pipeline import InferenceEventPipeline
 from src.inference.runtime import (
     WindowModelAdapter,
-    expand_batched_inference_results,
     load_model_from_checkpoint,
     load_runtime_settings,
     resolve_inference_device,
@@ -181,6 +181,43 @@ class CameraStreamSession:
         )
         self.writer = ActionEventWriter(class_labels=self.settings.class_labels)
 
+        context_module = None
+        try:
+            from src.inference.context_adapter import ContextModule
+
+            context_module = ContextModule()
+        except Exception as exc:
+            logger.warning(
+                "ContextModule failed to initialize for browser_camera session: %s", exc
+            )
+
+        self.bbox_hook = None
+        if self.settings.bbox_enabled:
+            try:
+                from src.inference.bbox_detector import get_or_create_bbox_enricher
+
+                self.bbox_hook = get_or_create_bbox_enricher(
+                    model_name=self.settings.bbox_model_name,
+                    confidence_threshold=self.settings.bbox_confidence_threshold,
+                    weights_dir=self.settings.bbox_weights_dir,
+                    frame_selector=self.settings.bbox_frame_selector,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "BBoxEnricher failed to initialize for browser_camera session: %s", exc
+                )
+
+        self.pipeline = InferenceEventPipeline(
+            engine=self.engine,
+            writer=self.writer,
+            alert_processor=self.alert_sm,
+            context_module=context_module,
+            bbox_hook=self.bbox_hook,
+            camera_id="browser_camera",
+            session_id=self.session_id,
+            track_id=self.settings.default_track_id,
+        )
+
         self._current_events: list[EventPayload] = []
 
         log_event(
@@ -211,41 +248,10 @@ class CameraStreamSession:
         if frame_bgr is None:
             raise ValueError("Failed to decode binary frame bytes into BGR image.")
 
-        res = self.engine.process_frame(frame_bgr)
-        if res is not None:
-            expanded = expand_batched_inference_results([res])
-            for r in expanded:
-                tid = self.settings.default_track_id
-                added = self.writer.add_result(r, track_id=tid)
-                if added:
-                    evt = self.writer.get_log().events[-1]
-
-                    # 1. Detection payload
-                    detection_payload = EventPayload(
-                        event_type=EventType.DETECTION,
-                        data=evt,
-                        camera_id="browser_camera",
-                        session_id=self.session_id,
-                    )
-                    self._current_events.append(detection_payload)
-                    self._handle_event_outputs(detection_payload)
-
-                    # 2. Check state machine alerts
-                    alert_evt = self.alert_sm.process_event(evt)
-                    if alert_evt is not None:
-                        alert_data = AlertData(
-                            severity="HIGH",
-                            message=f"Alert triggered for label: {alert_evt.label}",
-                            action_event=alert_evt.triggering_event,
-                        )
-                        alert_payload = EventPayload(
-                            event_type=EventType.ALERT,
-                            data=alert_data,
-                            camera_id="browser_camera",
-                            session_id=self.session_id,
-                        )
-                        self._current_events.append(alert_payload)
-                        self._handle_event_outputs(alert_payload)
+        payloads = self.pipeline.push_frame(frame_bgr)
+        for payload in payloads:
+            self._current_events.append(payload)
+            self._handle_event_outputs(payload)
 
         return list(self._current_events)
 

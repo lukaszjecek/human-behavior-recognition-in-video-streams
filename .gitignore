@@ -183,5 +183,8 @@ compose.override.yaml
 
 /data
 
+# Model weights
+*.pt
+
 # for one person that uses macos <3
 .DS_Store
