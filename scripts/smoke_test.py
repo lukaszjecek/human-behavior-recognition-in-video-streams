@@ -1,7 +1,10 @@
+"""Run a small end-to-end data/model smoke test."""
+
 import argparse
-import time
 import sys
+import time
 from pathlib import Path
+
 import torch
 import yaml
 
@@ -9,7 +12,8 @@ from src.data.loader import get_dataloader
 from src.models.baseline import BaselineBehaviorModel
 
 
-def main():
+def main() -> None:
+    """Run a configurable number of batches through the baseline model."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/data_pipeline.yml")
     parser.add_argument("--batches", type=int, default=3, help="Number of batches to test")

@@ -7,8 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.app import create_app
-from src.app.core.settings import Settings
-from src.app.core.settings import settings
+from src.app.core.settings import Settings, settings
 from src.app.db.models import Base
 from src.app.db.repository import get_distinct_session_ids, get_event_by_id, get_events, save_event
 from src.app.db.session import get_db
