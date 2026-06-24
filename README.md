@@ -1,205 +1,114 @@
 # Human Behavior Recognition in Video Streams
 
-End-to-end software engineering project focused on human behavior recognition from video sequences, with emphasis on temporal modeling, reproducible data handling, modular inference logic, and containerized development.
+End-to-end human behavior recognition system for video streams and MP4 clips. The project combines a FastAPI backend, React operator dashboard, PostgreSQL event history, reusable inference pipeline, Docker Compose orchestration, and documentation for demo, benchmark, and module workflows.
+
+This documentation pass is a draft while issue #130 is still pending. The final checkpoint release link and final performance numbers are not available yet.
 
 ## Quick Start
 
-### Requirements
-- Docker
-- local clone of this repository
-- dataset subset in `./data/raw`
+Requirements:
 
-### Run
+- Docker Desktop or Docker Engine with Docker Compose
+- Local clone of this repository
+- Local data folders used by Compose
 
-Start all services (API, database, and inference):
+Create the expected local folders when starting from a clean clone:
+
+```powershell
+mkdir data\raw
+mkdir data\logs
+mkdir data\uploads
+mkdir data\subset
+mkdir data\logs\checkpoints
+```
+
+Start the CPU-safe stack:
 
 ```bash
 docker compose up --build
 ```
 
-For local inference with an NVIDIA GPU, use the optional Compose override:
+For local NVIDIA GPU testing, layer the optional override:
 
 ```bash
 docker compose -f compose.yaml -f compose.gpu.yaml up --build
 ```
 
-CI uses only `compose.yaml`, so the default stack remains CPU-safe and does not require GPU access.
+CI and the default local stack use `compose.yaml`, so GPU access is optional.
 
-On Windows PowerShell, create the folders manually if they do not already exist:
+## Local Services
 
-```powershell
-mkdir data\raw
-mkdir data\logs
-mkdir data\subset
-docker compose up --build
-```
+- [Frontend](http://localhost:5173)
+- [Swagger UI / OpenAPI docs](http://localhost:8000/docs)
+- [ReDoc API docs](http://localhost:8000/redoc)
+- [API health](http://localhost:8000/health)
 
-### Expected Output
+If `.env` overrides `PORT`, use that API port instead of `8000`.
 
-After startup, the services will initialize:
+## Documentation Index
 
-- **API Service** - FastAPI backend running on `http://localhost:8000`
-  - Health endpoint: `GET http://localhost:8000/health`
-  - API documentation: `http://localhost:8000/docs`
+- [Architecture](docs/architecture.md) - Compose topology, Mermaid diagram, API/WebSocket surface, demo paths, checkpoint status, and limitations.
+- [Final Demo Runbook](docs/final-demo-runbook.md) - Infrastructure smoke verification and final MP4 fallback runbook.
+- [Performance Benchmark](docs/performance-benchmark.md) - Repeatable MP4 benchmark path and current non-final smoke measurements.
+- [Backend](docs/backend.md) - API contracts, WebSocket contracts, event schema, persistence, and logging details.
+- [Frontend](docs/frontend.md) - React dashboard, live camera mode, MP4 session mode, and operator workflow.
+- [Integration and DevOps](docs/integration-devops.md) - Docker Compose wiring, logs, environment variables, and smoke test flow.
+- [Inference](docs/inference.md) - MP4 inference CLI, runtime service API, checkpoint metadata, tracking, and context module.
+- [Data Pipeline](docs/data-pipeline.md) - Dataset preparation and visualization utilities.
+- [ML Baseline](docs/ml-baseline.md) - Baseline training, validation, checkpoint output, and selected classes.
+- [CI Workflows](docs/ci-workflows.md) - Automated validation paths.
+- [Contributing](docs/contributing.md) - Contributor workflow.
 
-- **Database Service** - PostgreSQL running on `localhost:5432`
-  - Credentials: `hbr_user` / `hbr_password`
-  - Database: `hbr_db`
+## Demo Paths
 
-- **Inference Service** - Model inference service
-  - Logs: `./data/logs/startup_summary.json`
-  - If dataset subset is mounted correctly, logs include discovered video files and classes
+Primary operator path:
 
-- **Frontend Service** - React (Vite) frontend application
-  - URL: `http://localhost:5173`
+- Live camera mode in the [Frontend](docs/frontend.md) streams browser camera frames to `WS /ws/camera`.
+- The backend returns live detection/status messages and broadcasts generated events through `WS /ws/live`.
+- Live camera behavior depends on a valid local checkpoint and config path. Treat final verification as pending until issue #130 publishes the final checkpoint.
 
-## Backend (Sprint 3)
+Fallback demo path:
 
-### API Development
+- MP4 session mode uploads an operator-selected `.mp4` to `POST /api/videos/upload`.
+- The frontend starts processing with `POST /api/sessions/`, polls `GET /api/sessions/{session_id}`, and then reads `GET /api/events/sessions/{session_id}`.
+- The final runbook also supports direct MP4-to-JSON fallback inference with `scripts/run_mp4_inference.ps1`.
 
-The FastAPI backend is located in `src/app/`:
-
-```
-src/app/
-├── __init__.py
-├── app.py           # Application factory
-├── api/
-│   ├── routes.py    # API endpoints
-│   └── websocket.py # WebSocket handlers
-├── core/
-│   └── settings.py  # Configuration (Pydantic V2)
-└── endpoints/
-    └── health.py    # Health check endpoint
-```
-
-### Running Backend Locally
-
-```bash
-# Start all services
-docker compose up --build
-
-# Or start the API service and its declared dependencies (for example, the database)
-docker compose up api --build
-```
-
-### Testing API Endpoints
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# API documentation (Swagger UI)
-open http://localhost:8000/docs
-
-# API documentation (ReDoc)
-open http://localhost:8000/redoc
-```
-
-### Inference Session REST Endpoints
-
-The API now exposes endpoints for managing offline inference sessions asynchronously:
-- `POST /api/sessions/` - Starts a new inference session in a background thread.
-- `GET /api/sessions/{session_id}` - Retrieves the current status (`pending`, `running`, `completed`, `failed`, `stopped`).
-- `POST /api/sessions/{session_id}/stop` - Gracefully interrupts and stops an ongoing running session.
-
-These endpoints use `asyncio.to_thread` for non-blocking execution and native `threading.Event` triggers down to the underlying inference loops to allow safe and clean interruptions without blocking the FastAPI event loop.
-
-### Shared Runtime Pipeline
-
-The `InferenceEventPipeline` (`src/inference/pipeline.py`) acts as the central contract for processing incoming frames across all video sources (MP4, RTSP, and WebSockets). It handles temporal inference window sliding, bounding-box enrichment, scene context evaluation, and stateful alert processing, yielding canonical `EventPayload` objects for detections and alerts.
-
-### Integration Smoke Test
-
-To verify the entire integrated flow (**Source -> Inference -> Alert/Event -> API/WebSocket -> DB**) end-to-end after bringing up the services, run the automated integration smoke test script inside the running API container:
-
-```bash
-docker compose exec api python scripts/integration_smoke_test.py
-```
-
-This script will dynamically create all necessary dummy weights and videos, run the inference session, listen via WebSockets for events, and confirm database persistence. For more details, see [Integration and DevOps](docs/integration-devops.md#sprint-3-integration-smoke-path).
-
-## Final Demo Runbook
-
-For final demo setup, infrastructure smoke verification, and MP4 fallback inference, see the [Final Demo Runbook](docs/final-demo-runbook.md).
+Infrastructure smoke path:
 
 ```powershell
 .\scripts\final_demo_smoke.ps1
-
-.\scripts\run_mp4_inference.ps1 `
-  -Input data\raw\<video>.mp4 `
-  -Checkpoint data\logs\checkpoints\<checkpoint>.pth
 ```
 
-The smoke helper uses the existing dummy checkpoint path to verify the stack. Repeat MP4 inference with the final checkpoint after issue #130 publishes it.
+The smoke script verifies API health, session creation, WebSocket event flow, database persistence, and logs using a generated dummy checkpoint and dummy MP4. It is not final model validation.
 
-## Performance Measurement
+## Checkpoint Status
 
-For repeatable MP4 inference latency/FPS measurements, run the benchmark documented in [Performance Benchmark](docs/performance-benchmark.md). Re-run it with the final checkpoint after issue #130 publishes that checkpoint.
+Place model checkpoints under:
 
-```powershell
-.\scripts\benchmark_mp4_inference.ps1 -Input data\raw\<video>.mp4 -Checkpoint data\logs\checkpoints\<checkpoint>.pth -Device auto
-.\scripts\benchmark_mp4_inference.ps1 -Input data\raw\<video>.mp4 -Checkpoint data\logs\checkpoints\<checkpoint>.pth -Device cuda -Gpu
+```text
+data/logs/checkpoints/<checkpoint>.pth
 ```
 
-### Configuration
+Inside Docker, the same file is visible as:
 
-Backend configuration is managed through environment variables in `src/app/core/settings.py`:
-
-- `HOST` - API host (default: `0.0.0.0`)
-- `PORT` - API port (default: `8000`)
-- `DB_HOST` - Database host (default: `db` in Docker, `localhost` locally)
-- `DB_PORT` - Database port (default: `5432`)
-- `DB_USER` - Database user (default: `hbr_user`)
-- `DB_PASSWORD` - Database password (default: `hbr_password`)
-- `DATABASE_URL` - Full connection string (auto-generated if not provided)
-- `DEBUG` - Debug mode (default: `False`)
-
-Create a `.env` file to override defaults:
-
-```bash
-# .env
-DB_USER=my_user
-DB_PASSWORD=secure_password
-DEBUG=true
+```text
+/app/data/logs/checkpoints/<checkpoint>.pth
 ```
 
-For detailed integration and DevOps documentation, see [Integration and DevOps](docs/integration-devops.md).
+The Compose inference service can read `INFERENCE_CHECKPOINT`, and the demo/benchmark scripts accept checkpoint paths through their `-Checkpoint` arguments. The frontend defaults to `data/logs/checkpoints/baseline_epoch_50.pth`, but that checkpoint is only suitable for local smoke work and must not be presented as final.
 
-## Sprint 2 MP4 to JSON CLI
+The final GitHub Release checkpoint link remains blocked by issue #130.
 
-Run action inference from a single MP4 file and write a JSON event log:
+## Performance Status
 
-```powershell
-python -m src.main `
-  --input data\raw\walking\sample.mp4 `
-  --checkpoint data\logs\checkpoints\baseline_epoch_10.pth `
-  --config configs\data_pipeline.yml `
-  --output data\logs\actions.json `
-  --device auto
-```
+See [Performance Benchmark](docs/performance-benchmark.md) for the repeatable benchmark command and current smoke measurements. The current numbers use `baseline_epoch_50.pth` and are non-final.
 
-Run the same flow in Docker:
+Final performance must be re-run after issue #130 publishes the final checkpoint. Do not claim final 15 FPS or <= 2 s compliance unless the final benchmark proves it.
 
-```bash
-docker compose run --rm inference python -m src.main \
-  --input /app/data/raw/walking/sample.mp4 \
-  --checkpoint /app/data/logs/checkpoints/baseline_epoch_10.pth \
-  --config /app/configs/data_pipeline.yml \
-  --output /app/data/logs/actions.json
-```
+## Known Limitations
 
-Inference mode requires `--input` and `--checkpoint` together. Without these arguments,
-`src.main` keeps the startup summary behavior and writes `startup_summary.json`.
-
-## Documentation
-- [Data Pipeline](docs/data-pipeline.md)
-- [Inference](docs/inference.md)
-- [ML Baseline](docs/ml-baseline.md)
-- [Backend](docs/backend.md)
-- [Frontend](docs/frontend.md)
-- [Integration and DevOps](docs/integration-devops.md)
-- [Final Demo Runbook](docs/final-demo-runbook.md)
-- [Performance Benchmark](docs/performance-benchmark.md)
-- [Contributing](docs/contributing.md)
-- [CI Workflows](docs/ci-workflows.md)
-
+- Final checkpoint and final release link are pending issue #130.
+- Final performance is pending a benchmark re-run on the final checkpoint.
+- Live camera mode is implemented, but final demo verification depends on the final checkpoint and target runtime conditions.
+- CPU mode may be slower than GPU mode.
+- Smoke benchmarks are not accuracy, model-quality, or final latency validation.

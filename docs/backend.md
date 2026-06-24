@@ -3,6 +3,34 @@
 
 [Back to README](../README.md)
 
+## API Surface Quick Reference
+
+Live API documentation:
+
+- [Swagger UI / OpenAPI docs](http://localhost:8000/docs)
+- [ReDoc API docs](http://localhost:8000/redoc)
+- [API health](http://localhost:8000/health)
+
+REST paths currently wired by `src/app/app.py` and `src/app/api/routes_impl.py`:
+
+- `GET /health` - liveness check.
+- `GET /readiness` - readiness placeholder.
+- `GET /api/` - API root.
+- `POST /api/videos/upload` - upload an operator-selected MP4 and return a `video_id`.
+- `POST /api/sessions/` - start an asynchronous offline inference session.
+- `GET /api/sessions/{session_id}` - retrieve session status.
+- `POST /api/sessions/{session_id}/stop` - stop a pending or running session.
+- `GET /api/events/` - retrieve persisted detection/alert history with optional filters.
+- `GET /api/events/sessions` - list session IDs with stored events.
+- `GET /api/events/sessions/{session_id}` - retrieve events for one session.
+- `GET /api/events/{event_id}` - retrieve one event payload.
+
+WebSocket paths currently wired by `src/app/api/websocket.py`:
+
+- `WS /ws/live` and `WS /api/websocket/live` - live detection/alert event stream.
+- `WS /ws/camera` and `WS /api/websocket/camera` - browser-camera binary frame stream with initial checkpoint/config JSON.
+- `WS /ws/echo` and `WS /api/websocket/echo` - echo endpoint for basic WebSocket checks.
+
 # Shared Payload Contract (Single Source of Truth)
 
 To ensure consistency across inference producers, FastAPI endpoints, WebSocket streaming, and database persistence, we use a single shared payload contract. The schema uses Pydantic models defined in `src/app/schemas/action_event.py`.
@@ -500,5 +528,5 @@ Audit logs follow the canonical JSON schema:
 
 To allow frontend clients (like the React dashboard) to communicate with the FastAPI backend from a different origin, CORS is configured on the application factory using FastAPI's `CORSMiddleware`.
 
-Origins are configurable via the `cors_origins` settings field in [settings.py](file:///d:/repos/human-behavior-recognition-in-video-streams/src/app/core/settings.py), which defaults to `["http://localhost:5173", "http://localhost:3000"]` (the standard ports used by the React development server).
+Origins are configurable via the `cors_origins` settings field in [settings.py](../src/app/core/settings.py), which defaults to `["http://localhost:5173", "http://localhost:3000"]` (the standard ports used by the React development server).
 
