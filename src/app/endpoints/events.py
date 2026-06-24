@@ -142,7 +142,7 @@ def read_events_by_session(
         default=None,
         description="Filter by event type (DETECTION or ALERT)",
     ),
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=10000, ge=1, le=100000),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[EventPayload]:

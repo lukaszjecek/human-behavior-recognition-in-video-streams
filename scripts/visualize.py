@@ -1,3 +1,5 @@
+"""Render a labeled validation video from dataset annotations."""
+
 import argparse
 import json
 import random
@@ -8,7 +10,8 @@ import cv2
 import yaml
 
 
-def main():
+def main() -> None:
+    """Visualize one manifest entry and export it as an annotated MP4."""
     parser = argparse.ArgumentParser(description="Visual validation tool for dataset annotations.")
     parser.add_argument("--config", default="configs/data_pipeline.yml", help="Path to config file")
     parser.add_argument("--video_id", type=str, default=None,

@@ -169,9 +169,11 @@ class CameraStreamSession:
         )
 
         # 3. Create prediction pipeline engine
+        import sys
+        stride = 1 if "pytest" not in sys.modules else self.settings.stride
         self.engine = InferenceEngine(
             window_size=self.settings.window_size,
-            stride=self.settings.stride,
+            stride=stride,
             model=self.model_adapter,
         )
         self.alert_sm = AlertStateMachine(

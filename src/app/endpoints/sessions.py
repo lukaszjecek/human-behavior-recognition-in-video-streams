@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _video_source_label(request_body: SessionStartRequest) -> str:
+    """Return a log-safe label for the requested video source."""
+    if request_body.video_id is not None:
+        return f"uploaded:{request_body.video_id}"
+    return str(request_body.video_path)
+
+
 @router.post(
     "/",
     response_model=SessionResponse,
@@ -31,37 +38,63 @@ async def start_session(
     """Start a new asynchronous offline inference session."""
     request_id = getattr(request.state, "request_id", None)
     log_context = RuntimeLogContext(session_id=request_id)
+    video_source = _video_source_label(request_body)
     log_event(
         logger,
         logging.INFO,
         "session_start_requested",
-        f"Request to start session for video: {request_body.video_path}",
+        f"Request to start session for video: {video_source}",
         log_context,
-        video_path=str(request_body.video_path),
+        video_source=video_source,
     )
     try:
-        response = manager.create_session(request_body)
+        app_settings = getattr(request.app.state, "settings", None)
+        response = manager.create_session(
+            request_body,
+            upload_dir=getattr(app_settings, "upload_dir", None),
+            data_dir=getattr(app_settings, "data_dir", None),
+        )
         log_event(
             logger,
             logging.INFO,
             "session_created",
-            f"Successfully created session {response.id} for video: {request_body.video_path}",
+            f"Successfully created session {response.id} for video: {video_source}",
             RuntimeLogContext(session_id=str(response.id)),
+            video_source=video_source,
             video_path=str(request_body.video_path),
         )
         return response
-    except ValueError as exc:
+    except FileNotFoundError as exc:
         log_event(
             logger,
             logging.WARNING,
             "session_start_failed",
             f"Failed to start session: {exc}",
             log_context,
-            video_path=str(request_body.video_path),
+            video_source=video_source,
+            error_type="FileNotFoundError",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
+    except ValueError as exc:
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if "already being processed" in str(exc)
+            else status.HTTP_400_BAD_REQUEST
+        )
+        log_event(
+            logger,
+            logging.WARNING,
+            "session_start_failed",
+            f"Failed to start session: {exc}",
+            log_context,
+            video_source=video_source,
             error_type="ValueError",
         )
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status_code,
             detail=str(exc)
         )
 

@@ -47,6 +47,7 @@ services:
     volumes:
       - ./:/app
       - ./data/raw:/app/data/raw
+      - ./data/uploads:/app/data/uploads
       - ./data/logs:/app/data/logs
     ports:
       - "${PORT:-8000}:${PORT:-8000}"
@@ -58,6 +59,7 @@ services:
     command: [ "sh", "-lc", "uvicorn src.app.app:create_app --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --factory" ]
     stdin_open: true
     tty: true
+
 
   frontend:
     build:
@@ -118,6 +120,8 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+
+
 
 volumes:
   db_data:

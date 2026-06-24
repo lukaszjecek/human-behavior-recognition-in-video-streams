@@ -3,9 +3,11 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Event
 from uuid import UUID, uuid4
 
+from src.app.core.settings import settings
 from src.app.db.repository import save_event
 from src.app.db.session import SessionLocal
 from src.app.schemas.action_event import EventPayload
@@ -19,6 +21,72 @@ from src.inference.runtime_logging import (
 from src.inference.service import InferenceServiceRequest, run_offline_mp4_inference
 
 logger = logging.getLogger(__name__)
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    """Return whether path resolves under root."""
+    try:
+        path.resolve(strict=False).relative_to(root.resolve(strict=False))
+        return True
+    except ValueError:
+        return False
+
+
+def _legacy_video_roots(data_dir: Path | None = None) -> list[Path]:
+    """Return directories allowed for legacy backend-visible video paths."""
+    roots = [
+        Path("data/raw"),
+        Path("data/demo_videos"),
+        Path("/app/data/raw"),
+        Path("/app/data/demo_videos"),
+    ]
+    if data_dir is not None:
+        roots.insert(0, data_dir)
+    return roots
+
+
+def _resolve_video_path(path: Path, data_dir: Path | None = None) -> Path:
+    """Resolve a legacy backend-visible video path inside allowed data roots."""
+    if ".." in path.parts:
+        raise ValueError("Video path traversal is not allowed.")
+
+    allowed_roots = _legacy_video_roots(data_dir)
+    if path.is_file():
+        resolved = path.resolve()
+        if any(_is_relative_to(resolved, root) for root in allowed_roots):
+            return resolved
+        raise ValueError("Video path must be inside a configured backend video directory.")
+
+    # Check recursively in data/raw or data folders inside container
+    filename = path.name
+    for root in allowed_roots:
+        if root.is_dir():
+            for found_path in root.rglob(filename):
+                if found_path.is_file():
+                    resolved = found_path.resolve()
+                    if any(
+                        _is_relative_to(resolved, allowed_root)
+                        for allowed_root in allowed_roots
+                    ):
+                        return resolved
+
+    return path
+
+
+def resolve_uploaded_video_path(video_id: UUID, upload_dir: Path) -> Path:
+    """Resolve an uploaded video ID to a file inside the upload directory."""
+    upload_root = upload_dir.resolve()
+    candidate = (upload_root / f"{video_id}.mp4").resolve(strict=False)
+
+    try:
+        candidate.relative_to(upload_root)
+    except ValueError as exc:
+        raise ValueError("Uploaded video ID resolves outside upload directory.") from exc
+
+    if not candidate.is_file():
+        raise FileNotFoundError(f"Uploaded video not found: {video_id}")
+
+    return candidate
 
 
 class SessionData:
@@ -60,8 +128,31 @@ class InferenceSessionManager:
         """Initialize the inference session manager."""
         self._sessions: dict[UUID, SessionData] = {}
 
-    def create_session(self, request: SessionStartRequest) -> SessionResponse:
+    def create_session(
+        self,
+        request: SessionStartRequest,
+        upload_dir: Path | None = None,
+        data_dir: Path | None = None,
+    ) -> SessionResponse:
         """Create and start a new inference session."""
+        if request.video_id is not None:
+            resolved_path = resolve_uploaded_video_path(
+                request.video_id,
+                upload_dir or settings.upload_dir,
+            )
+        elif request.video_path is not None:
+            # Resolve the video path recursively if it doesn't exist at the given path.
+            resolved_path = _resolve_video_path(
+                request.video_path,
+                data_dir or settings.data_dir,
+            )
+        else:
+            raise ValueError("Provide either video_path or video_id.")
+
+        if not resolved_path.is_file():
+            raise ValueError(f"Video file not found: {request.video_path}")
+        request.video_path = resolved_path
+
         # Check for duplicates
         for existing_session in self._sessions.values():
             if existing_session.status in (SessionStatus.PENDING, SessionStatus.RUNNING):

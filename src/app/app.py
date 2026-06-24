@@ -46,6 +46,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         version=app_settings.app_version,
         debug=app_settings.debug,
     )
+    app.state.settings = app_settings
 
     # Configure CORS middleware
     app.add_middleware(
