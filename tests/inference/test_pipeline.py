@@ -175,7 +175,8 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        assert event.context is None
+        assert event.context.scene_tag == "unknown"
+        assert event.context.confidence == 0.0
 
     def test_context_unknown_when_module_raises(self):
         bad_module = MagicMock()
@@ -185,7 +186,8 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        assert event.context is None
+        assert event.context.scene_tag == "unknown"
+        assert event.context.confidence == 0.0
 
     def test_context_unknown_when_module_returns_bad_dict(self):
         """get_context() returning unexpected keys should default gracefully."""
@@ -196,8 +198,9 @@ class TestContextFallback:
         detection = next(p for p in payloads if p.event_type == EventType.DETECTION)
         event = detection.data
         assert isinstance(event, ActionEvent)
-        # None is the default when context fails
-        assert event.context is None
+        # ContextData('unknown', 0.0) is the default when context fails
+        assert event.context.scene_tag == "unknown"
+        assert event.context.confidence == 0.0
 
     def test_valid_context_attached_when_module_works(self):
         good_module = MagicMock()
@@ -493,7 +496,7 @@ class TestResetAndMetrics:
         pipeline = _make_pipeline(context_module=mock_module, context_eval_every_n_windows=1)
         _push_n(pipeline, 3)
         pipeline.reset()
-        assert pipeline.get_metrics()["cached_context_scene_tag"] is None
+        assert pipeline.get_metrics()["cached_context_scene_tag"] == "unknown"
 
     def test_reset_clears_alert_processor_state(self):
         pipeline = _make_pipeline(window_size=1, stride=1, persistence_threshold=2)

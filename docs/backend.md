@@ -335,6 +335,13 @@ Automated tests are written in [test_websocket.py](../tests/app/test_websocket.p
 - **WebSocket Echo:** Validates standard WebSocket message echo loop.
 - **Live Event Broadcasting:** Spawns a mock WebSocket connection client using `TestClient.websocket_connect("/ws/live")`, pushes detection/alert payloads to the singleton `WebSocketManager`, and asserts that the client receives the serialized JSON structures conforming to the Sprint 3 payload contract.
 
+Automated streaming contract and idempotency tests are written in [test_stream_event_contract.py](../tests/app/test_stream_event_contract.py). They cover:
+- **Streaming Event Emits:** Verifies that detection events are emitted in real-time before reaching EOF (no blocking/buffering).
+- **Payload Contract Verification:** Ensures exact payload schema match between MP4 and live Camera streams.
+- **Context & Bounding Box Resilience:** Tests that spatial coordinate logic and "unknown" fallback contexts gracefully survive processing without crashing Pydantic schemas.
+- **Idempotency & Session Integrity:** Verifies `session_manager` handles consecutive identical files cleanly without deadlocking or state leakage.
+- **False Positive Prevention:** Validates the system's ability to debounce consecutive duplicate detections.
+
 ---
 
 # Database Persistence Layer
