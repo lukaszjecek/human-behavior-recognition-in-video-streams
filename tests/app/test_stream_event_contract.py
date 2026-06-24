@@ -366,3 +366,134 @@ def test_bounding_boxes_presence(client, pipeline_assets, dummy_video, tmp_path)
     # We verify that bboxes is handled correctly according to schema.
     # It must be None or a list.
     assert mp4_event.bboxes is None or isinstance(mp4_event.bboxes, list), "bboxes field must match ActionEvent schema"
+
+
+def test_mp4_double_inference_idempotency(pipeline_assets, dummy_video, tmp_path):
+    """
+    Test podwójnego załadowania pliku.
+    Ensures that running inference twice on the same video cleanly overwrites
+    the output and doesn't leak state or duplicate events.
+    """
+    ckpt_path, config_path = pipeline_assets
+    output_path = tmp_path / "actions.json"
+    
+    req = InferenceCliRequest(
+        input_path=dummy_video,
+        checkpoint_path=ckpt_path,
+        config_path=config_path,
+        output_path=output_path,
+        device="cpu"
+    )
+    
+    # Run first time
+    assert run_mp4_to_json_action_inference(req) == 0
+    data1 = json.loads(output_path.read_text(encoding="utf-8"))
+    count1 = data1["event_count"]
+    
+    # Run second time
+    assert run_mp4_to_json_action_inference(req) == 0
+    data2 = json.loads(output_path.read_text(encoding="utf-8"))
+    count2 = data2["event_count"]
+    
+    assert count1 == count2, "Event counts should be identical across independent runs"
+    assert count1 > 0
+
+
+from unittest.mock import patch
+
+def test_context_fallback_on_module_exception(client, pipeline_assets):
+    """
+    Step 3 Extension: Ensure pipeline survives ContextModule exceptions.
+    """
+    ckpt_path, config_path = pipeline_assets
+    session_id = uuid.uuid4()
+    
+    # We patch the context module to simulate an unexpected crash (e.g. CUDA OOM)
+    with patch("src.inference.context_adapter.ContextModule.get_context") as mock_get:
+        mock_get.side_effect = RuntimeError("Simulated GPU crash in context model")
+        
+        with client.websocket_connect("/api/websocket/camera") as ws:
+            ws.send_json({
+                "checkpoint_path": str(ckpt_path),
+                "config_path": str(config_path),
+                "session_id": str(session_id),
+            })
+            ws.receive_json()
+
+            frame = np.zeros((64, 64, 3), dtype=np.uint8)
+            _, jpeg_bytes = cv2.imencode(".jpg", frame)
+            
+            for _ in range(4):
+                ws.send_bytes(jpeg_bytes.tobytes())
+
+            # Even though context model crashed, we should still receive our DETECTION
+            # with the graceful fallback applied!
+            msg = ws.receive_json()
+            assert msg.get("event_type") == "DETECTION"
+            
+            from src.app.schemas.action_event import ActionEvent
+            event_data = ActionEvent(**msg["data"])
+            
+            assert event_data.context.scene_tag == "unknown"
+            assert event_data.context.confidence == 0.0
+            
+            ws.send_text("stop")
+            ws.receive_json()
+
+
+def test_bounding_boxes_with_active_hook(client, tmp_path, pipeline_assets):
+    """
+    Step 4 Extension: Prove that when a spatial detector hook is active,
+    bounding boxes are successfully serialized into the ActionEvent contract.
+    """
+    ckpt_path, old_config = pipeline_assets
+    
+    # Read and modify config to enable bbox
+    with open(old_config, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    
+    cfg["bbox"] = {
+        "enabled": True,
+        "model_name": "dummy_yolo",
+        "confidence_threshold": 0.5,
+        "frame_selector": "middle"
+    }
+    
+    new_config = tmp_path / "config_bbox.yml"
+    with open(new_config, "w", encoding="utf-8") as f:
+        yaml.dump(cfg, f)
+        
+    with patch("src.inference.bbox_detector.get_or_create_bbox_enricher") as mock_get_hook:
+        def dummy_hook(event, result):
+            from src.app.schemas.action_event import BoundingBox
+            box = BoundingBox(x1=0.1, y1=0.1, x2=0.9, y2=0.9, confidence=0.88)
+            return event.model_copy(update={"bboxes": [box]})
+            
+        mock_get_hook.return_value = dummy_hook
+        
+        with client.websocket_connect("/api/websocket/camera") as ws:
+            ws.send_json({
+                "checkpoint_path": str(ckpt_path),
+                "config_path": str(new_config),
+                "session_id": str(uuid.uuid4()),
+            })
+            ws.receive_json()
+
+            frame = np.zeros((64, 64, 3), dtype=np.uint8)
+            _, jpeg_bytes = cv2.imencode(".jpg", frame)
+            
+            for _ in range(4):
+                ws.send_bytes(jpeg_bytes.tobytes())
+
+            msg = ws.receive_json()
+            assert msg.get("event_type") == "DETECTION"
+            
+            from src.app.schemas.action_event import ActionEvent
+            event_data = ActionEvent(**msg["data"])
+            
+            assert event_data.bboxes is not None
+            assert len(event_data.bboxes) == 1
+            assert event_data.bboxes[0].confidence == 0.88
+            
+            ws.send_text("stop")
+            ws.receive_json()
