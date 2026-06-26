@@ -79,20 +79,20 @@ The JSON summary is machine-readable and includes:
 
 This benchmark is a single-run offline MP4 wall-clock measurement. The duration includes model loading, video decode, preprocessing, inference, event pipeline work, and any enabled context or bounding-box enrichment in the current config.
 
-It does not measure live camera capture-to-display latency, frontend rendering latency, network latency, or database persistence latency. For final reporting, run the benchmark more than once on the target machine and report the hardware, checkpoint, config, and device alongside the numbers.
+It does not measure live camera capture-to-display latency, frontend rendering latency, network latency, or database persistence latency. For reproducible reporting, run the benchmark more than once on the target machine and report the hardware, checkpoint, config, device, input video, and cold-start/cache state alongside the numbers.
 
-The final benchmark must be re-run after issue #130 publishes the final checkpoint. Until then, measurements from `baseline_epoch_50.pth` are smoke measurements only and must not be treated as final project performance.
+These measurements depend on the hardware, device, checkpoint, config, input video, and cold-start/cache state. They are throughput checks for the delivered setup, not model accuracy or quality validation.
 
-## Current Non-Final Smoke Measurements
+## Current Delivered-System Benchmark Measurements
 
-These measurements were captured locally on 2026-06-24 using `data/logs/checkpoints/baseline_epoch_50.pth`. That checkpoint is not the final checkpoint from issue #130, so every result in this table is a non-final smoke measurement only.
+These measurements were captured locally on 2026-06-24 using `data/logs/checkpoints/baseline_epoch_50.pth`.
 
 All three runs used the same MP4 input: `data/raw/car_makes_u_turn/0A2BF1E8-55E5-4D3D-9B7D-59929025D9CC_0.mp4`.
 
 | Run | Device/path | Frames | Inference windows | Events | Wall-clock duration | Approx processed FPS | Approx inference windows/s | Avg time/window | Notes |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Docker CPU smoke | CPU in Docker, default Compose | `369` | `23` | `23` | `35.162069 s` | `10.494263` | `0.654114` | `1.528786 s` | Non-final smoke measurement using `baseline_epoch_50.pth`. Includes Docker/container initialization and model startup behavior. |
+| Docker CPU smoke | CPU in Docker, default Compose | `369` | `23` | `23` | `35.162069 s` | `10.494263` | `0.654114` | `1.528786 s` | Delivered-system smoke measurement using `baseline_epoch_50.pth`. Includes Docker/container initialization and model startup behavior. |
 | Local Python CPU smoke | CPU in local `.venv` | `369` | `23` | `23` | `26.020006 s` | `14.181396` | `0.883935` | `1.131305 s` | Not directly comparable with Docker because local Python used BBoxEnricher fallback behavior without `ultralytics` installed. |
-| Docker GPU smoke | CUDA in Docker with `compose.gpu.yaml` | `369` | `23` | `23` | `11.127545 s` | `33.160954` | `2.066943` | `0.483806 s` | Non-final smoke measurement using `baseline_epoch_50.pth`. Confirms the Docker CUDA path works, but final performance must be re-measured after #130. |
+| Docker GPU smoke | CUDA in Docker with `compose.gpu.yaml` | `369` | `23` | `23` | `11.127545 s` | `33.160954` | `2.066943` | `0.483806 s` | Delivered-system smoke measurement using `baseline_epoch_50.pth`. Confirms the Docker CUDA path works for the documented setup. |
 
-Final performance must be re-measured after issue #130 publishes the final checkpoint. Do not use these smoke measurements to claim that the project meets 15 FPS or <= 2 s end-to-end latency.
+Do not use these smoke measurements to claim model accuracy, model quality, universal performance, live camera latency, or compliance with a target that is not directly measured by this benchmark.

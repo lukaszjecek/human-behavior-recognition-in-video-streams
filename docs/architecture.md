@@ -2,7 +2,7 @@
 
 [Back to README](../README.md)
 
-This page summarizes the system shape that is currently visible in `compose.yaml`, `compose.gpu.yaml`, and the FastAPI route wiring. It is a draft documentation pass while issue #130 is still pending; final checkpoint release details and final performance numbers are not available yet.
+This page summarizes the delivered system shape visible in `compose.yaml`, `compose.gpu.yaml`, and the FastAPI route wiring.
 
 ## Compose Topology
 
@@ -96,7 +96,7 @@ Live camera primary path:
 3. In Webcam mode, the browser opens the local camera, initializes `WS /ws/camera` with checkpoint/config paths, then sends compressed binary frames.
 4. The backend processes frames through the shared inference event pipeline, returns generated events/status on the camera socket, broadcasts events to live listeners, persists events to PostgreSQL, and writes audit/log files under `data/logs`.
 
-This path is implemented in the frontend and backend. Final live demo verification remains dependent on the final checkpoint from issue #130 and the target machine/runtime conditions.
+This path is implemented in the frontend and backend. Live demo behavior depends on the delivered checkpoint path, local camera/browser behavior, and the target machine/runtime conditions.
 
 MP4 fallback path:
 
@@ -131,19 +131,16 @@ Checkpoint references are passed in three ways:
 - `-Checkpoint` for `scripts/run_mp4_inference.ps1` and `scripts/benchmark_mp4_inference.ps1`.
 - `checkpoint_path` in REST session requests and the `WS /ws/camera` initialization message.
 
-Current local smoke work may use `baseline_epoch_50.pth`, including the frontend default path. That checkpoint is not final. The final GitHub Release checkpoint link and any final checkpoint name/path remain blocked by issue #130.
+The delivered demo and benchmark documentation use `baseline_epoch_50.pth`, including the frontend default path.
 
 ## Performance Status
 
-Performance values in [Performance Benchmark](performance-benchmark.md) are current non-final smoke measurements captured with `baseline_epoch_50.pth`. They are useful for checking that the benchmark machinery runs, but they are not final project performance claims.
-
-Final performance must be re-measured after issue #130 publishes the final checkpoint. Do not claim final 15 FPS or <= 2 s compliance unless the final benchmark proves it.
+Performance values in [Performance Benchmark](performance-benchmark.md) are delivered-system smoke measurements captured with `baseline_epoch_50.pth`. They are useful for reporting local throughput for the documented setup, but they are not accuracy or model-quality claims.
 
 ## Known Limitations
 
-- Final checkpoint and final release link are pending issue #130.
-- Final performance is pending a benchmark re-run on the final checkpoint.
-- Live camera mode is implemented, but final validation depends on the final checkpoint, local camera/browser behavior, and target hardware.
 - CPU mode may be slower than GPU mode.
-- Smoke benchmarks are not accuracy or model-quality validation.
+- Smoke benchmarks are throughput checks, not accuracy or model-quality validation.
+- Performance depends on hardware, device, checkpoint, config, input video, and cold-start/cache state.
+- Live camera mode depends on local camera/browser behavior and target hardware.
 - The Compose architecture does not currently define a separate inference HTTP API; API-triggered sessions use in-process inference code.
