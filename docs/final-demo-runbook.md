@@ -4,16 +4,16 @@
 
 ## Purpose
 
-This runbook covers the final demo and operational verification flow for the Docker Compose stack. It separates infrastructure smoke verification, which uses the existing dummy smoke path, from final MP4 inference, which requires a real model checkpoint.
+This runbook covers the final demo and operational verification flow for the Docker Compose stack. It separates infrastructure smoke verification, which uses the existing dummy smoke path, from delivered MP4 inference, which requires a real model checkpoint.
 
-The scope is operational demo readiness only. It does not train a model, benchmark performance, or finalize checkpoint release information.
+The scope is operational demo readiness only. It does not train a model or benchmark performance.
 
 ## Requirements
 
 - Docker Desktop or Docker Engine with Docker Compose
 - PowerShell
 - A local clone of this repository
-- For final MP4 inference only: a real `.pth` checkpoint and an MP4 demo video
+- For MP4 inference: a real `.pth` checkpoint and an MP4 demo video
 
 ## Clean Clone Setup
 
@@ -45,11 +45,15 @@ The default runtime config is:
 configs\data_pipeline.yml
 ```
 
-## Final Checkpoint Setup
+## Checkpoint Setup
 
-The final model checkpoint is expected to come from issue #130 or a GitHub Release asset once it is available. The current final model scope is expected to use a 21-class checkpoint, but the checkpoint may not exist yet.
+The delivered demo setup uses a local `.pth` checkpoint under `data\logs\checkpoints\`. The documented demo and benchmark flows use:
 
-Smoke verification can still run before the final checkpoint exists. The smoke path creates a dummy MP4 and dummy checkpoint, then verifies the API, WebSocket event flow, database persistence, and log/event plumbing. It is not final model validation.
+```text
+data\logs\checkpoints\baseline_epoch_50.pth
+```
+
+Smoke verification creates a dummy MP4 and dummy checkpoint, then verifies the API, WebSocket event flow, database persistence, and log/event plumbing. It is not model accuracy validation.
 
 ## Start The Stack
 
@@ -100,11 +104,11 @@ This verifies:
 
 The dummy smoke path requires session completion, at least one persisted `DETECTION` event, and WebSocket event reception. `ALERT` events are optional for this path: the script prints a warning when no alert is produced, because alert generation depends on danger-label configuration and state-machine persistence.
 
-It does not verify the final model checkpoint or final alert behavior. Check final alerts separately with a checkpoint, config, and video that trigger a configured danger label.
+It does not verify model accuracy or alert quality. Check alerts separately with a checkpoint, config, and video that trigger a configured danger label.
 
-## Final MP4 Inference Demo
+## MP4 Inference Demo
 
-After the real checkpoint is available, run fallback MP4 inference with:
+Run fallback MP4 inference with:
 
 ```powershell
 .\scripts\run_mp4_inference.ps1 `
@@ -197,7 +201,7 @@ docker compose up -d --build
 
 ### Missing Checkpoint
 
-The smoke script does not need the final checkpoint. Final MP4 inference does. Put the checkpoint under `data\logs\checkpoints\` and pass it with `-Checkpoint`.
+The smoke script creates its own dummy checkpoint. MP4 inference requires a real checkpoint. Put the checkpoint under `data\logs\checkpoints\` and pass it with `-Checkpoint`.
 
 ### Missing Input Video
 
@@ -236,8 +240,8 @@ This deletes the local PostgreSQL volume for the Compose stack.
 - API health returns `{"status":"ok"}`.
 - Frontend opens at `http://localhost:5173`.
 - `.\scripts\final_demo_smoke.ps1` passes.
-- Real checkpoint from issue #130 or a release asset is present when available.
-- `.\scripts\run_mp4_inference.ps1` produces `data\logs\actions.json` with the real checkpoint.
-- Final alert behavior is checked with a checkpoint/config/video that triggers a configured danger label.
+- Real checkpoint is present under `data\logs\checkpoints\`.
+- `.\scripts\run_mp4_inference.ps1` produces `data\logs\actions.json` with the selected checkpoint.
+- Alert behavior is checked with a checkpoint/config/video that triggers a configured danger label.
 - Backend, inference, audit logs, and database events can be inspected.
-- Known limitation is stated clearly: final checkpoint verification remains pending until issue #130 publishes the checkpoint.
+- Known limitations are stated clearly: smoke checks are not model accuracy validation, and performance depends on hardware, device, checkpoint, config, input video, and cold-start/cache state.
