@@ -4,13 +4,6 @@
 
 [Back to README](../README.md)
 
-###
-This file is the module documentation template for Integration and DevOps.
-This section should later describe Docker, compose setup, environment wiring, and integration flow between modules.
-For now, it is a placeholder waiting for the module owner to complete it. 
-###
-
-
 ## Docker Compose Orchestration
 
 This section describes the Docker Compose setup for local development, covering the orchestration of API, database, and inference services.
